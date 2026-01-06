@@ -408,18 +408,17 @@ export default function EmployeeCashAdmin() {
     () => [
       {
         header: 'Date',
-        accessor: 'createdAt',
+        accessor: 'date',
         width: 150,
         minWidth: 150,
         truncate: false,
         render: (value, row) => {
-          if (!value) return '';
+          // Prefer business date from API: row.date (YYYY-MM-DD)
+          const raw = row?.date || value || (row?.createdAt ? String(row.createdAt).split(' ')[0] : '');
+          if (!raw) return '';
 
-          // Format date
-          const parts = String(value).split(' ');
-          const datePart = parts[0] || '';
-          const [year, month, day] = datePart.split('-');
-          const formatted = (year && month && day) ? `${day}-${month}-${year}` : value;
+          const [year, month, day] = String(raw).split('-');
+          const formatted = (year && month && day) ? `${day}-${month}-${year}` : String(raw);
 
           // Code from row
           const code = row?.code || '';
