@@ -1,0 +1,86 @@
+{
+  "name": "frontend",
+  "version": "0.1.0",
+  "private": true,
+  "proxy": "http://localhost:8000",
+  "homepage": "/",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/inter": "^5.2.6",
+    "@heroicons/react": "^2.2.0",
+    "@hookform/resolvers": "^5.2.2",
+    "@mui/material": "^7.2.0",
+    "@mui/x-date-pickers": "^8.11.3",
+    "@mui/x-date-pickers-pro": "^8.11.3",
+    "@tailwindcss/forms": "^0.5.10",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.10.0",
+    "date-fns": "^2.30.0",
+    "dayjs": "^1.11.18",
+    "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
+    "i18next": "^25.7.2",
+    "jspdf": "^3.0.1",
+    "pdfmake": "^0.2.20",
+    "ra-data-simple-rest": "^5.9.0",
+    "react": "^19.1.0",
+    "react-admin": "^5.9.0",
+    "react-dom": "^19.1.0",
+    "react-helmet": "^6.1.0",
+    "react-hook-form": "^7.63.0",
+    "react-i18next": "^16.5.0",
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^7.6.2",
+    "react-scripts": "5.0.1",
+    "react-select": "^5.10.1",
+    "react-sortablejs": "^6.1.4",
+    "react-toastify": "^11.0.5",
+    "sortablejs": "^1.15.6",
+    "web-vitals": "^2.1.4",
+    "xlsx": "^0.18.5",
+    "zod": "^4.1.11"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "start-clean": "kill -9 $(lsof -t -i:3000) || true && react-scripts start",
+    "prestart": "rm -rf node_modules/.cache .eslintcache || true",
+    "start:mobile": "HOST=127.0.0.1 PORT=3100 WDS_ALLOWED_HOSTS=all DANGEROUSLY_DISABLE_HOST_CHECK=true WDS_SOCKET_HOST=localhost WDS_SOCKET_PORT=3100 CHOKIDAR_USEPOLLING=true CHOKIDAR_INTERVAL=500 WATCHPACK_POLLING=true BROWSER=none react-scripts start",
+    "build": "react-scripts build",
+    "build:dev": "react-scripts build --no-minify",
+    "analyze": "npm run build:dev && source-map-explorer 'build/static/js/*.js'",
+    "analyze-bundle": "npm run build:dev && npx webpack-bundle-analyzer 'build/static/js/*.js'",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "tailwind:build": "./src/tailwind_build/get-tailwind.sh",
+    "build:tailwind": "npx tailwindcss -c src/tailwind_build/tailwind.config.js -i ./src/index.css -o ./src/tailwind_build/index.css"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^4.9.5",
+    "webpack-bundle-analyzer": "^4.10.2"
+  }
+}

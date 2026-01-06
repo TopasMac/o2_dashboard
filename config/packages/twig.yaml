@@ -1,0 +1,9 @@
+twig:
+    file_name_pattern: '*.twig'
+    globals:
+        o2_logo_path: 'img/company-logo.png'
+        o2_company_contacts: 'Owners2 · owners2.com · hola@owners2.com · +52 1 984 xxx xxxx'
+
+when@test:
+    twig:
+        strict_variables: true

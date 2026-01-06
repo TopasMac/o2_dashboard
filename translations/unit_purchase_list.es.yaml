@@ -1,0 +1,39 @@
+unit_details: "Detalles unidad"
+client: "Cliente"
+report_code: "Código de reporte"
+issued: "Emitido"
+total: "Total"
+
+min: "Mín"
+have: "Exist"
+buy: "Comprar"
+unit_price: "Precio u."
+sub_total: "Sub-total"
+
+unit: "Unidad"
+type: "Tipo"
+pax: "Pax"
+beds: "Camas"
+baths: "Baños"
+
+Basics: "Básicos"
+Bedroom: "Recámara"
+Towels: "Toallas"
+Other: "Otros"
+
+Ironing Board: "Tabla de planchar"
+Lockbox: "Lockbox"
+Mattress Protector: "Protector de colchón"
+Pillows: "Almohadas"
+Sheets: "Sábanas"
+
+King: "King"
+Queen: "Queen"
+Single: "Individual"
+
+Bath Mat: "Tapete de baño"
+Face Towel: "Toalla facial"
+Pool Towel: "Toalla de alberca"
+Shower Towel: "Toalla de baño"
+
+Initial Kit: "Kit Inicial"

@@ -1,0 +1,100 @@
+--- a/frontend/src/components/reports/ClientMonthlyReport.jsx
++++ b/frontend/src/components/reports/ClientMonthlyReport.jsx
+@@ -63,6 +63,9 @@ export default function ClientMonthlyReport() {
+   const [wfCycle, setWfCycle] = useState(null); // /api/owner_report_cycles row
+
+   // --- Report PDF Preview Drawer ---
+   const [rpOpen, setRpOpen] = useState(false);
++  const [rpUrl, setRpUrl] = useState(null); // blob URL for inline PDF
++  const [rpLoading, setRpLoading] = useState(false);
++  const [rpError, setRpError] = useState(null);
+
+   // --- Month Workflow (ALL units for selected month) ---
+   const [mwOpen, setMwOpen] = useState(false);
+@@ -293,6 +296,11 @@ export default function ClientMonthlyReport() {
+     }
+     return `${base}?${usp.toString()}`;
+   }
++  function buildPreviewUrl(unitId, ym) {
++    const usp = new URLSearchParams({ unitId: String(unitId), yearMonth: ym });
++    return `${API_BASE}/api/reports/preview?${usp.toString()}`;
++  }
++
+   async function fetchData() {
+     setLoading(true);
+     setError(null);
+@@ -430,12 +438,43 @@ export default function ClientMonthlyReport() {
+   const closeWorkflowDrawer = () => {
+     setWfOpen(false);
+   };
+-
+-  const openReportPreviewDrawer = () => {
+-    if (!selectedUnit?.unitId || !yearMonth) return;
+-    setRpOpen(true);
+-  };
+-  const closeReportPreviewDrawer = () => setRpOpen(false);
++  async function fetchPreviewPdf() {
++    if (!selectedUnit?.unitId || !yearMonth) return;
++    setRpLoading(true);
++    setRpError(null);
++    try {
++      const url = buildPreviewUrl(selectedUnit.unitId, yearMonth);
++      const resp = await fetch(url, { headers: { Accept: 'application/pdf', ...AUTH_HEADERS } });
++      if (!resp.ok) throw new Error(`preview ${resp.status}`);
++      const blob = await resp.blob();
++      const objectUrl = URL.createObjectURL(blob);
++      if (rpUrl) URL.revokeObjectURL(rpUrl);
++      setRpUrl(objectUrl);
++    } catch (e) {
++      console.error('preview fetch error', e);
++      setRpError(e.message || 'Failed to load preview');
++      if (rpUrl) { URL.revokeObjectURL(rpUrl); setRpUrl(null); }
++    } finally {
++      setRpLoading(false);
++    }
++  }
++  const openReportPreviewDrawer = async () => {
++    if (!selectedUnit?.unitId || !yearMonth) return;
++    setRpOpen(true);
++    await fetchPreviewPdf();
++  };
++  const closeReportPreviewDrawer = () => {
++    setRpOpen(false);
++    if (rpUrl) {
++      URL.revokeObjectURL(rpUrl);
++      setRpUrl(null);
++    }
++  };
++  useEffect(() => {
++    if (rpOpen) { fetchPreviewPdf(); }
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [selectedUnit?.unitId, yearMonth]);
++  useEffect(() => () => { if (rpUrl) URL.revokeObjectURL(rpUrl); }, [rpUrl]);
+
+   // Handler to jump from Month Workflow drawer to a specific unit report for the selected YM
+   const goToUnitFromMonthWorkflow = (unitId, unitName) => {
+@@ -876,11 +915,17 @@ export default function ClientMonthlyReport() {
+             ) : (
+-              <iframe
+-                src={`${API_BASE}/api/reports/preview?unitId=${selectedUnit.unitId}&yearMonth=${yearMonth}`}
+-                title="Owner Report Preview"
+-                style={{ width: '100%', height: '100%', border: 0 }}
+-              />
++              <>
++                {rpLoading && (
++                  <div style={{ color:'#666', fontSize: 14, padding: 16 }}>Loading preview…</div>
++                )}
++                {rpError && !rpLoading && (
++                  <div style={{ color:'crimson', fontSize: 14, padding: 16 }}>Error: {rpError}</div>
++                )}
++                {!rpLoading && !rpError && rpUrl && (
++                  <iframe
++                    src={rpUrl}
++                    title="Owner Report Preview"
++                    style={{ width: '100%', height: '100%', border: 0 }}
++                  />
++                )}
++              </>
+             )}
+           </div>
+         </div>

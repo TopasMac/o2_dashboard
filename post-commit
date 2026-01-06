@@ -1,0 +1,79 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "[post-commit] hook running on branch: $(git rev-parse --abbrev-ref HEAD)"
+branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Only run this hook for the owners2_main worktree
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+if [ "$REPO_ROOT" != "/home/ubuntu/owners2_main" ]; then
+  echo "[post-commit] Repo root is $REPO_ROOT (not /home/ubuntu/owners2_main). Skipping build/deploy and auto-push."
+  exit 0
+fi
+
+# Helper to push current branch no matter what
+push_branch() {
+  local b="$1"
+  echo "🔄 Pushing commits to origin/${b}..."
+  if git push -u origin "$b"; then
+    echo "✅ Push complete!"
+  else
+    echo "❌ Push failed. Check your network/SSH key and remote permissions."
+  fi
+}
+
+if [ "$branch" = "main" ]; then
+  echo "🔧 Running post-commit build for MAIN..."
+  DEPLOY_DIR="/home/ubuntu/owners2_main/public"
+
+  # Build frontend with env configured for production API
+  (
+    set -e
+    cd frontend
+    export REACT_APP_BACKEND_BASE=https://dashboard.owners2.com/api
+    export REACT_APP_API_URL=https://dashboard.owners2.com/api
+    echo "ENV: REACT_APP_BACKEND_BASE=$REACT_APP_BACKEND_BASE REACT_APP_API_URL=$REACT_APP_API_URL"
+
+    # Install if node_modules missing but lockfile exists
+    if [ ! -d node_modules ] && [ -f package-lock.json ]; then
+      echo "📦 Installing frontend deps (npm ci)..."
+      npm ci
+    fi
+
+    echo "🏗️  Building React app..."
+    npm run build
+  ) || {
+    echo "⚠️ Frontend build failed — pushing commits anyway so you don't lose work."
+    push_branch "$branch"
+    exit 1
+  }
+
+  echo "🚀 Deploying to ${DEPLOY_DIR} (preserving uploads/)..."
+  sudo mkdir -p "${DEPLOY_DIR}" "${DEPLOY_DIR}/uploads"
+  # Sync build → DEPLOY_DIR, but DO NOT touch uploads/
+  if command -v rsync >/dev/null 2>&1; then
+    sudo rsync -a --exclude 'uploads/' frontend/build/ "${DEPLOY_DIR}/"
+  else
+    sudo rm -rf "${DEPLOY_DIR}/static" "${DEPLOY_DIR}/asset-manifest.json" "${DEPLOY_DIR}/index.html" "${DEPLOY_DIR}/manifest.json" "${DEPLOY_DIR}/robots.txt"
+    sudo cp -r frontend/build/* "${DEPLOY_DIR}/"
+  fi
+
+  # Ensure web server owns the deployed files
+  if id www-data >/dev/null 2>&1; then
+    sudo chown -R www-data:www-data "${DEPLOY_DIR}"
+  fi
+
+
+  echo "🔄 Reloading nginx..."
+  if sudo systemctl reload nginx; then
+    echo "✅ Nginx reloaded"
+  else
+    echo "⚠️ Failed to reload nginx. Check systemctl status nginx."
+  fi
+
+  # Always push after build/deploy
+  push_branch "$branch"
+else
+  echo "ℹ️ Not on main branch ($branch). Skipping production build/deploy."
+  push_branch "$branch"
+fi

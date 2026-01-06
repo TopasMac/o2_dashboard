@@ -1,0 +1,117 @@
+{# templates/pdf/_base.html.twig #}
+{# Base PDF template with inline header & footer (wkhtmltopdf header/footer disabled by default in PdfRenderer) #}
+<!DOCTYPE html>
+<html lang="{{ lang|default(locale|default(app.request.locale|default('en'))) }}">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block pdf_title %}Document{% endblock %}</title>
+
+  {# Shared, wkhtmltopdf-safe styles #}
+  {% include 'pdf/_styles.css.twig' %}
+
+  <style>
+    /* Page box: keep generous bottom margin for footer */
+    @page {
+      margin: 0 24pt 64pt 24pt; /* remove top margin; header spacing handled by wkhtml options */
+    }
+
+    /* Fixed header & footer (wkhtmltopdf supports fixed) */
+    .pdf-header {
+      position: fixed;
+      top: 0;
+      left: 0; right: 0;
+      height: 46pt;
+      padding: 1pt 8pt 1pt 8pt; /* minimal spacing top and bottom */
+      background: #fff;
+      box-sizing: border-box;
+      border: 0 !important;       /* reset all borders */
+      outline: none !important;   /* avoid thin outlines on some renderers */
+      box-shadow: none !important;/* avoid hairline artifacts */
+      /* divider moved to ::after to avoid vertical hairlines */
+      z-index: 10;
+    }
+    .pdf-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0; right: 0;
+      min-height: 40pt;
+      padding: 6pt 8pt 4pt 8pt;
+      background: #fff;
+      box-sizing: border-box;
+      font-size: var(--small);
+      color: var(--muted);
+    }
+
+    /* Body content leaves room for header/footer */
+    .pdf-body {
+      margin-top: 0;          /* rely on padding to self-clear the fixed header */
+      padding-top: 54pt;      /* header (46pt) + ~8pt cushion */
+      margin-bottom: 56pt;
+      padding-left: 4pt;
+      padding-right: 4pt;
+    }
+    /* Avoid top-margin collapse from the first child inside the body */
+    .pdf-body > *:first-child { margin-top: 0 !important; }
+
+    /* Header layout (table is safer for wkhtml than flex) */
+    .hdr-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .hdr-td    { vertical-align: middle; padding: 0; }
+    .hdr-left  { width: 60%; text-align: left; }
+    .hdr-right { width: 40%; text-align: right; color: var(--muted); font-size: var(--small); }
+    .hdr-logo  { height: 38pt; vertical-align: bottom; margin-bottom: 0; padding-bottom: 0; }
+    .hdr-divider { border-top: 1px solid var(--border); margin-top: 4pt; }
+    .hdr-table, .hdr-table * {
+      border: 0 !important;
+      outline: none !important;
+      box-shadow: none !important;
+    }
+
+    /* Body divider drawn in flow to avoid fixed-position artifacts */
+    .body-divider {
+      display: block;
+      height: 0;
+      margin: 0 8pt 4pt 8pt; /* slightly tighter spacing below the line */
+      border-top: 2px solid rgba(30, 118, 104, 0.55);  /* reliable line rendering */
+    }
+
+    /* Footer */
+    .ftr-divider { border-top: 1px solid var(--border); margin-bottom: 4pt; }
+  </style>
+
+  {% block pdf_head_extra %}{% endblock %}
+</head>
+<body>
+  {# ===== Header ===== #}
+  <div class="pdf-header">
+    {% set _logoPath = absolute_url(asset(logoPath|default(o2_logo_path|default('img/company-logo.png')))) %}
+    <table class="hdr-table">
+      <tr>
+        <td class="hdr-td hdr-left">
+          <img class="hdr-logo" src="{{ _logoPath }}" alt="Logo" />
+        </td>
+        <td class="hdr-td hdr-right">
+          {% block pdf_header_right %}
+            {{ headerRight|default('') }}
+          {% endblock %}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  {# ===== Body ===== #}
+  <main class="pdf-body">
+    <div class="body-divider"></div>
+    {% block pdf_content %}
+      {# Child templates provide their content here (tables, images, etc.) #}
+    {% endblock %}
+  </main>
+
+  {# ===== Footer ===== #}
+  <footer class="pdf-footer">
+    <div class="ftr-divider"></div>
+    {% block pdf_footer %}
+      {{ companyContacts|default(o2_company_contacts|default('Owners2 · owners2.com · hola@owners2.com · +52 (__) ___-____')) }}
+    {% endblock %}
+  </footer>
+</body>
+</html>

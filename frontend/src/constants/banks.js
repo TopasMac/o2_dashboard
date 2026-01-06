@@ -1,0 +1,17 @@
+export const BANKS = [
+    "Arcus",
+    "Azteca",
+    "BBVA",
+    "Banregio",
+    "Santander",
+    "HSBC",
+    "Banorte",
+    "Banamex",
+    "Scotiabank",
+    "Inbursa",   
+    "STP",
+    "Arcus",
+    "Cibanco",
+    "Kapital Bank",
+    "Mercado Pago",
+  ];

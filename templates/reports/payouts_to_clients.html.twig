@@ -1,0 +1,82 @@
+{% extends 'pdf/_base.html.twig' %}
+
+{% block pdf_title %}Payouts to Clients — {{ yearMonth|default('') }}{% endblock %}
+
+{% block pdf_header_right %}
+  {{ yearMonth|default('') }}
+{% endblock %}
+
+{% block pdf_content %}
+  <section class="mb-3">
+    <h1>Transferencias a Clientes</h1>
+    <div class="muted">Mes: {{ yearMonth|default('') }}</div>
+  </section>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 28%; text-align: left;">Unidade</th>
+        <th style="width: 18%; text-align: center;">Titular</th>
+        <th style="width: 18%; text-align: center;">Banco</th>
+        <th style="width: 20%; text-align: center;">CLABE</th>
+        <th style="width: 18%; text-align: center;">Referencia</th>
+        <th style="width: 16%; text-align: center;">Monto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set total = 0 %}
+      {% for r in rows|default([]) %}
+        {% set amt = r.amount is defined ? r.amount : 0 %}
+        {% set total = total + amt %}
+        <tr>
+          <td style="text-align: left;">{{ r.unitName }}</td>
+          <td style="text-align: center;">{{ r.bankOwner|default('') }}</td>
+          <td style="text-align: center;">{{ r.bankName|default('') }}</td>
+          <td style="text-align: center;">{{ r.bankAccount|default('') }}</td>
+          <td style="text-align: center;">{{ r.reference|default('') }}</td>
+          <td style="text-align: center;">{{ amt|number_format(2, '.', ',') }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="6" class="center muted" style="padding: 10px">No payouts for {{ yearMonth|default('this month') }}.</td>
+        </tr>
+      {% endfor %}
+
+      {% if rows is defined and rows|length > 0 %}
+        <tr>
+          <td colspan="6" style="border: none; height: 10px;"></td>
+        </tr>
+        <tr>
+          <td colspan="4" style="border: none;"></td>
+          <td style="text-align: center; font-weight: bold; border: none;">Total</td>
+          <td style="text-align: center; font-weight: bold; border: none;">{{ total|number_format(2, '.', ',') }}</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {% if showReferences|default(false) %}
+    <div class="page-break"></div>
+    <h2>Payment References</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 40%">Unit Name</th>
+          <th style="width: 60%">Reference</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows|default([]) %}
+          <tr>
+            <td>{{ r.unitName }}</td>
+            <td>{{ r.reference|default('') }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="2" class="center muted" style="padding: 12px">No references.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

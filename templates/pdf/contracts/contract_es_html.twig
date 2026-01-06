@@ -1,0 +1,159 @@
+{% extends 'pdf/_base.html.twig' %}
+
+{% block pdf_title %}{% endblock %}
+
+{# --- Helper para overrides por sección e idioma --- #}
+{% macro ov(key, defaultHtml, lang, overrides_en, overrides_es) %}
+  {% set _ov = (lang == 'es' ? (overrides_es[key]|default(null)) : (overrides_en[key]|default(null))) %}
+  {{ (_ov is not null and _ov|trim != '') ? _ov|raw : defaultHtml|raw }}
+{% endmacro %}
+{% import _self as sec %}
+
+{% block pdf_content %}
+
+  {# Normalize overrides to accept camelCase or snake_case from the controller #}
+  {% set _ov_en = (overrides_en is defined and overrides_en is not null) ? overrides_en : (overridesEn is defined ? overridesEn : {}) %}
+  {% set _ov_es = (overrides_es is defined and overrides_es is not null) ? overrides_es : (overridesEs is defined ? overridesEs : {}) %}
+
+  {% set __doc_title = 'document.title'|trans({}, 'contract', 'es') %}
+  <h1 style="text-align:center; margin:0 0 32px 0;">
+    {{ __doc_title == 'document.title' ? 'Contrato de Administración de Propiedad' : __doc_title }}
+  </h1>
+  
+  {% set d_intro %}
+  <p>
+    Este Contrato de Administración de Propiedad (el “Contrato”) entra en vigor a partir del
+    <strong>{{ contract.effectiveDate is defined ? contract.effectiveDate|date('d/m/Y') : '___/___/____' }}</strong>,
+    celebrado entre
+    <strong>{{ company.legalName|default('Owners2 Property Management') }} (“Owners2”)</strong>,
+    representada por el socio {{ company.representative|default('António Pedro Tarana de Macedo') }},
+    y <strong>{{ client.name|default('(Propietario)') }}</strong> (el “Propietario”),
+    denominados conjuntamente las “Partes”.
+  </p>
+  {% endset %}
+  {{ sec.ov('intro', d_intro, 'es', _ov_en, _ov_es) }}
+
+  <h2>1. {{ 'purpose.title'|trans({}, 'contract', 'es') }}</h2>
+
+  {% set d_purpose %}
+  <p>
+    {{ 'purpose.body'|trans({'%address%': unit.address|default('(dirección)')}, 'contract', 'es')|raw }}
+  </p>
+  {% endset %}
+  {{ sec.ov('purpose', d_purpose, 'es', _ov_en, _ov_es) }}
+
+  <h2>2. {{ 'services.title'|trans({}, 'contract', 'es') }}</h2>
+  {% set d_services %}
+  <p>
+    {{ 'services.intro'|trans({}, 'contract', 'es')|raw }}
+  </p>
+  <ol>
+    <li>{{ 'services.listing'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'services.guest_comm'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'services.reservations'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'services.checkin'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'services.cleaning'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'services.supplies'|trans({}, 'contract', 'es')|raw }}</li>
+  </ol>
+  {% endset %}
+  {{ sec.ov('services', d_services, 'es', _ov_en, _ov_es) }}
+
+  <h2>3. {{ 'financial.title'|trans({}, 'contract', 'es') }}</h2>
+  {% set d_financial %}
+  <ol>
+    <li>{{ 'financial.collection'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'financial.commission'|trans({'%commission%': contract.commission|default('20%'), '%currency%': contract.currency|default('MXN')}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'financial.taxes'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'financial.direct_bookings'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>
+      {{ 'financial.linens'|trans({}, 'contract', 'es')|raw }}
+      <p>{{ 'financial.linens_fee'|trans({'%linensFee%': contract.linensFee|default('___')}, 'contract', 'es')|raw }}</p>
+    </li>
+    <li>{{ 'financial.maintenance'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>Los pagos al Propietario se realizarán a más tardar el {{ contract.payoutDay|default('10') }}º día hábil del mes siguiente.</li>
+  </ol>
+  {% endset %}
+  {{ sec.ov('financial_terms', d_financial, 'es', _ov_en, _ov_es) }}
+
+  <h2>4. {{ 'other.title'|trans({}, 'contract', 'es') }}</h2>
+  {% set d_other %}
+  <ol>
+    <li>{{ 'other.use_by_owner'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'other.cancellation'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'other.access_inventory_photos'|trans({}, 'contract', 'es')|raw }}</li>
+  </ol>
+  {% endset %}
+  {{ sec.ov('other', d_other, 'es', _ov_en, _ov_es) }}
+
+  <div style="page-break-before: always; break-before: page;"></div>
+  <h2>5. {{ 'legal.title'|trans({}, 'contract', 'es') }}</h2>
+  {% set d_legal %}
+  <ol>
+    <li>{{ 'legal_extras.duration'|trans({'%initialTerm%': contract.initialTerm|default('un (1) año')}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal_extras.termination'|trans({'%terminationNotice%': contract.terminationNotice|default('treinta (30) días')}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal_extras.confirmed_bookings'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal.reps'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal.compliance'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal.legal_proc'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal.limitation'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal_extras.binding'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal_extras.governing_law'|trans({'%stateCountry%': contract.stateCountry|default('Quintana Roo, México')}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal_extras.notices'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal_extras.data_protection'|trans({}, 'contract', 'es')|raw }}</li>
+    <li>{{ 'legal.entire'|trans({}, 'contract', 'es')|raw }}</li>
+  </ol>
+  {% endset %}
+  {{ sec.ov('legal', d_legal, 'es', _ov_en, _ov_es) }}
+
+  <h2>6. {{ 'contacts.title'|trans({}, 'contract', 'es') }}</h2>
+  {% set d_contacts %}
+  <div style="margin-bottom:40px;">
+    <p>{{ 'contacts.intro'|trans({}, 'contract', 'es')|raw }}</p>
+    <table class="no-border" style="margin-bottom: 8px;">
+      <tr>
+        <td style="width:50%; vertical-align: top;">
+          <strong>Owners2</strong><br>
+          Tel.: <strong>{{ company.phone|default('+52 984 142 9561') }}</strong><br>
+          Email: <strong>{{ company.email|default('admin@owners2.com') }}</strong>
+        </td>
+        <td style="width:50%; vertical-align: top;">
+          <strong>Propietario</strong><br>
+          Tel.: <strong>{{ client.phone|default('(teléfono)') }}</strong><br>
+          Email: <strong>{{ client.email|default('(email)') }}</strong>
+        </td>
+      </tr>
+    </table>
+    <p class="muted small">{{ 'contacts.footer'|trans({}, 'contract', 'es')|raw }}</p>
+  </div>
+  {% endset %}
+  {{ sec.ov('contacts', d_contacts, 'es', _ov_en, _ov_es) }}
+
+  <div style="margin-top:80px; margin-bottom:70px;">
+    <table class="table no-border signature-block" style="width:100%; border:none;">
+      <tr>
+        <td style="width:50%; text-align:center; vertical-align:top; border:none;">
+          <div class="avoid-break">
+            ________________________________<br>
+            <strong>Owners2</strong><br>
+            {{ company.representative|default('António Pedro Tarana de Macedo') }}<br>
+            <div style="margin-top:12px;"></div>
+          </div>
+        </td>
+        <td style="width:50%; text-align:center; vertical-align:top; border:none;">
+          <div class="avoid-break">
+            ________________________________<br>
+            <strong>{{ 'signature.client_label'|trans({}, 'contract', 'es') }}</strong><br>
+            <strong>{{ client.name|default('(Propietario)') }}</strong><br>
+            <div style="margin-top:12px;"></div>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <h2>7. {{ 'place_date.title'|trans({}, 'contract', 'es')|raw }}</h2>
+  <p style="text-align: right; margin-top: 8px;">
+    {{ 'place_date.place'|trans({}, 'contract', 'es') }}: <strong>{{ contract.place|default(('place_date.default_place'|trans({}, 'contract', 'es'))) }}</strong>
+    &nbsp; | &nbsp;
+    {{ 'place_date.date'|trans({}, 'contract', 'es') }}: <strong>{{ contract.effectiveDate is defined ? contract.effectiveDate|date('d/m/Y') : '___/___/____' }}</strong>
+  </p>
+{% endblock %}

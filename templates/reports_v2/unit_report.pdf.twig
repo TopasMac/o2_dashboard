@@ -1,0 +1,968 @@
+{% extends 'reports_v2/_base.html.twig' %}
+
+{% block pdf_head_extra %}
+<style>
+  /* --- Owners2 shared PDF typography --- */
+  {% include 'reports_v2/_pdf_typography.css.twig' %}
+
+  /* Override body margin so it doesn't conflict with PDF chrome/header margins */
+  body { margin: 0; }
+
+  /* --- Unit Report (V2) specific styles --- */
+  .summary-card {
+    border: 1px solid #d1d5db;
+    border-radius: 3pt;
+    position: relative;
+    padding: 10pt 0 10pt 0; /* equal top and bottom padding for balanced spacing */
+    margin-top: 20pt;
+    margin-bottom: 10pt;
+    width: 100%;            /* full width for table-cell layout */
+    margin-left: 0;        /* anchor to the left edge of the column */
+    overflow: visible;     /* allow title to render fully */
+  }
+  .summary-card .card-title {
+    position: relative;
+    display: inline-block;
+    background: #fff;
+    font-weight: 700;
+    color: #1E7668;
+    font-size: 10.5pt;
+    line-height: 1;
+    top: -13pt;           /* micro‑nudge up for perfect centering */
+    left: 8pt;
+    padding: 0 4pt;
+    z-index: 1;
+  }
+
+  /* Comments card */
+  .comments-card {
+    border: 1px solid #d1d5db;
+    border-radius: 3pt;
+    position: relative;
+    padding: 6pt 8pt 8pt 8pt;  /* smaller padding; dynamic height */
+    margin: 24pt 0 14pt 0;     /* increase top margin for more space below Summary */
+    min-height: 20pt;          /* keep small visible box if empty */
+  }
+  .comments-card .card-title {
+    position: relative;
+    display: inline-block;
+    background: #fff;
+    font-weight: 700;
+    color: #1E7668;
+    font-size: 10.5pt;
+    line-height: 1;
+    top: -12pt;  /* overlap the top border line */
+    left: 4pt;
+    padding: 0 4pt;
+  }
+
+  /* Tighten the inner content spacing (text block) */
+  .comments-card .comments-box {
+    padding-top: 0pt;
+    padding-bottom: 2pt;
+  }
+  .comments-card .comments-box p {
+    margin: 0;
+  }
+
+  /* Bookings card */
+  .bookings-card {
+    border: 1px solid #d1d5db;
+    border-radius: 3pt;
+    position: relative;
+    padding: 6pt 8pt 8pt 8pt;  /* reduced top padding so header is closer to border */
+    margin: 24pt 0 0 0;        /* top gap = 24pt; bottom handled by ec-row */
+  }
+  .bookings-card .card-title {
+    position: relative;
+    display: inline-block;
+    background: #fff;
+    font-weight: 700;
+    color: #1E7668;
+    font-size: 10.5pt;
+    line-height: 1;
+    top: -14pt;   /* raise label to sit mid-border */
+    left: 4pt;
+    padding: 0 4pt;
+  }
+  .bookings-card .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  /* Bookings column widths + alignment */
+  .bookings-card .table { table-layout: fixed; }
+  .bookings-card .table col.col-source { width: 10%; }
+  .bookings-card .table col.col-payment { width: 10%; }
+  .bookings-card .table col.col-guest { width: 16%; } /* +2% */
+  .bookings-card .table col.col-stay { width: 16%; }
+  .bookings-card .table col.col-net { width: 11%; }
+  .bookings-card .table col.col-taxpct { width: 8%; }
+  .bookings-card .table col.col-o2pct { width: 8%; }
+  .bookings-card .table col.col-o2 { width: 10%; }     /* -2% */
+  .bookings-card .table col.col-client { width: 11%; }
+
+  /* Compact Stay column */
+  .nowrap { white-space: nowrap; }
+  .bookings-card .table th.stay,
+  .bookings-card .table td.stay {
+    white-space: nowrap;
+  }
+
+  .left   { text-align: left; }
+  .center { text-align: center; }
+  /* .num already exists as right-aligned */
+
+  .bookings-card .table thead th {
+    border-bottom: 0;     /* remove horizontal line under header */
+    padding: 3pt 4pt;     /* keep spacing */
+  }
+  /* Force center alignment for header labels on numeric columns */
+  .bookings-card .table thead th.center { text-align: center; }
+  .bookings-card .table tbody td {
+    padding: 1.5pt 4pt; /* tighter vertical spacing (same as Expenses) */
+    border-bottom: 0;   /* no horizontal line between rows */
+  }
+  .bookings-card .table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  /* Muted text helper */
+  .muted { color: #6b7280; }
+
+  /* Side-by-side using table layout (stable in wkhtmltopdf) */
+  .ec-row {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-spacing: 0;       /* no outer inset so edges align perfectly */
+    margin-top: 24pt;        /* match the Comments→Bookings gap */
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .ec-row > .expenses-card,
+  .ec-row > .credits-card {
+    display: table-cell;
+    vertical-align: top;
+  }
+  .ec-row > .expenses-card { width: 59%; padding-right: 16pt; }
+  .ec-row > .credits-card  { width: 39%; padding-left: 16pt; }
+
+  .expenses-card,
+  .credits-card {
+    /* draw border with pseudo-elements so we can trim the inner edge */
+    border: none;
+    border-radius: 3pt;
+    position: relative;
+    padding: 8pt;
+  }
+  .expenses-card::before,
+  .credits-card::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 0; right: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 3pt;
+    pointer-events: none;
+    background: transparent;
+  }
+  /* trim the inner edge to create the visible gap between cards */
+  .expenses-card::before { right: 10pt; }   /* move right border inward */
+  .credits-card::before  { left: 10pt; }    /* move left border inward */
+
+  /* Definitions card */
+  .defs-card {
+    border: 1px solid #d1d5db;
+    border-radius: 3pt;
+    position: relative;
+    padding: 8pt 10pt 8pt 10pt;
+    margin-top: 40pt; /* fixed 40pt gap below Expenses/Credits */
+  }
+  .defs-card .card-title {
+    position: relative;
+    display: inline-block;
+    background: #fff;
+    font-weight: 700;
+    color: #1E7668;
+    font-size: 10.5pt;
+    line-height: 1;
+    top: -12pt;
+    left: 4pt;
+    padding: 0 4pt;
+  }
+  .defs-card p {
+    font-size: 9pt;
+    margin: 2pt 0 4pt 0;
+  }
+  .defs-card .spacer { display: inline-block; width: 14pt; }
+
+  .expenses-card .card-title,
+  .credits-card .card-title {
+    position: relative;
+    display: inline-block;
+    background: #fff;
+    font-weight: 700;
+    color: #1E7668;
+    font-size: 10.5pt;
+    line-height: 1;
+    top: -12pt;  /* overlap top border like other cards */
+    left: 4pt;
+    padding: 0 4pt;
+  }
+
+  .expenses-card .table,
+  .credits-card .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .expenses-card .table thead th,
+  .credits-card  .table thead th {
+    border-bottom: 0;     /* no horizontal line under header */
+    padding: 3pt 4pt;
+  }
+  /* Right-align header labels when using .num (for TH) */
+  .expenses-card .table thead th.num,
+  .credits-card  .table thead th.num { text-align: right; }
+  /* Center header labels in Expenses/Credits when using .center */
+  .expenses-card .table thead th.center,
+  .credits-card  .table thead th.center { text-align: center; }
+  .expenses-card .table tbody td {
+    padding: 1.5pt 4pt; /* reduced vertical spacing */
+    border-bottom: 0; /* no row separators inside Expenses */
+  }
+  .credits-card  .table tbody td {
+    padding: 1.5pt 4pt; /* reduced vertical spacing */
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .expenses-card .table tbody tr:last-child td,
+  .credits-card .table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+
+  /* Expenses group label inside Description column */
+  .expenses-card tr.group td { 
+    border-bottom: 0; 
+    padding: 4pt 4pt 2pt 4pt; 
+  }
+  .expenses-card tr.group td.group-label {
+    font-weight: 600;
+    color: #6b7280;   /* muted grey */
+    font-size: 9pt;   /* smaller font */
+  }
+
+  /* Credits group label inside Description column (match Expenses; remove separator line) */
+  .credits-card tr.group td {
+    border-bottom: 0;
+    padding: 4pt 4pt 2pt 4pt;
+  }
+  .credits-card tr.group td.group-label {
+    font-weight: 600;
+    color: #6b7280;   /* muted grey */
+    font-size: 9pt;
+  }
+
+
+
+  .summary-card .summary-table {
+    width: 100%;         /* fill the narrower card */
+    margin: 0;
+    border-collapse: collapse;
+  }
+  .summary-card .summary-table td {
+    font-size: 9pt; /* slightly smaller row text */
+  }
+  .summary-card .summary-table .label {
+    font-weight: 600;
+    color: #6b7280;
+    width: 66%;          /* slightly wider label column */
+    padding-right: 2pt;  /* bring value closer */
+  }
+  .summary-card .summary-table .value {
+    text-align: right;
+    white-space: nowrap;
+    width: 34%;          /* tighter value column */
+  }
+  .summary-card .summary-table tr:nth-child(odd) td { background: #fafafa; }
+  .summary-card .summary-table tr td {
+    padding: 3pt 8pt;    /* add more horizontal padding (left/right) */
+    vertical-align: middle;
+  }
+
+  .client-block h3 {
+    color: #1E7668;
+    margin: 0 0 6pt 0;
+    font-size: 11pt;
+  }
+  .client-block table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .client-block .label {
+    font-weight: 700;
+    width: 15%;           /* narrower label column */
+    padding-right: 1pt;   /* reduce horizontal gap further */
+  }
+  .client-block .value {
+    width: 62%;
+  }
+  /* Ensure notice box spans full width of the Client column */
+  .client-block .notice { width: 80%; box-sizing: border-box; }
+  /* Two-column grid for summary and client */
+  .grid-2 {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-spacing: 0;
+  }
+  .grid-2__col {
+    display: table-cell;
+    vertical-align: top;
+  }
+  .grid-2__col:first-child { width: 40%; padding-right: 6pt; }
+  .grid-2__col:last-child { width: 60%; padding-left: 6pt; }
+</style>
+  {# Notice boxes for OWNERS2 negative balance #}
+  <style>
+  /* Notice boxes for OWNERS2 negative balance */
+  .notice { border: 1px solid #f59e0b; border-radius: 6pt; padding: 7pt 9pt; margin-top: 8pt; font-size: 8pt; line-height: 1.3; background: #fff; }
+  .notice .notice-title { font-weight: 700; margin: 0 0 4pt 0; color: #f59e0b; }
+  .notice p { text-align: justify; }
+  .notice.payment { border-color: #f59e0b; }
+  .notice.headsup { border-color: #f59e0b; }
+  .notice .sep { height: 1px; background: #e5e7eb; margin: 8pt 0 6pt 0; }
+  .notice table { width: 100%; border-collapse: collapse; }
+  .notice td.label { font-weight: 700; width: 24%; }
+  .notice td.value { width: 76%; }
+  </style>
+{% endblock %}
+
+{# -------- Title (browser/document) -------- #}
+{% block pdf_title %}
+  {{ 'Monthly Report'|trans({}, 'unit_report', meta.language|default('es')) }}
+  · {{ unit.name|default(unit.listingName|default(unit.unitName|default('Unit'))) }}
+  · {{ meta.yearMonth|default(period|default(ym|default(''))) }}
+{% endblock %}
+
+{# -------- Header Right (editable) -------- #}
+{% block pdf_header_right %}
+  {{ meta.monthLabel|default(periodLabel|default(period|default(ym|default('')))) }}
+{% endblock %}
+
+{# -------- Body -------- #}
+{% block pdf_content %}
+
+  {# ---- Locale helpers ---- #}
+  {% set _lang = meta.language|default('es') %}
+  {% set _dec = (_lang starts with 'es') ? ',' : '.' %}
+  {% set _th  = (_lang starts with 'es') ? '.' : ',' %}
+  {% set _payMode = unit.paymentType|default('CLIENT') %} {# OWNERS2 or CLIENT #}
+  {% set _mdec = ',' %}
+  {% set _mth  = '.' %}
+
+  {# ---- Precompute CLIENT private total for Summary ---- #}
+  {% set _isClient = (_payMode|upper == 'CLIENT') %}
+  {% set _bookingsCandidate = reservas|default(bookings|default([])) %}
+  {% set bookingsAll = _bookingsCandidate.rows|default(_bookingsCandidate|default([])) %}
+  {% set _rows_private = [] %}
+  {% if bookingsAll %}
+    {% for _r in bookingsAll %}
+      {% set _src = _r.source|default('') %}
+      {% if _src == 'Private' or _src == 'Owner' or _src == 'Direct' %}
+        {% set _rows_private = _rows_private|merge([_r]) %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  {% set _clientPrivateTotal = 0 %}
+  {% for r in _rows_private %}
+    {% set _netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+    {% set _o2Amt = r.o2CommissionInMonth|default(0) %}
+    {% set _clientPrivateTotal = _clientPrivateTotal + (_netPay - _o2Amt) %}
+  {% endfor %}
+
+  {# ---- Sum Cleaning fees for Airbnb (CLIENT summary) ---- #}
+  {% set _airbnbCleaningTotal = 0 %}
+  {% if bookingsAll %}
+    {% for r in bookingsAll %}
+      {% if r.source|default('') == 'Airbnb' %}
+        {% set _airbnbCleaningTotal = _airbnbCleaningTotal + (r.cleaningFeeInMonth|default(r.cleaningFee|default(0))) %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+
+  {# ---- Helper: final closing balance value used for client card conditions ---- #}
+  {% set _closing = closingBalance|default(totals.closingBalance|default(meta.closingBalance|default(0))) %}
+
+  {# ===== Summary (KPI left "card", Client right) ===== #}
+  <div class="grid-2">
+    <div class="grid-2__col">
+      <div class="summary-card">
+        <div class="card-title">{{ 'Summary'|trans({}, 'unit_report', _lang) }}</div>
+        <table class="summary-table">
+          <tbody>
+            <tr>
+              <td class="label">{{ 'Client Commissions'|trans({}, 'unit_report', _lang) }}:</td>
+              {# In OWNERS2 mode, clientCredit.total includes credits; use payouts only for commissions #}
+              {% set _ccTotal = _isClient
+                ? _clientPrivateTotal
+                : (clientCredit.payouts|default(bookings.totals.ownerPayout|default(totals.payoutReservas|default(totals.bookings|default(0))))) %}
+              <td class="value num">{{ '$' }}{{ _ccTotal|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            <tr>
+              <td class="label">O2:</td>
+              <td class="value num">{{ '$' }}{{ (bookings.totals.o2Commission|default(totals.o2Commission|default(0)))|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            {% if _isClient %}
+            <tr>
+              <td class="label">{{ 'Cleaning'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value num">{{ '$' }}{{ _airbnbCleaningTotal|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td class="label">{{ 'Total Expenses'|trans({}, 'unit_report', _lang) }}:</td>
+              {# Total Expenses should include both housekeeping + regular expenses; avoid zero housekeeping overriding expenses #}
+              {% set _expHK  = housekeeping.totals.charged|default(0) %}
+              {% set _expReg = expenses.totals.amount|default(0) %}
+              {% set _expTotal = (_expHK + _expReg) %}
+              {% if _expTotal == 0 %}
+                {% set _expTotal = totals.gastosTotalClient|default(totals.expenses|default(0)) %}
+              {% endif %}
+              <td class="value num">{{ '$' }}{{ _expTotal|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Total Credits'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value num">{{ '$' }}{{ (abonos.totals.amount|default(credits.totals.amount|default(totals.abonosTotalClient|default(totals.credits|default(0)))))|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Month Result'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value num">{{ '$' }}{{ (monthlyResult|default(totals.monthlyEarnings|default(totals.result|default(0))))|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Opening Balance'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value num">{{ '$' }}{{ (openingBalance|default(totals.unitBalanceStart|default(meta.openingBalance|default(0))))|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            <tr>
+              <td class="label">
+                {{ (_payMode|upper == 'OWNERS2' and _closing < 0)
+                    ? 'Amount Due'|trans({}, 'unit_report', _lang)
+                    : 'Closing Balance'|trans({}, 'unit_report', _lang) }}:
+              </td>
+              <td class="value num"><strong>{{ '$' }}{{ (closingBalance|default(totals.closingBalance|default(meta.closingBalance|default(0))))|number_format(2, _mdec, _mth) }}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2__col">
+      <div class="client-block">
+        <h3>{{ 'Client'|trans({}, 'unit_report', _lang) }}</h3>
+        <table>
+          <tbody>
+            <tr>
+              <td class="label">{{ 'Name'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value">{{ client.name|default('') }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Email'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value">{{ client.email|default('') }}</td>
+            </tr>
+            {% if _payMode|upper == 'OWNERS2' and _closing >= 0 %}
+            {% set _bankVal  = client.bank|default(client.bankName|default(client.bank_name|default(''))) %}
+            {% set _clabeRaw = client.clabe|default(client.bankAccount|default(client.bank_account|default(''))) %}
+            <tr>
+              <td class="label">{{ 'Bank'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value">{{ _bankVal }}</td>
+            </tr>
+            <tr>
+              <td class="label">CLABE:</td>
+              <td class="value">
+                {% if _clabeRaw %}
+                  ********* {{ _clabeRaw|slice(-3) }}
+                {% else %}
+                  {{ _clabeRaw }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+        {% if _payMode|upper == 'CLIENT' and _closing < 0 %}
+          {% set _o2Holder = meta.o2Holder|default(meta.owners2Holder|default('Antonio Pedro Macedo')) %}
+          {% set _o2Bank   = meta.o2Bank|default(meta.owners2Bank|default('Santander')) %}
+          {% set _o2Clabe  = meta.o2Clabe|default(meta.owners2Clabe|default('014 694 606 078 428 258')) %}
+          {% set _o2Email  = meta.o2Email|default(meta.owners2Email|default('admin@owners2.com')) %}
+          {% set _absDue   = (_closing * -1) %}
+          <div class="o2-payment">
+            <h3>Owners2</h3>
+            <table>
+              <tbody>
+                <tr>
+                  <td class="label">{{ (_lang starts with 'es') ? 'Nombre:' : 'Name:' }}</td>
+                  <td class="value">{{ _o2Holder }}</td>
+                </tr>
+                <tr>
+                  <td class="label">Email:</td>
+                  <td class="value">{{ _o2Email }}</td>
+                </tr>
+                <tr>
+                  <td class="label">{{ (_lang starts with 'es') ? 'A pagar:' : 'Amount Due:' }}</td>
+                  <td class="value">{{ '$' }}{{ _absDue|number_format(2, _mdec, _mth) }}</td>
+                </tr>
+                <tr>
+                  <td class="label">{{ (_lang starts with 'es') ? 'Banco:' : 'Bank:' }}</td>
+                  <td class="value">{{ _o2Bank }}</td>
+                </tr>
+                <tr>
+                  <td class="label">CLABE:</td>
+                  <td class="value">{{ _o2Clabe }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ===== Comments (always render the card, text optional) ===== #}
+  <div class="comments-card">
+    <div class="card-title">{{ 'Comments'|trans({}, 'unit_report', _lang) }}</div>
+
+    {% set _commentsArr = notes.report|default(reportNotes|default(notesReport|default([]))) %}
+    {% set _commentsParts = [] %}
+
+    {% if _commentsArr is iterable %}
+      {% for c in _commentsArr %}
+        {% if c is iterable %}
+          {# Common shapes: {text:...} / {note:...} / {comment:...} / {message:...} #}
+          {% set _t = c.note_comment|default(c.text|default(c.note|default(c.comment|default(c.message|default(''))))) %}
+          {% if _t|trim != '' %}
+            {% set _commentsParts = _commentsParts|merge([_t]) %}
+          {% endif %}
+        {% else %}
+          {% set _t = c %}
+          {% if _t is not empty and (_t|trim != '') %}
+            {% set _commentsParts = _commentsParts|merge([_t]) %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% elseif _commentsArr is not empty %}
+      {% set _commentsParts = [_commentsArr] %}
+    {% endif %}
+
+    {% set _commentsText = _commentsParts|join(' • ') %}
+
+    {% if _commentsText|trim != '' %}
+      <div class="comments-box"><p>{{ _commentsText }}</p></div>
+    {% else %}
+      <div class="comments-box muted">{{ 'No comments'|trans({}, 'unit_report', _lang) }}</div>
+    {% endif %}
+  </div>
+
+  {# ===== Bookings (card) ===== #}
+  {% set _bookingsCandidate = reservas|default(bookings|default([])) %}
+  {% set bookings = _bookingsCandidate.rows|default(_bookingsCandidate|default([])) %}
+  {# Scaffolding for CLIENT layout mirroring legacy template #}
+  {% set _isClient = (_payMode|upper == 'CLIENT') %}
+  {% set rows_airbnb = [] %}
+  {% set rows_private = [] %}
+  {% if bookings %}
+    {% for _r in bookings %}
+      {% set _src = _r.source|default('') %}
+      {% if _src == 'Airbnb' %}
+        {% set rows_airbnb = rows_airbnb|merge([_r]) %}
+      {% elseif _src == 'Private' or _src == 'Owner' or _src == 'Direct' %}
+        {% set rows_private = rows_private|merge([_r]) %}
+      {% else %}
+        {# Unclassified sources go to Airbnb bucket by default to preserve old behavior where most were Airbnb #}
+        {% set rows_airbnb = rows_airbnb|merge([_r]) %}
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+  {% if _isClient %}
+    {# --- CLIENT MODE: Two separate cards --- #}
+
+    {% if rows_airbnb|length > 0 %}
+      <div class="bookings-card">
+        <div class="card-title">{{ 'Airbnb Reservations'|trans({}, 'unit_report', _lang) }}</div>
+        <table class="table">
+          <colgroup>
+            <col style="width: 12%">
+            <col style="width: 20%">
+            <col style="width: 18%">
+            <col style="width: 12%">
+            <col style="width: 8%">
+            <col style="width: 8%">
+            <col style="width: 10%">
+            <col style="width: 12%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="left">{{ 'Payment'|trans({}, 'unit_report', _lang) }}</th>
+              <th class="left">{{ 'Guest'|trans({}, 'unit_report', _lang) }}</th>
+              <th class="left stay">{{ 'Stay'|trans({}, 'unit_report', _lang) }}</th>
+              <th class="center">{{ 'Net Pay'|trans({}, 'unit_report', _lang) }}</th>
+              <th class="center">{{ 'Tax %'|trans({}, 'unit_report', _lang) }}</th>
+              <th class="center">{{ 'O2 %'|trans({}, 'unit_report', _lang) }}</th>
+              <th class="center">O2</th>
+              <th class="center">{{ '(Cleaning)'|trans({}, 'unit_report', _lang) }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows_airbnb %}
+              {% set sY = r.checkIn|date('Y', false, _lang) %}
+              {% set eY = r.checkOut|date('Y', false, _lang) %}
+              {% set sM = r.checkIn|date('m', false, _lang) %}
+              {% set eM = r.checkOut|date('m', false, _lang) %}
+              {% if sY == eY and sM == eM %}
+                {% set stay = (r.checkIn|date('d', false, _lang)) ~ ' – ' ~ (r.checkOut|date('d M', false, _lang)) %}
+              {% else %}
+                {% set stay = (r.checkIn|date('d M', false, _lang)) ~ ' – ' ~ (r.checkOut|date('d M', false, _lang)) %}
+              {% endif %}
+              {% if _lang starts with 'es' %}
+                {% set stay = stay|lower %}
+              {% endif %}
+
+              {% set rawName = (r.guestName|default(''))|trim %}
+              {% if rawName %}
+                {% set parts = rawName|split(' ') %}
+                {% set guest = (parts|length > 1) ? (parts|first ~ ' ' ~ (parts|last)) : (parts|first) %}
+              {% else %}
+                {% set guest = (r.guest.firstName|default('')) ~ ' ' ~ (r.guest.lastName|default('')) %}
+              {% endif %}
+
+              {% set netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+              {% set o2Pct  = r.o2Percent|default( (r.o2CommissionInMonth is defined and r.commissionBaseInMonth is defined and r.commissionBaseInMonth != 0)
+                            ? (100 * r.o2CommissionInMonth / r.commissionBaseInMonth) : null ) %}
+              {% set o2Amt = r.o2CommissionInMonth|default(0) %}
+              {% set clientAmt = netPay - o2Amt %}
+
+              <tr>
+                <td class="left">{{ (r.paymentMethod|default(r.payment|default(''))) | capitalize }}</td>
+                <td class="left">{{ guest }}</td>
+                <td class="left stay">{{ stay }}</td>
+                <td class="num">{{ '$' }}{{ netPay|number_format(2, _mdec, _mth) }}</td>
+                <td class="center">{{ (r.taxPercent|default(r.taxPct|default(0)))|number_format(0, _dec, _th) }}%</td>
+                <td class="center">{{ (o2Pct|default(0))|number_format(2, _dec, _th) }}%</td>
+                <td class="num">{{ '$' }}{{ o2Amt|number_format(2, _mdec, _mth) }}</td>
+                <td class="num">{{ '$' }}{{ (r.cleaningFeeInMonth|default(r.cleaningFee|default(0)))|number_format(2, _mdec, _mth) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+
+    <div class="bookings-card" style="margin-top: 18pt;">
+      <div class="card-title">{{ 'Private Reservations'|trans({}, 'unit_report', _lang) }}</div>
+      <table class="table">
+        <colgroup>
+          <col style="width: 12%">
+          <col style="width: 20%">
+          <col style="width: 18%">
+          <col style="width: 12%">
+          <col style="width: 8%">
+          <col style="width: 8%">
+          <col style="width: 10%">
+          <col style="width: 12%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="left">{{ 'Payment'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="left">{{ 'Guest'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="left stay">{{ 'Stay'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">{{ 'Net Pay'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">{{ 'Tax %'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">{{ 'O2 %'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">O2</th>
+            <th class="center">{{ 'Client'|trans({}, 'unit_report', _lang) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if rows_private and rows_private|length > 0 %}
+            {% for r in rows_private %}
+              {% set sY = r.checkIn|date('Y', false, _lang) %}
+              {% set eY = r.checkOut|date('Y', false, _lang) %}
+              {% set sM = r.checkIn|date('m', false, _lang) %}
+              {% set eM = r.checkOut|date('m', false, _lang) %}
+              {% if sY == eY and sM == eM %}
+                {% set stay = (r.checkIn|date('d', false, _lang)) ~ ' – ' ~ (r.checkOut|date('d M', false, _lang)) %}
+              {% else %}
+                {% set stay = (r.checkIn|date('d M', false, _lang)) ~ ' – ' ~ (r.checkOut|date('d M', false, _lang)) %}
+              {% endif %}
+              {% if _lang starts with 'es' %}
+                {% set stay = stay|lower %}
+              {% endif %}
+
+              {% set rawName = (r.guestName|default(''))|trim %}
+              {% if rawName %}
+                {% set parts = rawName|split(' ') %}
+                {% set guest = (parts|length > 1) ? (parts|first ~ ' ' ~ (parts|last)) : (parts|first) %}
+              {% else %}
+                {% set guest = (r.guest.firstName|default('')) ~ ' ' ~ (r.guest.lastName|default('')) %}
+              {% endif %}
+
+              {% set netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+              {% set o2Pct  = r.o2Percent|default( (r.o2CommissionInMonth is defined and r.commissionBaseInMonth is defined and r.commissionBaseInMonth != 0)
+                            ? (100 * r.o2CommissionInMonth / r.commissionBaseInMonth) : null ) %}
+              {% set o2Amt = r.o2CommissionInMonth|default(0) %}
+              {% set clientAmt = netPay - o2Amt %}
+
+              <tr>
+                <td class="left">{{ (r.paymentMethod|default(r.payment|default(''))) | capitalize }}</td>
+                <td class="left">{{ guest }}</td>
+                <td class="left stay">{{ stay }}</td>
+                <td class="num">{{ '$' }}{{ netPay|number_format(2, _mdec, _mth) }}</td>
+                <td class="center">{{ (r.taxPercent|default(r.taxPct|default(0)))|number_format(0, _dec, _th) }}%</td>
+                <td class="center">{{ (o2Pct|default(0))|number_format(0, _dec, _th) }}%</td>
+                <td class="num">{{ '$' }}{{ o2Amt|number_format(2, _mdec, _mth) }}</td>
+                <td class="num">{{ '$' }}{{ clientAmt|number_format(2, _mdec, _mth) }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="8" class="muted">{{ 'No bookings to report'|trans({}, 'unit_report', _lang) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if rows_airbnb|length == 0 and rows_private|length == 0 %}
+      <div class="bookings-card">
+        <div class="card-title">{{ 'Bookings'|trans({}, 'unit_report', _lang) }}</div>
+        <table class="table"><tbody><tr><td colspan="8" class="muted">{{ 'No bookings to report'|trans({}, 'unit_report', _lang) }}</td></tr></tbody></table>
+      </div>
+    {% endif %}
+
+  {% else %}
+    {# --- OWNERS2 MODE: keep current 9-column table --- #}
+    <div class="bookings-card">
+      <div class="card-title">{{ 'Bookings'|trans({}, 'unit_report', _lang) }}</div>
+      <table class="table">
+        <colgroup>
+          <col class="col-source">
+          <col class="col-payment">
+          <col class="col-guest">
+          <col class="col-stay">
+          <col class="col-net">
+          <col class="col-taxpct">
+          <col class="col-o2pct">
+          <col class="col-o2">
+          <col class="col-client">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="left">{{ 'Source'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="left">{{ 'Payment'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="left">{{ 'Guest'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="left stay">{{ 'Stay'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">{{ 'Net Pay'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">{{ 'Tax %'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">{{ 'O2 %'|trans({}, 'unit_report', _lang) }}</th>
+            <th class="center">O2</th>
+            <th class="center">{{ 'Client'|trans({}, 'unit_report', _lang) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if bookings %}
+            {% for r in bookings %}
+              {% set sY = r.checkIn|date('Y', false, _lang) %}
+              {% set eY = r.checkOut|date('Y', false, _lang) %}
+              {% set sM = r.checkIn|date('m', false, _lang) %}
+              {% set eM = r.checkOut|date('m', false, _lang) %}
+              {% if sY == eY and sM == eM %}
+                {% set stay = (r.checkIn|date('d', false, _lang)) ~ ' – ' ~ (r.checkOut|date('d M', false, _lang)) %}
+              {% else %}
+                {% set stay = (r.checkIn|date('d M', false, _lang)) ~ ' – ' ~ (r.checkOut|date('d M', false, _lang)) %}
+              {% endif %}
+              {% if _lang starts with 'es' %}
+                {% set stay = stay|lower %}
+              {% endif %}
+
+              {% set rawName = (r.guestName|default(''))|trim %}
+              {% if rawName %}
+                {% set parts = rawName|split(' ') %}
+                {% set guest = (parts|length > 1) ? (parts|first ~ ' ' ~ (parts|last)) : (parts|first) %}
+              {% else %}
+                {% set guest = (r.guest.firstName|default('')) ~ ' ' ~ (r.guest.lastName|default('')) %}
+              {% endif %}
+
+              {% set netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+              {% set o2Pct  = r.o2Percent|default( (r.o2CommissionInMonth is defined and r.commissionBaseInMonth is defined and r.commissionBaseInMonth != 0)
+                            ? (100 * r.o2CommissionInMonth / r.commissionBaseInMonth) : null ) %}
+              {% set o2Amt = r.o2CommissionInMonth|default(0) %}
+              {% set clientAmt = (_payMode == 'OWNERS2')
+                    ? r.ownerPayoutInMonth|default(0)
+                    : netPay - o2Amt %}
+
+              <tr>
+                <td class="left">{{ r.source|default('') }}</td>
+                <td class="left">{{ (r.paymentMethod|default(r.payment|default(''))) | capitalize }}</td>
+                <td class="left">{{ guest }}</td>
+                <td class="left stay">{{ stay }}</td>
+                <td class="num">{{ '$' }}{{ netPay|number_format(2, _mdec, _mth) }}</td>
+                <td class="center">{{ (r.taxPercent|default(r.taxPct|default(0)))|number_format(0, _dec, _th) }}%</td>
+                <td class="center">{{ (o2Pct|default(0))|number_format(0, _dec, _th) }}%</td>
+                <td class="num">{{ '$' }}{{ o2Amt|number_format(2, _mdec, _mth) }}</td>
+                <td class="num">{{ '$' }}{{ clientAmt|number_format(2, _mdec, _mth) }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="9" class="muted">{{ 'No bookings to report'|trans({}, 'unit_report', _lang) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {# ===== Expenses & Credits (side-by-side cards) ===== #}
+  <div class="ec-row">
+    <div class="expenses-card">
+      <div class="card-title">{{ 'Expenses'|trans({}, 'unit_report', _lang) }}</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:18%">{{ 'Date'|trans({}, 'unit_report', _lang) }}</th>
+            <th>{{ 'Description'|trans({}, 'unit_report', _lang) }}</th>
+            <th style="width:24%" class="num">{{ 'Amount'|trans({}, 'unit_report', _lang) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {# Prefer grouped data from the builder; fallback to flat list #}
+          {% set _expCandidate = expenses|default(gastos|default([])) %}
+          {% set expenses = _expCandidate.rows|default(_expCandidate|default([])) %}
+          {% set groups   = gastosGrouped|default(null) %}
+
+          {% if groups is iterable and groups|length > 0 %}
+            {# Builder provided grouped + sorted structure #}
+            {% for grp in groups %}
+              <tr class="group">
+                <td></td>
+                <td class="group-label">{{ grp.label|default('') }}</td>
+                <td></td>
+              </tr>
+              {% for g in grp.items|default([]) %}
+                {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
+                {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
+                {% set gAmt  = g.amount is defined ? g.amount
+                  : (g.charged is defined ? g.charged
+                    : (g.paid is defined ? g.paid
+                      : (g.total is defined ? g.total : 0))) %}
+                <tr>
+                  <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
+                  <td>{{ gDesc }}</td>
+                  <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
+                </tr>
+              {% endfor %}
+            {% endfor %}
+
+          {% elseif expenses %}
+            {# Fallback: legacy flat list with on-the-fly grouping #}
+            {% set current = null %}
+            {% for g in expenses %}
+              {# Allocation/category label (housekeeping rows use categoryName) #}
+              {% set cat = g.categoryName|default(g.allocation|default(g.category|default(g.cat|default(null)))) %}
+              {% if cat != current and cat %}
+                <tr class="group">
+                  <td></td>
+                  <td class="group-label">{{ cat }}</td>
+                  <td></td>
+                </tr>
+                {% set current = cat %}
+              {% endif %}
+              {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
+              {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
+              {% set gAmt  = g.amount is defined ? g.amount
+                : (g.charged is defined ? g.charged
+                  : (g.paid is defined ? g.paid
+                    : (g.total is defined ? g.total : 0))) %}
+              <tr>
+                <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
+                <td>{{ gDesc }}</td>
+                <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
+              </tr>
+            {% endfor %}
+
+          {% else %}
+            <tr><td colspan="3" class="muted">{{ 'No expenses to report'|trans({}, 'unit_report', _lang) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="credits-card">
+      <div class="card-title">{{ 'Credits'|trans({}, 'unit_report', _lang) }}</div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:18%">{{ 'Date'|trans({}, 'unit_report', _lang) }}</th>
+            <th>{{ 'Description'|trans({}, 'unit_report', _lang) }}</th>
+            <th style="width:24%" class="center">{{ 'Amount'|trans({}, 'unit_report', _lang) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set _crCandidate = abonos|default(credits|default([])) %}
+          {% set credits = _crCandidate.rows|default(_crCandidate|default([])) %}
+          {% set _renderedCredits = 0 %}
+          {% set currentCreditCat = null %}
+          {% if credits %}
+            {% for a in credits %}
+              {% set aDate = (a.date is defined) ? a.date : ((a.when is defined) ? a.when : null) %}
+              {% set aDesc = a.description is defined ? a.description : (a.desc is defined ? a.desc : (a.concept is defined ? a.concept : (a.name is defined ? a.name : ''))) %}
+              {% set aAmt  = a.amount is defined ? a.amount : (a.total is defined ? a.total : 0) %}
+              {# Allocation/category label (credits are Owners2-only but still may carry a categoryName/allocation/category) #}
+              {% set cat = a.categoryName|default(a.allocation|default(a.category|default(a.cat|default(null)))) %}
+
+              {% if cat != currentCreditCat and cat %}
+                <tr class="group">
+                  <td></td>
+                  <td class="group-label">{{ cat }}</td>
+                  <td></td>
+                </tr>
+                {% set currentCreditCat = cat %}
+              {% endif %}
+              {# Skip empty/dummy rows (wkhtmltopdf Twig may not support "continue") #}
+              {% if not ((aDate is null) and ((aDesc|trim) == '') and (aAmt == 0)) %}
+                {% set _renderedCredits = _renderedCredits + 1 %}
+                <tr>
+                  <td>{{ aDate ? (aDate|date('d/m/y')) : '' }}</td>
+                  <td>
+                    {% if cat and aDesc == cat %}
+                      <span class="group-label">{{ aDesc }}</span>
+                    {% else %}
+                      {{ aDesc }}
+                    {% endif %}
+                  </td>
+                  <td class="num">{{ '$' }}{{ aAmt|number_format(2, _mdec, _mth) }}</td>
+                </tr>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+
+          {% if _renderedCredits == 0 %}
+            <tr><td colspan="3" class="muted">{{ 'No credits to report'|trans({}, 'unit_report', _lang) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ===== Definitions (card) ===== #}
+  <div class="defs-card">
+    <div class="card-title">{{ 'Definitions'|trans({}, 'unit_report', _lang) }}</div>
+    <div>
+      <p><strong>{{ 'Month Result'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Calculated as client commissions + credits − expenses'|trans({}, 'unit_report', _lang) }}.</p>
+      <p>
+        <strong>{{ 'Opening Balance'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'The unit’s balance at the beginning of the report month'|trans({}, 'unit_report', _lang) }}.
+        <span class="spacer"></span>
+        <strong>{{ 'Closing Balance'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Opening Balance + Month Result'|trans({}, 'unit_report', _lang) }}.
+      </p>
+      <p><strong>{{ 'Net Payout'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Result from Total Payout − Tax − Cleaning fee. If the reservation extends into the following month, it shows the proportional value for the current month'|trans({}, 'unit_report', _lang) }}.</p>
+      <p><strong>O2</strong>: {{ 'Owners2 reservation commission'|trans({}, 'unit_report', _lang) }}. <strong>{{ 'Client'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Client reservation commission'|trans({}, 'unit_report', _lang) }}.</p>
+    </div>
+  </div>
+
+{% endblock %}
+
+{# -------- Footer (definitions/contact) -------- #}
+{% block pdf_footer %}{% endblock %}

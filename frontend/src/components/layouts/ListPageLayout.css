@@ -1,0 +1,54 @@
+/* Reusable list page layout styles */
+
+.list-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.list-page-title {
+  margin: 0;
+}
+
+.list-page-description {
+  color: #667085;
+  margin-top: 6px;
+}
+
+.list-page-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Optional: ensure tables stretch nicely under the header */
+.list-page-body {
+  width: 100%;
+}
+
+
+@media (max-width: 600px) {
+  .list-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .list-page-title {
+    margin-bottom: 8px;
+  }
+  .list-page-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .list-page-actions > * {
+    width: 100%;
+  }
+  .list-page-body {
+    overflow-x: auto;
+  }
+}

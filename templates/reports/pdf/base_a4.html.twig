@@ -1,0 +1,67 @@
+{# Base A4 sheet + shared CSS for ALL PDF reports #}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}Reporte{% endblock %}</title>
+  <style>
+    :root{
+      /* A4 + margins (edit once, applies to all reports) */
+      --page-w: 210mm;
+      --page-h: 297mm;
+      --margin-top: 22mm;      /* space for header */
+      --margin-bottom: 18mm;   /* space for footer */
+      --margin-side: 4mm;
+
+      --font: Arial, Helvetica, sans-serif;
+      --text: #222;
+      --muted: #666;
+      --teal: #1E6F68;
+      --hair: #e6e6e6;
+    }
+
+    html, body{
+      margin:0; padding:0;
+      font: 12px/1.35 var(--font); color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* On-screen preview “paper” (wkhtmltopdf ignores size here) */
+    .sheet{
+      width: var(--page-w);
+      height: var(--page-h);
+      margin: 0 auto;              /* no extra margin around page */
+      box-shadow: none;            /* remove border/shadow */
+      background: #fff;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Body region that visually respects header/footer space */
+    .page-wrap{
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      padding:
+        calc(var(--margin-top) - 6mm)   /* small visual offset */
+        var(--margin-side)
+        calc(var(--margin-bottom) - 6mm)
+        var(--margin-side);
+    }
+
+    /* Shared utility */
+    .title{ font-weight: 700; color: var(--teal) }
+    .muted{ color: var(--muted) }
+    hr.hair{ border:0; border-top:1px solid var(--hair); margin:8px 0; }
+  </style>
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <div class="sheet">
+    <div class="page-wrap">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</body>
+</html>

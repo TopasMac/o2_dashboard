@@ -1,0 +1,79 @@
+document:
+  title: "Property Management Agreement"
+effective_date: "In effect as of Date"
+parties:
+  owner_name: "Owner: %ownerName%"
+  address: "Property Address: %address%"
+  contact_phone: "Phone: %ownerPhone%"
+  contact_email: "Email: %ownerEmail%"
+  signature_owner: "Owner Signature: %ownerFirstLast%"
+
+purpose:
+  title: "Purpose"
+  body: "The Owner owns the property located at <strong>%address%</strong> (the “Property”). Owners2 is in the business of managing properties of this type. The Owner desires to engage Owners2 to manage the Property."
+
+services:
+  title: "Owners2 Services"
+  intro: "Owners2 agrees to manage the Property according to the following description. Owners2 will independently decide the tools, methods, and processes used to deliver the Services, always acting in good faith and with due care."
+  listing: "<strong>Property Listing.</strong> Owners2 will list the Property on different relevant platforms. This includes a market study to ensure that the proposed rates are in line with the competition."
+  guest_comm: "<strong>Guest Communication.</strong> Owners2 will be responsible for communication with guests and providing them with all necessary information."
+  reservations: "<strong>Reservations.</strong> Managing reservations and addressing any rental period concerns or incidents that may occur."
+  checkin: "<strong>Check-in / Check-out.</strong> Owners2 will assure a smooth and comfortable check-in and check-out, as well as property inspections before and after each rental."
+  cleaning: "<strong>Cleaning.</strong> Cleaning the Property before and after each reservation, including the change of towels and bed linen."
+  supplies: "<strong>Supplies.</strong> The dish soap, trash bags, dish sponges, kitchen paper towels, toilet paper, shampoo, and bath soap will be provided by Owners2."
+
+financial:
+  title: "Financial Terms & Obligations"
+  collection: "<strong>Collection & Disbursement of Rent.</strong> Owners2 shall be responsible for all collection of rent earned on the Property. Owners2 shall then be responsible for disbursement of those proceeds to the Owner. The Owner shall provide Owners2 with a bank account where proceeds shall be disbursed. If the account is not with a Mexican bank, transfer fees may be charged. Owners2 shall further prepare and provide to the Owner a detailed accounting of all rents, expenses, and disbursements."
+  commission: "<strong>Owners2 Commission Fee.</strong> The Parties agree that Owners2 shall be compensated as follows: <strong>%commission%</strong> commission on Net Revenue (Gross/Total payout minus taxes and any cleaning fee charged to the guest). All amounts are denominated in <strong>%currency%</strong>."
+  taxes: "<strong>Taxes & Withholding.</strong> Owners2 may withhold and/or remit taxes as required by law (e.g., IVA/ISR/withholding) and deduct any related costs. The Owner remains responsible for Owner-side taxes."
+  direct_bookings: "<strong>Direct Bookings.</strong> “Direct Booking” means any reservation not processed through an external platform (e.g., Airbnb). During the term, the management fee for Direct Bookings is 20% of the rates that Owners2 would charge for the same period. If the Owner or the Owner’s immediate family stays at the Property, only the cleaning fee applies."
+  linens: "<strong>Linens.</strong> At the start of this Agreement, the Owner will provide a complete set of bed linens and towels for the Property (including beach towels). If the Property already has linens and towels, Owners2 will evaluate their suitability for guest use; the final decision on whether they can be used rests with Owners2. Owners2 operates a pooled-linens system in which linens are not assigned to a specific unit; if Owner-provided linens are accepted, they may be used across any unit managed by Owners2. Alternatively, upon request or where existing linens are unsuitable, Owners2 can purchase the necessary items and deduct the cost from the first monthly payout or statement."
+  linens_fee: "<strong>5.1 Monthly Linens Fee.</strong> For this unit, the monthly fee is <strong>(%linensFee%) MXN</strong>. To ensure consistent quality, availability of replacements for damage/loss/theft, and to avoid ad-hoc charges, this fee is determined based on the unit’s configuration (e.g., number of bedrooms/beds) and may be updated from time to time. This structure allows the Owner to make an initial one-time investment (if needed) and thereafter only pay the predictable monthly fee."
+  maintenance: "<strong>Maintenance & Repair.</strong> Owners2 shall be responsible for performing, or hiring necessary personnel to perform, all necessary maintenance and repairs to the Property. In emergencies threatening people, reservations or the Property, Owners2 may approve and arrange repairs without prior Owner approval and will notify the Owner as soon as practicable. The Owner authorizes reimbursement of such costs via netting from payouts."
+  payment: "<strong>Payment & Monthly Report.</strong> Owners2 will make monthly payouts by the <strong>%payoutDay%</strong> business day for the prior month. If the payout day falls on a weekend or public holiday, payment will be made on the next business day. Owners2 may net authorized reimbursements and fees from payouts. Each payment will be accompanied by (i) the monthly report for the prior month—detailing proceeds, deductions, and the final payout— and (ii) proof of payment (transfer receipt/confirmation). In case the closing balance is negative, the Owner shall reimburse Owners2 no later than the fifteenth (15th) day of that month."
+
+legal:
+  title: "Legal"
+  reps: "<strong>Representations and Warranties.</strong> Both Parties represent that they are fully authorized to enter into this Agreement. The performance and obligations of either Party will not violate or infringe upon the rights of any third party or violate any other agreement between the Parties, individually, and any other person, organization, or business or any law or governmental regulation."
+  compliance: "<strong>Compliance & House Rules.</strong> The Owner warrants that the Property complies with applicable laws, zoning, HOA/condo rules, permits, and any short-term rental restrictions. Owners2 may publish and enforce reasonable house rules (e.g., occupancy limits, quiet hours, no parties, pet/smoking policies) to protect the Property and comply with rules."
+  legal_proc: "<strong>Legal Proceedings.</strong> If collection or legal proceedings related to a guest stay or rental of the Property become necessary (e.g., recovery of unpaid amounts, damage claims through platforms, or small-claims filings), Owners2 may handle such matters on the Owner’s behalf. Retaining outside counsel or initiating proceedings beyond routine platform processes or small-claims actions requires the Owner’s prior approval. The Owner is responsible for such external legal fees and court costs. Owners2 is not responsible for legal proceedings that do not arise from the management and rental of the Property."
+  damages: "<strong>Damages.</strong> Owners2 will use commercially reasonable efforts, including pursuing platform claims (e.g., Airbnb resolution center) and applying any available security deposits, to seek recovery from the guest for guest-caused damage. If, despite such efforts, recovery is not obtained, the Owner is ultimately responsible for the cost of repair or replacement. Owners2 is not responsible for ordinary wear and tear; failures or defects of building/common-area systems, services, or utilities; or issues outside Owners2’s reasonable control. Owners2 is not liable for damages caused by Guests except to the extent arising from Owners2’s gross negligence or willful misconduct. For reservations made by third parties on the Owner’s behalf, Owners2 will seek recovery from such third party or the guest first; if recovery is not obtained, the Owner remains ultimately responsible."
+  limitation: "<strong>Limitation of Liability.</strong> Owners2 will use commercially reasonable efforts, including pursuing platform claims (e.g., Airbnb resolution center) and applying any available security deposits, to seek recovery from the guest for guest-caused damage. If, despite such efforts, recovery is not obtained, the Owner is ultimately responsible for the cost of repair or replacement. Owners2 shall not be liable for ordinary wear and tear; failures or defects of building/common-area systems, services, or utilities; or issues outside Owners2’s reasonable control. To the fullest extent permitted by law, neither Party shall be liable for consequential, incidental, special, exemplary, or punitive damages. This clause should be read consistently with Section 2.1 (Damages & Security Deposits)."
+  entire: "<strong>Entire Agreement.</strong> The Parties acknowledge and agree that this Agreement represents the entire agreement between the Parties. If the Parties desire to change, add, or otherwise modify any terms, they shall do so in writing to be signed by both Parties. An Appendix A (Inventory) will be prepared and provided to the Owner after execution of this Agreement, and must also be signed by the Owner."
+
+definitions:
+  title: "Definitions"
+  guest: "<strong>Guest:</strong> The individual(s) staying at the Property under a reservation."
+  services: "<strong>Services:</strong> The management services described in Section 2 (Owners2 Services)."
+  direct_booking: "<strong>Direct Booking:</strong> Any reservation not processed through an external booking platform (e.g., Airbnb); i.e., a reservation secured directly by Owners2 or the Owner outside such platforms."
+  net_revenue: "<strong>Net Revenue:</strong> Gross/Total payout actually received for a reservation <em>minus</em> (i) taxes collected/withheld on that reservation and (ii) any cleaning fee charged to the guest."
+
+other:
+  title: "Other"
+  use_by_owner: "<strong>Use by the Owner.</strong> The Owner can reserve the Property at their convenience, as long as the dates they choose are available. Cleaning after checking out must be performed by Owners2, with the expenses being deducted from the monthly result."
+  cancellation: "<strong>Booking Cancellation.</strong> In the event that the property owner requests the cancellation of a reservation, they will be responsible for any contractual penalties that may arise."
+  access_inventory_photos: "<strong>Access, Inventory &amp; Photos.</strong> The Owner will provide at least two complete sets of keys/fobs, Wi‑Fi credentials, and available appliance manuals. Professional photos suitable for listings are required; the cost may be deducted from the first monthly payout."
+
+legal_extras:
+  duration: "<strong>Duration.</strong> This Agreement shall have a duration of <strong>%initialTerm%</strong> from the Effective Date indicated above and shall be automatically renewed for successive one (1) year periods."
+  termination: "<strong>Termination.</strong> This Agreement may be terminated at any time by either Party upon <strong>%terminationNotice%</strong> written notice to the other Party. Upon termination, Owners2 will either (a) continue to service confirmed reservations under this Agreement, or (b) if acceptable to the guest and feasible, transfer the reservation. The Owner bears any platform penalties if cancellations occur at the Owner’s request. A joint inventory check will be completed at termination. Owners2 shall disburse to the Owner any monies due within thirty (30) days of termination; the Owner shall reimburse Owners2 for any approved expenses incurred prior to termination within the same period."
+  confirmed_bookings: "<strong>Confirmed Bookings.</strong> If there are confirmed reservations after the termination date, the Property Owner will decide how to proceed and will assume responsibility for any contractual penalties that may arise from cancellations."
+  binding: "<strong>Legal and Binding Agreement.</strong> This Agreement is legal and binding between the Parties as stated above. The Parties each represent that they have the authority to enter into this Agreement."
+  governing_law: "<strong>Governing Law and Jurisdiction.</strong> This Agreement is governed by the laws of the State of %stateCountry%. The Parties agree to the courts with jurisdiction in that State for any dispute that cannot be resolved amicably."
+  notices: "<strong>Notices.</strong> Notices related to this Agreement may be given by email and phone using the contacts on record for each Party."
+  data_protection: "<strong>Data Protection &amp; Confidentiality.</strong> Each Party will protect personal data and use it only for managing the Property. Commercial information such as rates and statements will be treated as confidential and not disclosed to third parties except as required by law or for performance of this Agreement."
+
+contacts:
+  title: "Contacts"
+  intro: "The parties agree to use the following contact information for all communications relating to this contract:"
+  footer: "All communication between the parties relating to this contract shall be conducted through these contacts. If either party changes their contact information, they shall promptly notify the other party in writing of the new information."
+
+signature:
+  client_label: "Client"
+
+place_date:
+  title: "Place & Date"
+  place: "Place"
+  date: "Date"
+  default_place: "Playa del Carmen"

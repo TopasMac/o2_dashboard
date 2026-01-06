@@ -1,0 +1,204 @@
+/* Base button styles */
+.btn {
+  font-family: var(--font-primary);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  cursor: pointer;
+  display: inline-block;
+}
+
+/* Primary variant */
+.btn-primary {
+  background-color: transparent;
+  color: var(--color-teal);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 2px solid #66a5a1; /* lighter teal */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Secondary variant */
+.btn-secondary {
+  background-color: transparent;
+  color: var(--color-coral);
+  font-size: var(--fs-13);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 2px solid #f59f90; /* lighter coral */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Info / Draft variant (soft blue) */
+.btn-info {
+  background-color: transparent;
+  color: #2563eb;            /* blue-600 */
+  font-size: var(--fs-13);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 2px solid #93c5fd; /* blue-300 */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Danger variant */
+.btn-danger {
+  background-color: #d9534f;
+  color: #ffffff;
+  font-size: var(--fs-13);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 2px solid #d9534f;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+@media (min-width: 1024px) {
+  .btn-primary:hover {
+    background-color: var(--color-teal);
+    color: var(--color-white);
+  }
+  .btn-secondary:hover {
+    background-color: var(--color-coral);
+    color: var(--color-white);
+  }
+  .btn-info:hover {
+    background-color: #2563eb;
+    color: var(--color-white);
+    border-color: #2563eb;
+  }
+  .btn-danger:hover {
+    background-color: #c9302c;
+    border-color: #c9302c;
+    color: #ffffff;
+  }
+}
+
+/* Unit name link-like behavior */
+.link-hover {
+  color: var(--color-teal);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.link-hover:hover {
+  color: var(--color-coral);
+  text-decoration: none;
+}
+
+.link-hover:focus-visible {
+  outline: 2px solid var(--color-coral);
+  outline-offset: 2px;
+}
+
+/* ================================
+   Form Actions (shared layout)
+   - Bottom of forms
+   - Left group: Save, Cancel
+   - Right group: Delete
+   ================================ */
+.form-actions {
+  display: flex;
+  justify-content: space-between; /* Save+Cancel left, Delete right */
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0,0,0,0.06); /* subtle separator */
+}
+.form-actions__left {
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+}
+.form-actions__right {
+  display: inline-flex;
+  gap: 12px;
+  margin-left: auto; /* push to the right */
+}
+
+/* Size normalization for form buttons */
+.form-actions .btn {
+  padding: 6px 14px;
+  font-size: var(--fs-13);
+  line-height: 1.25;
+  border-radius: 6px;
+}
+
+/* Save (Teal outline + text) uses .btn-primary */
+.form-actions .btn-primary {
+  background-color: transparent;
+  color: var(--color-teal);
+  border: 2px solid #66a5a1; /* lighter teal outline */
+}
+
+/* Cancel (Orange outline + text) uses .btn-secondary */
+.form-actions .btn-secondary {
+  background-color: transparent;
+  color: var(--color-coral);
+  border: 2px solid #f59f90; /* lighter coral outline */
+}
+
+/* Delete (Red filled) uses .btn-danger */
+.form-actions .btn-danger {
+  background-color: #d9534f;
+  color: #ffffff;
+  border: 2px solid #d9534f;
+}
+
+@media (min-width: 1024px) {
+  .form-actions .btn-primary:hover {
+    background-color: var(--color-teal);
+    color: var(--color-white);
+    border-color: var(--color-teal);
+  }
+  .form-actions .btn-secondary:hover {
+    background-color: var(--color-coral);
+    color: var(--color-white);
+    border-color: var(--color-coral);
+  }
+  .form-actions .btn-danger:hover {
+    background-color: #c9302c;
+    border-color: #c9302c;
+  }
+}
+
+/* ====================================
+   Extra Actions (e.g. Checked button)
+   ==================================== */
+.form-actions__extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px; /* space from Cancel */
+}
+
+/* Blue variant for extra action buttons */
+.btn-extra {
+  background-color: transparent;
+  color: #0074cc; /* medium blue */
+  border: 2px solid #80bfff; /* lighter blue outline */
+  font-size: var(--fs-13);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+@media (min-width: 1024px) {
+  .btn-extra:hover {
+    background-color: #0074cc;
+    color: var(--color-white);
+    border-color: #0074cc;
+  }
+}

@@ -1,0 +1,23 @@
+/* Base Styles */
+body {
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #F9F9F6;
+  color: #4B4F56;
+}
+
+/* Headings */
+h1, h2, h3 {
+  font-weight: 700;
+  color: #1E6F68;
+}
+h1 { font-size: 36px; }
+h2 { font-size: 28px; }
+
+/* Paragraphs */
+p {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
+}

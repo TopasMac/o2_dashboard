@@ -1,0 +1,45 @@
+# Local environment / secrets
+.env
+.env.dev
+.env.test
+.env.local
+.env.*.local
+
+# Recovery / worktree artifacts
+.git_worktree_pointer_backup
+
+###> symfony/framework-bundle ###
+/.env.local
+/.env.local.php
+/.env.*.local
+/config/secrets/prod/prod.decrypt.private.php
+/public/bundles/
+/var/
+/vendor/
+###< symfony/framework-bundle ###
+
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###
+
+###> symfony/asset-mapper ###
+/public/assets/
+/assets/vendor/
+###< symfony/asset-mapper ###
+
+/frontend/tailwind_build/tailwindcss
+
+###> lexik/jwt-authentication-bundle ###
+/config/jwt/*.pem
+###< lexik/jwt-authentication-bundle ###
+
+# Ignore SQL database backup files
+*.sql
+frontend/src/tailwind_build/
+/public/static/
+/public/uploads/
+
+# Ignore build/static assets
+/public/static/
+*.map

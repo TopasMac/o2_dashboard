@@ -1,0 +1,100 @@
+{% if rows is defined and items is not defined %}
+  {% set items = rows %}
+{% endif %}
+{% set headerRight = 'Property Management Services' %}
+{# templates/reports/services_payments_html.twig #}
+{% extends 'pdf/_base.html.twig' %}
+
+{% block pdf_title %}
+  Service Payments – {{ service|default('') }} – {{ month|default('') }}/{{ year|default('') }}
+{% endblock %}
+
+{% block pdf_content %}
+  {% set svc = (service is defined and service ? service|upper : '') %}
+
+  {% if isPreview is defined and isPreview %}
+    <div class="html-preview-header" style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      {% set logoData = (company is defined and company.logoData is defined and company.logoData) ? company.logoData : null %}
+      {% set rawLogoUrl = asset('img/company-logo.png') %}
+      {% set finalLogoUrl = logoData ? logoData : absolute_url(rawLogoUrl) %}
+      <img src="{{ finalLogoUrl }}" alt="Logo" style="height:24px" />
+    </div>
+  {% endif %}
+
+  <div class="container">
+    <h1 class="mb-2">Pagos de {{ service }}</h1>
+    <div class="row mb-4">
+      <div class="col">
+        <div><strong>Mes:</strong> {{ '%02d'|format(month) }}/{{ '%02d'|format(year % 100) }}</div>
+      </div>
+      <div class="col right">
+        {% if company is defined and (company.name is defined) and company.name %}
+          <div><strong>{{ company.name }}</strong></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <table class="avoid-break" style="line-height:1.6;">
+      <thead>
+        <tr>
+          <th class="bg-teal text-white">Unit</th>
+          <th class="bg-teal text-white">Fecha</th>
+          <th class="bg-teal text-white">Nombre</th>
+          <th class="bg-teal text-white">Banco</th>
+          <th class="bg-teal text-white">Cuenta</th>
+          <th class="bg-teal text-white">Referencia</th>
+          <th class="bg-teal text-white">Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set list = items %}
+        {% if list is not defined or list is empty %}
+          <tr>
+            <td colspan="8" class="center muted">No data</td>
+          </tr>
+        {% else %}
+          {% for row in list|sort((a, b) => ((a.fechaPagoIso ?? a.paymentDateIso ?? a.paymentDate) <=> (b.fechaPagoIso ?? b.paymentDateIso ?? b.paymentDate))) %}
+            <tr style="line-height:1.6;">
+              <td style="padding:6px 4px;">{{ row.unitName }}</td>
+              {% set rawDate = row.fechaPagoIso ?? row.paymentDateIso ?? row.paymentDate ?? row.fechaPago ?? '' %}
+              {% if rawDate %}
+                {% set formattedDate = rawDate|date('d/m') %}
+                <td style="padding:6px 4px;text-align:center">{{ formattedDate }}</td>
+              {% else %}
+                <td style="padding:6px 4px;text-align:center"></td>
+              {% endif %}
+              <td style="padding:6px 4px;">{{ row.nombre ?? row.reference ?? row.accountName ?? '' }}</td>
+              <td style="padding:6px 4px;">{{ row.banco|default(row.provider|default('')) }}</td>
+              <td style="padding:6px 4px;">{{ row.cuenta ?? row.account ?? row.referenceCode ?? '' }}</td>
+              {% set cleanUnit = (row.unitName is defined and row.unitName is not null) ? row.unitName|replace({'_':''}) : '' %}
+              {% set svcCode = row.servicio is defined and row.servicio ? row.servicio : (row.service is defined and row.service ? row.service : (service ?? '')) %}
+              {% set yymm = ('%02d'|format(year % 100)) ~ ('%02d'|format(month)) %}
+              <td style="padding:6px 4px;">{{ cleanUnit ~ '_' ~ svcCode ~ '_' ~ yymm }}</td>
+              {% set amountVal =
+                  (row.hoa_amount is defined and row.hoa_amount is not empty) ? (row.hoa_amount * 1) :
+                  ((row.monto is defined and row.monto is not empty) ? (row.monto * 1) :
+                  ((row.amount is defined and row.amount is not empty) ? (row.amount * 1) : 0))
+              %}
+              <td style="padding:6px 4px;">{{ '$' ~ amountVal|number_format(2, '.', ',') }}</td>
+            </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+
+    {% if svc == 'HOA' and list is defined and list is not empty %}
+      {% set totalMonto = 0 %}
+      {% for row in list %}
+        {% set amt = (row.hoa_amount is defined and row.hoa_amount is not empty) ? (row.hoa_amount * 1) : 0 %}
+        {% set totalMonto = totalMonto + amt %}
+      {% endfor %}
+      <div style="margin-top:14px;font-size:10pt; text-align:right;">
+        <strong>Total:</strong>&nbsp;&nbsp;${{ totalMonto|number_format(2, '.', ',') }}
+      </div>
+    {% endif %}
+
+    {% if note is defined and note %}
+      <p class="muted pt-2">{{ note }}</p>
+    {% endif %}
+  </div>
+{% endblock %}

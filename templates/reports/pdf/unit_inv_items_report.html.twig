@@ -1,0 +1,190 @@
+{% extends 'reports/pdf/base_a4.html.twig' %}
+
+{% block title %}Reporte de Inventario{% endblock %}
+
+{% block head_extra %}
+<style>
+  .report-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1E6F68;
+    margin: 0 0 6px 0;
+  }
+  .meta { margin: 0 0 10px 0; font-size: 11px; color: #444; }
+  .meta-table { border-collapse: collapse; }
+  .meta-table td { padding: 2px 6px; vertical-align: top; }
+  .meta-table td.k { width: auto; color: #666; padding-right: 6px; white-space: nowrap; }
+
+  .notes {
+    background: #f7faf9;
+    border: 1px solid #e1eeec;
+    padding: 8px;
+    border-radius: 6px;
+    margin: 10px 0 14px 0;
+    font-size: 11px;
+    color: #333;
+  }
+
+  /* ===== Two fixed columns (wkhtmltopdf-friendly) ===== */
+  .columns {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+  .col {
+    display: table-cell;
+    width: 50%;
+    vertical-align: top;
+    padding-right: 10px;
+  }
+  .col.right {
+    padding-right: 0;
+    padding-left: 10px;
+  }
+
+  /* Area block should not split between pages */
+  .area {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    margin: 12px 0 14px 0;
+  }
+
+  .area h3 {
+    margin: 0 0 6px 0;
+    font-size: 14px;
+    line-height: 18px;
+    color: #1E6F68;
+    border-bottom: 1px solid #e6e6e6;
+    padding-bottom: 3px;
+    padding-top: 4px;
+  }
+
+  table.items { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+  table.items thead th { text-align: left; padding: 6px; color: #666; border-bottom: 1px solid #e6e6e6; font-weight: 600; }
+  table.items tbody td { padding: 6px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .col-item { width: 65%; }
+  .col-qty  { width: 10%; text-align: center; }
+  .col-notes{ width: 25%; }
+
+  .totals { margin-top: 10px; font-size: 11px; color: #555; }
+
+</style>
+</style>
+{% endblock %}
+
+{% block content %}
+<div>
+  <div class="report-title">Reporte de Inventario</div>
+
+  <div class="meta">
+    <table class="meta-table">
+      <tr>
+        <td class="k"><strong>Unidade:</strong></td>
+        <td>{{ meta.unitName }} <span style="color:#888;">{% if meta.city %}· {{ meta.city }}{% endif %}</span></td>
+      </tr>
+      <tr>
+        <td class="k"><strong>Fecha:</strong></td>
+        <td>{{ meta.generatedAt|date('d-m-Y') }}</td>
+      </tr>
+    </table>
+  </div>
+
+  {% if meta.notes %}
+    <div class="notes">
+      <strong>Comentarios:</strong>
+      <div>{{ meta.notes }}</div>
+    </div>
+  {% endif %}
+
+  {# ==========================================================
+     Build two wkhtmltopdf-friendly columns by splitting areas
+     so the LEFT column fills first (approx) and the RIGHT gets
+     the remainder. We use item counts as a proxy for height.
+     ========================================================== #}
+
+  {% set totalItems = 0 %}
+  {% set areaStats = [] %}
+
+{% for a in areas %}
+  {% if a.items is defined and a.items|length %}
+    {% set cnt = a.items|length %}
+    {% set totalItems = totalItems + cnt %}
+    {% set areaStats = areaStats|merge([{'name': a.name, 'items': a.items, 'count': cnt}]) %}
+  {% endif %}
+{% endfor %}
+
+  {% set half = (totalItems / 2.0) %}
+  {% set leftAreas = [] %}
+  {% set rightAreas = [] %}
+  {% set acc = 0 %}
+
+  {% for s in areaStats %}
+    {% if acc < half %}
+      {% set leftAreas = leftAreas|merge([s]) %}
+      {% set acc = acc + s.count %}
+    {% else %}
+      {% set rightAreas = rightAreas|merge([s]) %}
+    {% endif %}
+  {% endfor %}
+
+  <div class="columns">
+    <div class="col left">
+      {% for a in leftAreas %}
+        <div class="area">
+          <h3>{{ a.name }}</h3>
+          <table class="items">
+            <thead>
+              <tr>
+                <th class="col-item">Item</th>
+                <th class="col-qty">Qty</th>
+                <th class="col-notes">Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in a.items %}
+                <tr>
+                  <td class="col-item">{{ it.name }}</td>
+                  <td class="col-qty">{{ it.qty is not null and it.qty is not same as('') ? it.qty : '-' }}</td>
+                  <td class="col-notes">{{ (it.notes is not empty) ? it.notes : '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="col right">
+      {% for a in rightAreas %}
+        <div class="area">
+          <h3>{{ a.name }}</h3>
+          <table class="items">
+            <thead>
+              <tr>
+                <th class="col-item">Item</th>
+                <th class="col-qty">Qty</th>
+                <th class="col-notes">Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for it in a.items %}
+                <tr>
+                  <td class="col-item">{{ it.name }}</td>
+                  <td class="col-qty">{{ it.qty is not null and it.qty is not same as('') ? it.qty : '-' }}</td>
+                  <td class="col-notes">{{ (it.notes is not empty) ? it.notes : '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="totals">
+    Total items listed: {{ totalItems }}
+  </div>
+</div>
+{% endblock %}

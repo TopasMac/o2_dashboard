@@ -1,0 +1,13 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  body{ margin:0; font: 10px Arial, Helvetica, sans-serif; color:#666; }
+  .bar{ display:flex; justify-content:space-between;
+        padding: 0 12mm 6mm 12mm; } /* match side margins */
+  .muted{ color:#999; }
+</style>
+</head><body>
+  <div class="bar">
+    <div class="muted">{{ footer_left|default('Owners2 • confidencial') }}</div>
+    <div class="muted">Página [page]/[toPage]</div>
+  </div>
+</body></html>

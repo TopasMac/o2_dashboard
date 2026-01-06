@@ -1,0 +1,96 @@
+security:
+    # https://symfony.com/doc/current/security.html#registering-the-user-hashing-passwords
+    password_hashers:
+        App\Entity\User:
+            algorithm: auto
+
+    # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+
+    # Define role hierarchy
+    role_hierarchy:
+        ROLE_ADMIN: [ROLE_MANAGER]
+        ROLE_MANAGER: [ROLE_EMPLOYEE]
+        ROLE_EMPLOYEE: [ROLE_USER]
+        ROLE_SUPERVISOR: [ROLE_EMPLOYEE]
+        ROLE_CLIENT: [ROLE_USER]
+
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+
+        login:
+            pattern: ^/api/login_check$
+            stateless: true
+            provider: app_user_provider
+            user_checker: App\Security\UserChecker
+            json_login:
+                check_path: /api/login_check
+                username_path: email
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
+        contracts_preview:
+            pattern: ^/api/contracts/preview
+            security: false
+
+
+        reports_export_pdf:
+            pattern: ^/api/reports/services-payments/export\.pdf$
+            security: false
+
+        api_public:
+            pattern: ^/api/public
+            stateless: true
+            security: false
+
+        api:
+            pattern: ^/api
+            stateless: true
+            provider: app_user_provider
+            lazy: true
+            user_checker: App\Security\UserChecker
+            jwt: ~
+
+        reports_signed_preview:
+            pattern: ^/api/reports/unit-inventory/items/\d+/(preview|download)
+            stateless: true
+            security: false
+
+    # Easy way to control access for large sections of your site
+    # Note: Only the *first* access control that matches will be used
+    access_control:
+        - { path: ^/api/public, roles: PUBLIC_ACCESS, methods: [GET, OPTIONS] }
+        - { path: ^/api/contracts/preview/html, roles: PUBLIC_ACCESS }
+        - { path: ^/api/contracts/preview$, roles: PUBLIC_ACCESS }
+        - { path: ^/reports/ping$, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/reports(/|$), roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/reports/file, roles: PUBLIC_ACCESS }
+        - { path: ^/api/reports/o2/monthly-summary$, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/reports/services-payments/export\.pdf$, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/reports/hr/payment-request/preview$, roles: PUBLIC_ACCESS, methods: [GET, POST] }
+        - { path: ^/api/reports/hr/payment-request/export\.pdf$, roles: PUBLIC_ACCESS, methods: [GET, POST] }
+        - { path: ^/api/reports/send-email$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/login, roles: PUBLIC_ACCESS }
+        - { path: ^/api/login_check, roles: PUBLIC_ACCESS }
+        - { path: ^/api/reports/unit-inventory/items/\d+/(preview|download), roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/employee-ledger/\d+/(approve|reject|post)$, roles: [ROLE_MANAGER, ROLE_ADMIN] }
+        - { path: ^/api/employee-ledger, roles: [ROLE_EMPLOYEE, ROLE_MANAGER, ROLE_ADMIN] }
+        - { path: ^/api/admin, roles: ROLE_ADMIN }
+        - { path: ^/api/manager, roles: ROLE_MANAGER }
+        - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+
+when@test:
+    security:
+        password_hashers:
+            App\Entity\User:
+                algorithm: auto
+                cost: 4 # Lowest possible value for bcrypt
+                time_cost: 3 # Lowest possible value for argon
+                memory_cost: 10 # Lowest possible value for argon

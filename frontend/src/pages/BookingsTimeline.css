@@ -1,0 +1,410 @@
+/* BookingsTimeline.css — lightweight CSS Grid timeline styles */
+
+:root {
+  --bt-border: #E0E6E8;
+  --bt-border-soft: #EEF2F3;
+  --bt-header-bg: #F8FAF9;
+  --bt-text: #4B4F56;
+  --bt-today: rgba(245, 124, 77, 0.2); /* Owners2 orange tint */
+  --bt-airbnb: #FF5A5F;  /* Airbnb red */
+  --bt-private: #1E6F68; /* Owners2 teal */
+  --bt-hold: #FBBF24;  /* amber/yellow for holds (tentative) */
+  --bt-block: #9AA3A7;   /* neutral gray */
+  --bt-sidebar-offset: 0px; /* set to sidebar width when open */
+  --bt-row-h: 50px;
+  --bt-days: 31; /* default; JSX can override per month via inline style */
+  --bt-day-width: 80px;
+  --bt-resource-width: 180px;
+}
+
+/* Wrapper */
+.bt-card {
+  border: 1px solid var(--bt-border);
+  border-radius: 8px;
+  background: #fff;
+  /* scrolling handled by .bt-scroll to enable sticky header */
+  overflow: visible;
+}
+
+.bt-scroll {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  max-height: 80vh;           /* constrain height here */
+  overflow-y: auto;           /* vertical scroll lives here */
+  overflow-x: auto;           /* enable horizontal scrolling */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; /* prevent page from hijacking scroll */
+}
+
+/* Header grid (sticky) */
+/* Removed old .bt-header styles as the old sticky header div is removed */
+
+/* Header expands to grid content width so horizontal scroll works */
+/* Removed old .bt-header styles */
+
+/* But allow interactions inside (if any in the future) */
+/* Removed old .bt-header * pointer-events rule */
+
+/* Header day cells use the same column model as body cells */
+
+.bt-resource-head {
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--bt-text);
+  background: var(--bt-header-bg);
+  border-right: 1px solid var(--bt-border);
+  border-bottom: 1px solid var(--bt-border);
+}
+
+.bt-day-head {
+  position: relative;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--bt-text);
+  background: var(--bt-header-bg);
+  /* Remove border so header widths don't drift vs body grid */
+  border-right: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  text-indent: 0.5px;
+  margin: 0;
+}
+
+/* Highlight today's header cell */
+.bt-day-head.bt-today {
+  background: #1E6F68 !important; /* Owners2 teal */
+  color: #fff !important;
+  font-weight: 700;
+  border-radius: 4px;
+}
+
+/* Make sure day labels appear above header grid lines */
+.bt-day-head {
+  z-index: 2;
+  position: relative;
+}
+
+.bt-day-hit {
+  background: transparent;
+  border: none;
+  appearance: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  z-index: 1; /* under bars (3) but above grid background */
+}
+.bt-day-hit:hover {
+  background: rgba(30, 111, 104, 0.06);
+}
+
+/* Rows */
+.bt-row {
+  display: grid;
+  /* grid-template-columns comes from inline JSX to avoid drift */
+  grid-template-rows: 1fr; /* unified single row */
+  position: relative;
+  height: var(--bt-row-h);
+  min-height: var(--bt-row-h);
+  align-items: stretch; /* grid items fill the row height */
+  width: auto; /* let the grid expand based on inline template */
+}
+.bt-row::after {
+  content: "";
+  position: absolute;
+  left: var(--bt-resource-width, 180px); /* start after the sticky resource column */
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--bt-border-soft);
+  pointer-events: none;
+  z-index: 2; /* above grid lines (1) and bars (3) won't be covered by sticky cell */
+}
+
+
+.bt-resource-cell {
+  box-sizing: border-box;
+  height: var(--bt-row-h);
+  padding: 6px 12px;
+  border-right: 1px solid var(--bt-border);
+  border-bottom: 1px solid var(--bt-border-soft);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  align-self: stretch; /* fill the row height */
+  gap: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+/* First line = unit name (bold) */
+.bt-resource-cell > :first-child {
+  font-weight: 600;
+}
+
+/* Second line = city (smaller, muted) */
+.bt-resource-cell > :last-child {
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.bt-day-divider {
+  border-right: 1px solid var(--bt-border);
+  height: 100%;
+  align-self: stretch;
+}
+
+/* Today vertical indicator */
+.bt-today-line {
+  width: 2px;
+  background: var(--bt-today);
+  justify-self: center !important;
+  align-self: stretch;
+  margin: 0; /* prevent drift from inherited margin */
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Booking bars */
+.bt-bar {
+  position: relative;
+  align-self: center;      /* center as grid item */
+  margin: auto 0;          /* equal space top/bottom, no horizontal margin by default */
+  height: 20px;            /* slightly taller for a 52px row */
+  border-radius: 6px;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 14px 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  z-index: 3;
+  -webkit-background-clip: content-box;
+          background-clip: content-box;
+  background-origin: content-box;
+  overflow: hidden; /* ensure rounded corner looks clean with clipped bg */
+}
+
+.bt-bar .bt-hold-icon,
+.bt-bar .bt-block-icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 11px;
+  color: #ffffff;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transform: translateY(-1px); /* nudge icon slightly up inside the bar */
+}
+
+/* Notes icon for tooltips and bars */
+.bt-notes-icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 11px;
+  color: #ffffff;
+  vertical-align: middle;
+  flex-shrink: 0;
+  transform: translateY(-1px);
+}
+
+/* Visually inset bar ends without changing grid alignment */
+
+.bt-bar.airbnb { background: var(--bt-airbnb); }
+.bt-bar.private { background: var(--bt-private); }
+.bt-bar.hold {
+  background: var(--bt-hold);
+  color: #111827; /* dark text for contrast on yellow */
+}
+.bt-bar.block { background: var(--bt-block); }
+
+/* Legend */
+.bt-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.bt-legend .chip {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+
+/* Ensure booking bars can truncate inner text */
+.bt-bar {
+  min-width: 0; /* required for flex children to shrink */
+}
+.bt-bar .bt-bar-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fade indicators when a booking continues outside the visible window */
+.bt-bar.continued-left,
+.bt-bar.continued-right,
+.bt-bar.continued-left.continued-right {
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/* Continues from previous month (fade on left edge) */
+.bt-bar.continued-left {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+}
+
+/* Continues into next month (fade on right edge) */
+.bt-bar.continued-right {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+}
+
+/* Continues on both sides */
+.bt-bar.continued-left.continued-right {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+}
+
+.bt-today-line {
+  height: 100%;           /* still full height */
+}
+
+/* Unified body expands to content width (sum of grid columns); .bt-scroll will handle overflow */
+.bt-body {
+  display: inline-block;
+  width: max-content;
+  min-width: calc(var(--bt-resource-width, 180px) + var(--bt-day-width, 120px) * var(--bt-days, 31));
+}
+
+/* Middle-of-day thin line (aligns with bar starts/ends) */
+.bt-mid-line {
+  width: 1px;
+  height: 100%;
+  justify-self: center;
+  background: var(--bt-border); /* same tone you use for grid lines */
+}
+
+/* End-of-day boundary line (full height) */
+.bt-boundary-line {
+  width: 1px;
+  height: 100%;
+  justify-self: end;
+  background: var(--bt-border-soft); /* a hair lighter than mid-line */
+}
+
+.bt-mid-line,
+.bt-boundary-line,
+.bt-today-line {
+  pointer-events: none;
+  z-index: 1;            /* behind .bt-bar (z-index:3) */
+  align-self: stretch;   /* fill row vertically */
+  height: 100%;
+}
+
+/* Fixed width for resource column */
+.bt-resource-head,
+.bt-resource-cell {
+  box-sizing: border-box;
+  width: var(--bt-resource-width, 180px);
+}
+
+/* Make left resource column sticky on horizontal scroll */
+.bt-resource-head,
+.bt-resource-cell {
+  position: sticky;
+  left: 0;
+  z-index: 5; /* above bars/lines, below header corner */
+  background: #fff;
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.06); /* subtle divider to the right */
+}
+
+/* Top-left header cell needs to sit above everything at the intersection */
+.bt-header .bt-resource-head {
+  z-index: 7;
+  background: var(--bt-header-bg);
+  box-shadow: 1px 0 0 rgba(0,0,0,0.06), 0 1px 0 rgba(0,0,0,0.06);
+}
+.bt-header .bt-resource-head { border-top-left-radius: 8px; }
+.bt-header .bt-day-head:last-child { border-top-right-radius: 8px; }
+
+/* Fixed width for each day cell */
+.bt-day-head,
+.bt-day-divider {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+}
+/* Prevent borders/padding from altering computed width */
+.bt-day-head,
+.bt-day-divider { box-sizing: content-box; }
+
+/* Z-index stacking for sticky elements and bars/lines */
+.bt-mid-line,
+.bt-boundary-line,
+.bt-today-line { z-index: 1; }
+.bt-bar { z-index: 3; }
+.bt-header { z-index: 10; }
+
+/* Unified width owner for header + body inside the scroll container */
+.bt-grid {
+  display: inline-block;
+  width: max-content;
+  min-width: calc(180px + 160px * var(--bt-days, 31)); /* match body width: 180 + (2 x 80px per day) */
+}
+
+/* Force header to a single row and prevent implicit extra rows */
+/* Removed old .bt-header height and grid-auto-rows rules */
+
+/* Ensure all header children sit on the same grid row */
+/* Removed old .bt-header > * grid-row rule */
+
+/* Decoupled sticky top header */
+.bt-days-head-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 12; /* above rows/bars */
+  background: var(--bt-header-bg);
+  border-bottom: 1px solid var(--bt-border);
+}
+
+/* Days head grid: first col = 180px (units), then 60px per day */
+.bt-days-head {
+  display: grid;
+  grid-template-columns: 180px repeat(var(--bt-days, 31), 80px);
+  width: max-content;
+  min-width: calc(180px + 80px * var(--bt-days, 31));
+  align-items: center;
+}
+
+/* Sticky corner cell (top-left) */
+.bt-corner {
+  grid-column: 1 / 2;
+  position: sticky;
+  left: 0;
+  z-index: 13; /* above sticky resource cells */
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--bt-text);
+  background: var(--bt-header-bg);
+  box-shadow: 1px 0 0 rgba(0,0,0,0.06), 0 1px 0 rgba(0,0,0,0.06);
+  border-right: 1px solid var(--bt-border);
+}

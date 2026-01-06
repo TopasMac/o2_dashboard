@@ -1,0 +1,34 @@
+
+[data-appshell-navrail] .navrail-submenu-header,
+[data-appshell-navrail] .navrail-subitem-content {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+[data-appshell-navrail] .navrail-subitem-content svg {
+  color: #475467;
+}
+
+[data-appshell-navrail] .navrail-subitem-content:hover svg {
+  color: #0f766e;
+}
+
+[data-appshell-navrail] .navrail-submenu-header {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 4px;
+}
+
+[data-appshell-navrail] .navrail-subitem-content {
+  color: #333;
+  cursor: pointer;
+}
+
+[data-appshell-navrail] .navrail-subitem-content:hover {
+  background: #ecfdf5;
+  color: #0f766e;
+}

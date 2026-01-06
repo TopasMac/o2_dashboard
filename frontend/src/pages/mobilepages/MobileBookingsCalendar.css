@@ -1,0 +1,256 @@
+/* Mobile Bookings Calendar (mobile-first) */
+:root {
+  --mbc-bg: #ffffff;
+  --mbc-text: #1f2937;         /* gray-800 */
+  --mbc-muted: #6b7280;        /* gray-500 */
+  --mbc-border: #e5e7eb;       /* gray-200 */
+  --mbc-chip-bg: #111111;
+  --mbc-chip-text: #ffffff;
+  --mbc-accent: #1976d2;       /* blue 700 */
+  --mbc-hold: #FBBF24;         /* amber/yellow for Hold bars (tentative) */
+}
+
+/* Page wrapper (apply this id on the top-level container) */
+#mobile-bookings-calendar {
+  max-width: 440px;
+  margin: 0 auto;
+  /* normal page padding (MobileShell handles sticky header + unit selector) */
+  padding: 4px 12px 28px 16px;
+  background: var(--mbc-bg);
+  color: var(--mbc-text);
+  overflow-x: clip; /* prevent any child overflow from causing horizontal scroll */
+}
+
+/* Filters row */
+#mobile-bookings-calendar .mbc-filters {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+/* Month header */
+#mobile-bookings-calendar .mbc-month-title {
+  font-weight: 700;
+  font-size: 16px;
+  margin: 12px 0 14px 0;
+}
+
+/* Weekday header row */
+#mobile-bookings-calendar .mbc-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+#mobile-bookings-calendar .mbc-weekdays .wd {
+  text-align: center;
+  font-size: 12px;
+  color: var(--mbc-muted);
+}
+
+/* Grid of days */
+#mobile-bookings-calendar .mbc-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 18px 0 0 0;
+  padding: 0;
+  overflow-x: clip; /* ensure no horizontal scroll from the grid itself */
+}
+
+/* Individual day cell */
+#mobile-bookings-calendar .mbc-day {
+  border: 1px solid var(--mbc-border);
+  border-radius: 8px;
+  background: #fff;
+  min-height: 74px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#mobile-bookings-calendar .mbc-day.dim {
+  opacity: 0.45;
+}
+
+#mobile-bookings-calendar .mbc-day .label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--mbc-text);
+}
+
+/* Chips (override MUI defaults within the page) */
+#mobile-bookings-calendar .MuiChip-root {
+  border-radius: 12px !important;
+  height: 22px !important;
+  font-size: 11px !important;
+  background: var(--mbc-chip-bg) !important;
+  color: var(--mbc-chip-text) !important;
+  max-width: 100%;
+}
+#mobile-bookings-calendar .MuiChip-label {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+
+/* Utility: subtle divider between weeks (optional – add .mbc-week-sep elements if desired) */
+#mobile-bookings-calendar .mbc-week-sep {
+  height: 8px;
+}
+
+/* Sticky month header for long scrolls */
+#mobile-bookings-calendar .mbc-sticky {
+  position: sticky;
+  top: 44px; /* stick closer under header/unit selector */
+  background: var(--mbc-bg);
+  z-index: 10;
+  padding-top: 4px;
+  padding-bottom: 12px;
+}
+
+#mobile-bookings-calendar .mbc-sticky::before {
+  content: '';
+  position: absolute;
+  top: -6px;  /* extend a bit above to hide scrolling content */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--mbc-bg);
+  z-index: -1;
+}
+
+/* Buttons tinting */
+#mobile-bookings-calendar .mbc-icon-btn {
+  color: var(--mbc-accent);
+}
+
+/* Compact helper for small phones */
+@media (max-width: 360px) {
+  #mobile-bookings-calendar { padding-left: 10px; padding-right: 8px; }
+  #mobile-bookings-calendar .mbc-month-title { font-size: 15px; }
+}
+
+#mobile-bookings-calendar .mbc-booking-bar {
+  height: 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+  width: 100%;
+}
+
+
+#mobile-bookings-calendar .mbc-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 0; /* MobileShell provides spacing in the sticky area */
+  background: var(--mbc-bg);
+  border: 1px solid var(--mbc-border);
+  border-radius: 10px;
+}
+
+#mobile-bookings-calendar .mbc-filter-bar .grow { flex: 1; }
+#mobile-bookings-calendar .mbc-filter-btn { color: var(--mbc-accent); }
+
+/* Autocomplete dropdown: reduce whitespace + tighter rows */
+#mobile-bookings-calendar .MuiAutocomplete-listbox {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+#mobile-bookings-calendar .MuiAutocomplete-option {
+  min-height: 34px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+
+/* ===== Continuous bars overlay ===== */
+#mobile-bookings-calendar .mbc-grid { position: relative; }
+#mobile-bookings-calendar .mbc-bars-layer {
+  position: absolute;
+  inset: 0; /* top/right/bottom/left */
+  top: 0;
+  z-index: 3; /* draw above day cells */
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  /* rows are set inline from JSX via gridTemplateRows */
+  pointer-events: none; /* let taps go to cells */
+  gap: 6px; /* match day grid gap so spans align */
+  padding: 8px; /* match day cell padding so bars sit inside cards */
+  box-sizing: border-box;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip; /* clip any pseudo tails at container edges */
+}
+#mobile-bookings-calendar .mbc-bar {
+  height: 18px; /* slightly thicker */
+  border-radius: 9px; /* proportional curve */
+  margin-top: 42px;
+  position: relative; /* enable pseudo tail */
+  pointer-events: auto;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden; /* ensure pseudo-element can't expand the box beyond its grid area */
+}
+#mobile-bookings-calendar .mbc-bar.has-tail::after {
+  content: "";
+  position: absolute;
+  right: -45%;            /* extend ~1/3 into checkout cell */
+  top: 0;
+  width: 45%;
+  height: 100%;
+  background: inherit;    /* same color as bar */
+  border-radius: inherit; /* keep rounded cap */
+}
+
+/* Hold-specific styling: amber bar with dark text for contrast */
+#mobile-bookings-calendar .mbc-bar.hold {
+  background: var(--mbc-hold);
+  color: #111827;
+}
+
+/* Inline icons for Hold / Block labels inside mobile bars */
+#mobile-bookings-calendar .mbc-bar .mbc-block-icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 11px;
+  color: #ffffff;          /* force icons to white for contrast */
+  vertical-align: middle;
+  flex-shrink: 0;
+  transform: translateY(-1px);
+}
+#mobile-bookings-calendar .mbc-bar .mbc-hold-icon {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 11px;
+  color: #ffffff;          /* force icons to white for contrast */
+  vertical-align: middle;
+  flex-shrink: 0;
+  transform: translateY(1px); /* move icon down slightly */
+}
+#mobile-bookings-calendar .mbc-bar .mbc-notes-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 11px;
+  color: #ffffff;        /* always white for contrast */
+  vertical-align: middle;
+  flex-shrink: 0;
+  transform: translateY(1px); /* align with text baseline */
+}
+/* Unit Autocomplete: remove top whitespace inside dropdown */
+.mbc-unit-popper .MuiAutocomplete-paper {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.mbc-unit-popper .MuiAutocomplete-listbox {
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}

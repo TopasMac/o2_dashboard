@@ -1,0 +1,165 @@
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+
+    App\EventListener\JWTCreatedListener:
+        tags:
+            - { name: 'kernel.event_listener', event: 'lexik_jwt_authentication.on_jwt_created', method: 'onJWTCreated' }
+
+    App\EventListener\LoginSuccessListener:
+        tags:
+            - { name: 'kernel.event_listener', event: 'lexik_jwt_authentication.on_authentication_success', method: 'onAuthenticationSuccessResponse' }
+
+    App\Controller\Api\DashboardController:
+        tags: ['controller.service_arguments']
+        autowire: true
+        autoconfigure: true
+
+    App\Controller\Api\ServicePaymentCheckController:
+        public: true
+        tags: ['controller.service_arguments']
+
+    App\Controller\Api\MarkupController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+    App\EventListener\O2TransactionsAuditListener:
+        tags:
+            - { name: doctrine.event_listener, event: prePersist }
+            - { name: doctrine.event_listener, event: preUpdate }
+
+    App\EventListener\UnitBalanceLedgerListener:
+        tags:
+            - { name: doctrine.event_subscriber }
+
+
+    App\EventSubscriber\UnitDocumentCleanupSubscriber:
+        tags:
+            - { name: 'doctrine.event_subscriber' }
+
+
+
+
+
+    App\EventListener\AllBookingsSliceListener:
+        arguments:
+            $logger: '@logger'
+        tags:
+            - { name: doctrine.event_subscriber }
+
+
+    App\Doctrine\NotDismissedByExtension:
+        arguments: ['@request_stack']
+        tags: ['api_platform.doctrine.orm.query_extension.collection']
+
+
+    App\EventListener\ApiExceptionListener:
+        tags:
+            - { name: kernel.event_listener, event: kernel.exception, method: onKernelException }
+
+    App\Controller\HKCleaningController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+    App\Controller\Api\HKCleaningsReadController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+
+    App\Controller\Reports\HKResultsController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+    App\Controller\EmployeeController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+    App\Controller\Reports\UnitMonthlyReportController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+
+    App\Controller\Api\UnitDocumentController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+
+    App\Controller\EmployeeLedgerController:
+      public: true
+      autowire: true
+      autoconfigure: true
+      tags: ['controller.service_arguments']
+
+    App\Service\EmployeeLedgerService:
+      public: true
+      autowire: true
+      autoconfigure: true
+
+
+    App\EventListener\AllBookingsHKCleaningsListener:
+        tags:
+            - { name: 'doctrine.event_listener', event: 'postPersist' }
+
+    App\EventListener\UnitMediaUpdateListener:
+        arguments:
+            $bucketName: '%env(CDN_BUCKET)%'
+            $cdnBase: '%env(CDN_BASE)%'
+            $originPrefix: '%env(default::CDN_ORIGIN_PREFIX)%'
+        tags:
+            - { name: doctrine.event_listener, event: preUpdate }
+
+    App\EventListener\UnitMediaDeleteListener:
+        arguments:
+            $bucketName: '%env(CDN_BUCKET)%'
+        tags:
+            - { name: doctrine.event_listener, event: postRemove }
+
+    aws.s3_client:
+        class: Aws\S3\S3Client
+        factory: ['Aws\S3\S3Client', 'factory']
+        arguments:
+            - {
+                version: 'latest',
+                region: '%env(AWS_S3_REGION)%'
+              }
+
+    Aws\S3\S3Client:
+        alias: 'aws.s3_client'
+        public: false
+
+
+    # Ensures only a single Access-Control-Allow-Origin header on /api/* responses
+    App\EventSubscriber\CorsSanitizerSubscriber:
+        tags:
+            - { name: 'kernel.event_subscriber' }

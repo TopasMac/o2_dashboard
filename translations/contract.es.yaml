@@ -1,0 +1,80 @@
+document:
+  title: "Contrato de Administración de Propiedad"
+effective_date: "entra en vigor a partir de <strong>%effectiveDate%</strong>"
+parties:
+  owner_name: "Propietario: %ownerName%"
+  address: "Dirección de la Propiedad: %address%"
+  contact_phone: "Teléfono: %ownerPhone%"
+  contact_email: "Correo electrónico: %ownerEmail%"
+  signature_owner: "Firma del Propietario: %ownerFirstLast%"
+
+purpose:
+  title: "Objeto"
+  body: "El Propietario es titular del inmueble ubicado en <strong>%address%</strong> (la “Propiedad”). Owners2 se dedica a la administración de propiedades de este tipo. El Propietario desea contratar a Owners2 para administrar la Propiedad."
+
+services:
+  title: "Servicios de Owners2"
+  intro: "Owners2 se compromete a administrar la Propiedad conforme a la siguiente descripción. Owners2 decidirá de manera independiente las herramientas, métodos y procesos utilizados para prestar los Servicios, actuando siempre de buena fe y con la debida diligencia."
+  listing: "<strong>Publicación del inmueble.</strong> Owners2 publicará la Propiedad en distintas plataformas relevantes. Esto incluye un estudio de mercado para asegurar que las tarifas propuestas estén alineadas con la competencia."
+  guest_comm: "<strong>Comunicación con huéspedes.</strong> Owners2 será responsable de la comunicación con los huéspedes y de proporcionarles toda la información necesaria."
+  reservations: "<strong>Reservas.</strong> Gestión de las reservas y atención de cualquier inquietud o incidencia que pueda surgir durante el periodo de renta."
+  checkin: "<strong>Check-in / Check-out.</strong> Owners2 garantizará un proceso de entrada y salida ágil y cómodo, así como inspecciones de la propiedad antes y después de cada renta."
+  cleaning: "<strong>Limpieza.</strong> Limpieza de la Propiedad antes y después de cada reserva, incluyendo el cambio de toallas y ropa de cama."
+  supplies: "<strong>Insumos.</strong> Owners2 proporcionará jabón para platos, bolsas de basura, esponjas, toallas de papel de cocina, papel higiénico, champú y jabón de baño."
+
+financial:
+  title: "Términos y Obligaciones Financieras"
+  collection: "<strong>Cobro y transferencia de rentas.</strong> Owners2 será responsable de cobrar todas las rentas generadas por la Propiedad y posteriormente transferir los fondos al Propietario. El Propietario proporcionará a Owners2 una cuenta bancaria para recibir dichos depósitos. Si la cuenta no es de un banco mexicano, podrían aplicarse comisiones de transferencia. Owners2 preparará y entregará al Propietario una contabilidad detallada de rentas, gastos y transferencias."
+  commission: "<strong>Honorarios de Owners2.</strong> Las Partes acuerdan que Owners2 será compensada de la siguiente manera: <strong>%commission%</strong> de comisión sobre los Ingresos Netos (Pago bruto/total menos impuestos y cualquier tarifa de limpieza cobrada al huésped). Todos los montos se denominan en <strong>%currency%</strong>."
+  taxes: "<strong>Impuestos y retenciones.</strong> Owners2 podrá retener y/o enterar impuestos cuando así lo exija la ley (p. ej., IVA/ISR/retenciones) y deducir los costos relacionados. El Propietario sigue siendo responsable de los impuestos a su cargo."
+  direct_bookings: "<strong>Reservas directas.</strong> “Reserva directa” significa cualquier reserva no procesada por una plataforma externa (p. ej., Airbnb). Durante la vigencia, el honorario de administración para Reservas directas es del 20% sobre las tarifas que Owners2 cobraría para el mismo periodo. Si el Propietario o su familia inmediata se alojan en la Propiedad, únicamente aplica la tarifa de limpieza."
+  linens: "<strong>Ropa de cama y toallas.</strong> Al inicio del Contrato, el Propietario proporcionará un juego completo de ropa de cama y toallas para la Propiedad (incluyendo toallas de playa). Si la Propiedad ya cuenta con ropa de cama y toallas, Owners2 evaluará su idoneidad para uso de huéspedes; la decisión final sobre su utilización corresponde a Owners2. Owners2 opera un sistema de ropa de cama compartida, en el cual dichas piezas no se asignan a una unidad específica; si se aceptan las piezas proporcionadas por el Propietario, podrán utilizarse en cualquiera de las unidades administradas por Owners2. Alternativamente, a petición o cuando las piezas existentes no sean adecuadas, Owners2 podrá adquirir los artículos necesarios y deducir el costo del primer pago o estado de cuenta mensual."
+  linens_fee: "<strong>5.1 Cuota mensual de ropa de cama.</strong> Para esta unidad, la cuota mensual es de <strong>%linensFee% MXN</strong>. Para asegurar calidad constante, disponibilidad de reposiciones por daño/pérdida/robo y evitar cargos ad hoc, esta cuota se determina según la configuración de la unidad (p. ej., número de habitaciones/camas) y puede actualizarse periódicamente. Esta estructura permite que el Propietario haga, si es necesario, una inversión inicial única y en adelante solo pague la cuota mensual predecible."
+  maintenance: "<strong>Mantenimiento y reparaciones.</strong> Owners2 será responsable de realizar, o contratar al personal necesario para realizar, el mantenimiento y las reparaciones que sean necesarias en la Propiedad. En emergencias que amenacen a personas, reservaciones o la Propiedad, Owners2 podrá autorizar y coordinar reparaciones sin aprobación previa del Propietario, notificándolo tan pronto sea posible. El Propietario autoriza el reembolso de dichos costos mediante compensación en los pagos."
+  payment: "<strong>Pago e informe mensual.</strong> Owners2 efectuará pagos mensuales a más tardar el %payoutDay%º día hábil del mes siguiente. Si dicho día coincide con fin de semana o feriado, el pago se realizará el siguiente día hábil. Owners2 podrá compensar reembolsos y honorarios autorizados. Cada pago irá acompañado de (i) el informe mensual del mes anterior —detallando ingresos, deducciones y el pago final— y (ii) el comprobante de transferencia. En caso de que el saldo final sea negativo, el Propietario deberá reembolsar a Owners2 a más tardar el día quince (15) de ese mes."
+
+legal:
+  title: "Disposiciones legales"
+  reps: "<strong>Declaraciones y garantías.</strong> Ambas Partes declaran que están plenamente facultadas para celebrar este Contrato. El cumplimiento y las obligaciones de cualquiera de las Partes no violarán ni infringirán derechos de terceros ni contravendrán otros acuerdos entre las Partes, individualmente, y cualquier otra persona, organización o empresa, ni ley o regulación gubernamental alguna."
+  compliance: "<strong>Cumplimiento y reglas de casa.</strong> El Propietario garantiza que la Propiedad cumple con las leyes aplicables, zonificación, reglamentos de HOA/condominio, permisos y cualquier restricción de renta de corto plazo. Owners2 puede publicar y hacer cumplir reglas de casa razonables (p. ej., límites de ocupación, horarios de silencio, prohibición de fiestas, políticas de mascotas/tabaco) para proteger la Propiedad y cumplir las normas."
+  legal_proc: "<strong>Gestiones legales.</strong> Si resultan necesarias gestiones de cobro o procedimientos legales relacionados con una estancia o renta de la Propiedad (p. ej., recuperación de importes adeudados, reclamaciones por daños en plataformas o juicios de mínima cuantía), Owners2 podrá atender dichos asuntos en nombre del Propietario. La contratación de abogados externos o el inicio de procedimientos más allá de los procesos rutinarios de plataforma o de mínima cuantía requieren la aprobación previa del Propietario. El Propietario es responsable de dichos honorarios legales externos y costos judiciales. Owners2 no es responsable por gestiones legales que no deriven de la administración y renta de la Propiedad."
+  damages: "<strong>Daños.</strong> Owners2 empleará esfuerzos comercialmente razonables, incluyendo la gestión de reclamaciones en plataformas (p. ej., centro de resoluciones de Airbnb) y la aplicación de depósitos de seguridad disponibles, para procurar la recuperación frente al huésped por daños causados por éste. Si, a pesar de tales gestiones, no se obtiene recuperación, el Propietario será en última instancia responsable del costo de reparación o reposición. Owners2 no es responsable por el desgaste normal; fallas o defectos de sistemas, servicios o instalaciones comunes del edificio; ni por asuntos fuera del control razonable de Owners2. Owners2 no es responsable por daños causados por huéspedes salvo en la medida en que deriven de negligencia grave o dolo de Owners2. Para reservaciones realizadas por terceros en nombre del Propietario, Owners2 procurará primero la recuperación contra dicho tercero o el huésped; si no se obtiene recuperación, el Propietario seguirá siendo el responsable final."
+  limitation: "<strong>Limitación de responsabilidad.</strong> Owners2 empleará esfuerzos comercialmente razonables, incluyendo la gestión de reclamaciones en plataformas (p. ej., centro de resoluciones de Airbnb) y la aplicación de depósitos de seguridad disponibles, para procurar la recuperación frente al huésped por daños causados por éste. Si, a pesar de tales gestiones, no se obtiene recuperación, el Propietario será en última instancia responsable del costo de reparación o reposición. Owners2 no será responsable por el desgaste normal; fallas o defectos de sistemas, servicios o instalaciones comunes del edificio; ni por asuntos fuera del control razonable de Owners2. En la máxima medida permitida por la ley, ninguna de las Partes será responsable por daños consecuenciales, incidentales, especiales, ejemplares o punitivos. Esta cláusula se debe leer en forma consistente con la Sección 2.1 (Daños y Depósitos de garantía)."
+  entire: "<strong>Acuerdo íntegro.</strong> Las Partes reconocen y aceptan que este Contrato constituye el acuerdo íntegro entre ellas. Si las Partes desean cambiar, agregar o modificar cualquier término, deberán hacerlo por escrito y con la firma de ambas. Se preparará y entregará al Propietario un Anexo A (Inventario) después de la firma de este Contrato, el cual también deberá ser firmado por el Propietario."
+
+definitions:
+  title: "Definiciones"
+  guest: "<strong>Huésped:</strong> La(s) persona(s) que se alojan en la Propiedad bajo una reserva."
+  services: "<strong>Servicios:</strong> Los servicios de administración descritos en la Sección 2 (Servicios de Owners2)."
+  direct_booking: "<strong>Reserva directa:</strong> Cualquier reserva no procesada a través de una plataforma externa (p. ej., Airbnb); es decir, una reserva gestionada directamente por Owners2 o el Propietario fuera de dichas plataformas."
+  net_revenue: "<strong>Ingresos Netos:</strong> Pago bruto/total efectivamente recibido por una reserva <em>menos</em> (i) los impuestos cobrados/retenidos en esa reserva y (ii) cualquier tarifa de limpieza cobrada al huésped."
+
+other:
+  title: "Otros"
+  use_by_owner: "<strong>Uso por el Propietario.</strong> El Propietario puede reservar la Propiedad cuando lo desee, siempre que las fechas elegidas estén disponibles. La limpieza posterior al check-out debe realizarse por Owners2, y su costo se deducirá del resultado mensual."
+  cancellation: "<strong>Cancelación de reservas.</strong> En caso de que el Propietario solicite la cancelación de una reserva, será responsable de las penalizaciones contractuales que pudieran generarse."
+  access_inventory_photos: "<strong>Acceso, Inventario y Fotos.</strong> El Propietario proporcionará al menos dos juegos completos de llaves/tarjetas, credenciales de Wi‑Fi y los manuales de electrodomésticos disponibles. Se requieren fotos profesionales adecuadas para las publicaciones; su costo puede deducirse del primer pago mensual."
+
+legal_extras:
+  duration: "<strong>Duración.</strong> Este Contrato tendrá una duración de un (1) año a partir de la Fecha de Entrada en Vigor indicada arriba y se renovará automáticamente por periodos sucesivos de un (1) año."
+  termination: "<strong>Terminación.</strong> Este Contrato podrá darse por terminado en cualquier momento por cualquiera de las Partes con treinta (30) días de aviso por escrito a la otra Parte. Al finalizar, Owners2 (a) continuará atendiendo las reservas confirmadas bajo este Contrato, o (b) si es aceptable para el huésped y factible, transferirá la reserva. El Propietario asume las penalizaciones de plataforma si las cancelaciones ocurren a petición suya. Se realizará un inventario conjunto al finalizar. Owners2 entregará al Propietario los importes debidos dentro de los treinta (30) días siguientes a la terminación; el Propietario reembolsará a Owners2 los gastos aprobados incurridos antes de la terminación dentro del mismo plazo."
+  confirmed_bookings: "<strong>Reservas confirmadas.</strong> Si existen reservas confirmadas después de la fecha de terminación, el Propietario decidirá cómo proceder y asumirá la responsabilidad por cualquier penalización contractual derivada de cancelaciones."
+  binding: "<strong>Acuerdo legal y vinculante.</strong> Este Contrato es legal y vinculante entre las Partes según lo indicado. Cada Parte declara que tiene la autoridad para celebrar este Contrato."
+  governing_law: "<strong>Ley aplicable y jurisdicción.</strong> Este Contrato se rige por las leyes del Estado de %stateCountry%. Las Partes se someten a los tribunales con jurisdicción en dicho Estado para cualquier controversia que no pueda resolverse de manera amistosa."
+  notices: "<strong>Avisos.</strong> Los avisos relacionados con este Contrato podrán darse por correo electrónico y teléfono utilizando los contactos registrados de cada Parte."
+  data_protection: "<strong>Protección de datos y confidencialidad.</strong> Cada Parte protegerá los datos personales y los utilizará únicamente para la administración de la Propiedad. La información comercial, como tarifas y estados de cuenta, se tratará como confidencial y no se divulgará a terceros salvo cuando lo exija la ley o sea necesario para la ejecución de este Contrato."
+
+contacts:
+  title: "Contactos"
+  intro: "Las partes acuerdan utilizar la siguiente información de contacto para todas las comunicaciones relacionadas con este contrato:"
+  footer: "Toda comunicación entre las partes relativa a este contrato se realizará a través de estos contactos. Si alguna de las partes cambia su información de contacto, deberá notificar por escrito a la otra parte a la brevedad."
+
+signature:
+  client_label: "Cliente"
+
+
+place_date:
+  title: "Lugar y Fecha"
+  place: "Lugar"
+  date: "Fecha"
+  default_place: "Playa del Carmen"

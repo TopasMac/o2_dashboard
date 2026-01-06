@@ -1,0 +1,1262 @@
+{% set lang = (client.language ?? meta.language ?? 'es')|lower %}
+{% set month_es = (meta.monthLabel|default(''))|replace({'January':'enero','February':'febrero','March':'marzo','April':'abril','May':'mayo','June':'junio','July':'julio','August':'agosto','September':'septiembre','October':'octubre','November':'noviembre','December':'diciembre'}) %}
+{% set month_label = lang == 'en' ? (meta.monthLabel|default('')) : month_es %}
+{% set L = lang == 'en' ? {
+  'reportTitle': 'Monthly Report',
+  'unitLabel': 'Unit',
+  'summary': 'Summary',
+  'comments': 'Comments',
+  'bookings': 'Bookings',
+  'bookingsAirbnb': 'Bookings — Airbnb',
+  'bookingsPrivate': 'Owner Reservation',
+  'source': 'Source',
+  'guest': 'Guest',
+  'stay': 'Stay',
+  'netPay': 'Net Pay',
+  'cleaning': 'Cleaning',
+  'o2Comm': 'O2',
+  'clientComm': 'Client Commissions',
+  'noBookings': 'No bookings to report',
+  'expenses': 'Expenses',
+  'description': 'Description',
+  'amount': 'Amount',
+  'noExpenses': 'No expenses to report',
+  'deposits': 'Credits',
+  'noDeposits': 'No credits to report',
+  'totalExpenses': 'Total Expenses',
+  'totalDeposits': 'Total Credits',
+  'client': 'Client',
+  'name': 'Name',
+  'email': 'Email',
+  'bank': 'Bank',
+  'clabe': 'CLABE',
+  'payment': 'Payment',
+  'badgeClientToO2': 'Client → Owners2',
+  'badgeO2ToClient': 'Owners2 → Client',
+  'owners2Payout': 'Owners2 Payout',
+  'clientCommissions': 'Client Commissions',
+  'monthlyResult': 'Month Result',
+  'openingBalance': 'Opening Balance',
+  'closingBalance': 'Closing Balance',
+  'paymentCol': 'Payment',
+  'taxPct': 'Tax %',
+  'o2Pct': 'O2 %',
+  'clientPayout': 'Client'
+} : {
+  'reportTitle': 'Reporte Mensual',
+  'unitLabel': 'Unidad',
+  'summary': 'Resumen',
+  'comments': 'Comentarios',
+  'bookings': 'Reservas',
+  'bookingsAirbnb': 'Reservas — Airbnb',
+  'bookingsPrivate': 'Reservas — Privado',
+  'source': 'Origen',
+  'guest': 'Huésped',
+  'stay': 'Estancia',
+  'netPay': 'Pago Neto',
+  'cleaning': 'Limpieza',
+  'clientComm': 'Comisiones Cliente',
+  'noBookings': 'Ninguna reserva a reportar',
+  'expenses': 'Gastos',
+  'description': 'Descripción',
+  'amount': 'Monto',
+  'noExpenses': 'Sin gastos a reportar',
+  'deposits': 'Abonos',
+  'noDeposits': 'Sin abonos a reportar',
+  'totalExpenses': 'Total Gastos',
+  'totalDeposits': 'Total Abonos',
+  'client': 'Cliente',
+  'name': 'Nombre',
+  'email': 'Email',
+  'bank': 'Banco',
+  'clabe': 'CLABE',
+  'payment': 'Pago',
+  'badgeClientToO2': 'Client → Owners2',
+  'badgeO2ToClient': 'Owners2 → Client',
+  'owners2Payout': 'Owners2 Payout',
+  'clientCommissions': 'Comisiones Cliente',
+  'monthlyResult': 'Resultado Mes',
+  'openingBalance': 'Saldo Inicial',
+  'closingBalance': 'Balance Final',
+  'paymentCol': 'Pago',
+  'taxPct': 'Tax %',
+  'o2Pct': 'O2 %',
+  'clientPayout': 'Cliente',
+  'o2Comm': 'O2'
+} %}
+
+{# --- Canonical balances (prefer root → report → summary → meta; no self-reference) --- #}
+{% set openingBalance_value =
+  openingBalance|default(
+    report.openingBalance|default(
+      report.opening_balance|default(
+        summary.openingBalance|default(
+          summary.opening_balance|default(
+            meta.openingBalance|default(
+              meta.opening_balance|default(0)
+            )
+          )
+        )
+      )
+    )
+  )
+%}
+{% set monthlyResult_value =
+  monthlyResult|default(
+    report.monthlyResult|default(
+      report.monthly_result|default(
+        summary.monthlyResult|default(
+          summary.monthly_result|default(
+            meta.monthlyResult|default(
+              meta.monthly_result|default(null)
+            )
+          )
+        )
+      )
+    )
+  )
+%}
+{% set closingBalance_value =
+  closingBalance|default(
+    report.closingBalance|default(
+      report.closing_balance|default(
+        summary.closingBalance|default(
+          summary.closing_balance|default(
+            meta.closingBalance|default(
+              meta.closing_balance|default(
+                monthlyResult_value is not null ? (openingBalance_value + monthlyResult_value) : null
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+%}
+{# --- Consistency fix: if closing and monthly are present, derive opening = closing - monthly --- #}
+{% if monthlyResult_value is not null and closingBalance_value is not null %}
+  {% set openingBalance_value = (closingBalance_value - monthlyResult_value) %}
+{% endif %}
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ L.reportTitle }} {{ month_label }}</title>
+    <style>
+      /* Keep totals aligned at the bottom of Gastos/Abonos boxes */
+      .side-by-side .boxed-section { display: flex; }
+      .gastos-wrap, .abonos-wrap { flex: 1; display: flex; flex-direction: column; }
+      table.gastos, table.abonos { flex: 1; display: flex; flex-direction: column; }
+      /* Let body grow and push footer */
+      table.gastos tbody, table.abonos tbody { flex: 1; display: block; }
+      /* Override global tfoot display so margin auto can work */
+      table.gastos tfoot, table.abonos tfoot { display: block; margin-top: auto; }
+      /* (Debug CSS removed: blue horizontal lines and dashed borders) */
+      :root {
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --brand: #0f766e; /* teal */
+        --accent: #f57c4d; /* coral */
+        --bg-card: #f8fafc;
+        --border: #e5e7eb;
+        --summary-width: 75%; /* widened so long labels + values fit on one line */
+      }
+      * { box-sizing: border-box; }
+      body { font: 11pt/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Arial, sans-serif; color: var(--ink); margin: 24pt; position: relative; }
+      .definitions {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        margin: 0 24pt;
+        width: auto;
+      }
+      .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8pt; margin-bottom: 8pt; }
+      .logo { height: 40pt; width: auto; }
+      .title { margin: 0 0 2pt 0; font-size: 18pt; font-weight: 700; }
+      .subtitle { margin: 0; color: var(--muted); }
+
+      .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10pt; }
+      .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10pt; }
+      .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8pt; padding: 10pt; }
+      .comment-box {
+        background: transparent !important;
+        border-radius: 0 !important;
+      }
+      .label { font-size: 9pt; color: var(--muted); margin-bottom: 2pt; }
+      .value { font-size: 14pt; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+      .section { margin-top: 4pt; }
+      .section h2 { margin: 0 0 6pt; font-size: 12pt; color: var(--brand); letter-spacing: 0.2pt; }
+
+      /* Box with label embedded in top border (legend style) */
+      .boxed-section {
+        border: 1px solid var(--border);
+        border-radius: 6pt;
+        margin: 18pt 0;
+        padding: 12pt 12pt; /* equal left and right padding */
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .boxed-section h2 {
+        position: absolute;
+        top: -14pt; /* bring label down into border for alignment */
+        left: 12pt;
+        background: #fff;
+        padding: 0 6pt;
+        font-size: 10pt;
+        font-weight: 600;
+        color: var(--brand);
+      }
+
+      .summary-box h2 {
+        position: absolute;
+        top: -8pt;
+        left: 12pt;
+        background: #fff;
+        padding: 0 6pt;
+        font-size: 10pt;
+        font-weight: 600;
+        color: var(--brand);
+        margin-top: 0;
+      }
+
+      .after-summary {
+        margin-top: 10pt;
+      }
+      .after-summary .boxed-section {
+        margin-top: 18pt;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+      thead { display: table-header-group; }
+      tfoot { display: table-row-group; }
+      th, td { border: 1px solid var(--border); padding: 6pt 8pt; }
+      th { background: #f3f4f6; text-align: left; font-weight: 600; }
+      tbody tr:nth-child(even) { background: #fafafa; }
+      tr, .card { page-break-inside: avoid; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; }
+      .summary-row td { font-weight: 700; }
+
+      .muted { color: var(--muted); }
+
+      .client-row { margin-bottom: 4pt; }
+      .client-label { font-weight: 700; margin-right: 6pt; }
+      .client-value { font-weight: 400; }
+      .section-divider {
+        border-top: 1px solid var(--border);
+        margin: 6pt 0;
+      }
+      /* Summary rows rendered as table for wkhtmltopdf reliability */
+      .summary-table { width: 100%; border-collapse: collapse; }
+      .summary-table td { border: none; padding: 1px 0; vertical-align: baseline; line-height: 1.15; }
+      .summary-table tr.compact td { padding-top: 1pt; padding-bottom: 1pt; }
+      .summary-table td.label { font-weight: 700; white-space: nowrap; font-size: 10pt; }
+      .summary-table td.value { text-align: right; white-space: nowrap; font-weight: 400; font-size: 10pt; }
+      .summary-table tr:last-child td.value { font-weight: 700; }
+
+      /* PDF-friendly two column layout */
+      .twocol { width: 100%; border-collapse: collapse; }
+      .twocol td { vertical-align: top; padding: 8pt 0 8pt 0; border: none !important; }
+      .twocol td:first-child {
+        width: 40%;
+        padding-right: 1pt !important; /* tighten gap from left column */
+      }
+      .twocol td.client-col {
+        width: 60%;
+        padding-left: 0pt !important; /* tighten gap from right column */
+      }
+
+      /* Bordered summary box with controlled width */
+      .summary-box { border: 1px solid var(--border); padding: 8pt 12pt; width: var(--summary-width); }
+
+      /* Small pill badge used next to Summary */
+      .badge {
+        display: inline-block;
+        margin-left: 6pt;
+        padding: 1pt 6pt;
+        border-radius: 999px;
+        font-size: 8pt;
+        font-weight: 700;
+        line-height: 1.4;
+        border: 1px solid currentColor;
+        white-space: nowrap;
+      }
+
+      /* Reservas table clean style */
+      table.reservas th, table.reservas td {
+        border: none;
+        background: transparent;
+        font-size: 10pt;
+      }
+      table.reservas tbody tr:nth-child(even) { background: transparent; }
+      /* Tighten Reservas row spacing for wkhtmltopdf */
+      table.reservas td { padding: 2pt 8pt; }
+      /* Make Reservas columns respect assigned widths and keep Stay in one line */
+      table.reservas { table-layout: fixed; }
+      /* Stay is the 4th column */
+      table.reservas th:nth-child(4),
+      table.reservas td:nth-child(4) { white-space: nowrap; }
+
+      /* Center Stay (4), Tax % (6), O2 % (7) in Reservas */
+      table.reservas th:nth-child(4),
+      table.reservas td:nth-child(4),
+      table.reservas th:nth-child(6),
+      table.reservas td:nth-child(6),
+      table.reservas th:nth-child(7),
+      table.reservas td:nth-child(7) {
+        text-align: center !important;
+      }
+
+      /* Gastos table clean style */
+      .side-by-side {
+        display: flex;
+        gap: 6pt;
+      }
+      .side-by-side .boxed-section {
+        flex: 1;
+        margin: 0 4pt; /* add horizontal margin for spacing between tables */
+      }
+      table.gastos th, table.gastos td {
+        border: none;
+        background: transparent;
+        font-size: 10pt;
+      }
+      table.gastos tbody tr:nth-child(even) { background: transparent; }
+      /* Constrain and align the Amount column in Gastos */
+      table.gastos .num {
+        text-align: right;
+        width: 1%;
+        white-space: nowrap;
+      }
+      /* Allow Gastos table columns to auto-size based on content */
+      table.gastos {
+        /* table-layout: fixed; */ /* Removed to allow natural column sizing */
+      }
+      /* Remove hardcoded widths for Gastos columns */
+
+      /* Tighten Gastos row spacing for wkhtmltopdf */
+      table.gastos td { padding: 2pt 8pt; }
+      table.gastos tr.g-compact td { padding-top: 1pt; padding-bottom: 1pt; }
+      .gastos-subtitle { font-size: 9pt; margin: 0 0 1pt 0; color: var(--muted); }
+      .gastos-desc { margin: 0; line-height: 1.15; }
+
+      /* Narrow the Gastos table so the Amount column sits closer to Description */
+      /* .gastos-wrap { width: 50%; } */
+
+      /* Abonos table clean style */
+      table.abonos th, table.abonos td {
+        border: none;
+        background: transparent;
+        font-size: 10pt;
+      }
+      table.abonos tbody tr:nth-child(even) { background: transparent; }
+      /* Tighten Abonos row spacing for wkhtmltopdf */
+      table.abonos td { padding: 2pt 8pt; }
+      table.abonos tr.ab-compact td { padding-top: 1pt; padding-bottom: 1pt; }
+      .abonos-subtitle { font-size: 9pt; margin: 0 0 1pt 0; color: var(--muted); }
+      .abonos-desc { margin: 0; line-height: 1.15; }
+      /* Constrain and align the Amount column in Abonos */
+      table.abonos .num {
+        text-align: right;
+        width: 1%;
+        white-space: nowrap;
+      }
+      /* Allow Abonos table columns to auto-size based on content */
+      table.abonos {
+        /* table-layout: fixed; */ /* Removed to allow natural column sizing */
+      }
+      /* Remove hardcoded widths for Abonos columns */
+
+      /* Narrow the Abonos table so the Amount column sits closer to Description */
+      /* .abonos-wrap { width: 50%; } */
+
+      .definitions-content {
+        font-size: 8pt;
+        line-height: 1.3;
+      }
+      .definitions-content p {
+        margin: 2pt 0;
+      }
+      .payment-notice-content {
+        font-size: 8pt;
+        line-height: 1.3;
+        text-align: justify;
+      }
+
+      /* Force left alignment for Description column (header + values, ES & EN) */
+      table.gastos th:nth-child(2),
+      table.abonos th:nth-child(2),
+      table.gastos td:nth-child(2),
+      table.abonos td:nth-child(2),
+      /* also any nested spans/divs inside the cell */
+      table.gastos td:nth-child(2) * ,
+      table.abonos td:nth-child(2) * {
+        text-align: left !important;
+      }
+      /* Ensure description helper wrappers also stay left */
+      .gastos-desc, .abonos-desc {
+        text-align: left !important;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+
+
+    {# Header #}
+    <div class="header">
+      {% set logo = company.logoUrl ?? absolute_url(asset('img/company-logo.png')) %}
+      {% if logo %}
+        <img class="logo" src="{{ logo }}" alt="Logo" />
+      {% endif %}
+      {# Build formatted date from report period (YYYY-MM). If missing, fall back to meta period values only. #}
+      {% set _period = report.period|default(meta.period|default(period|default(yearMonth|default(ym|default(''))))) %}
+      {% set _fallback_period = meta.yearMonth|default(yearMonth|default(ym|default(''))) %}
+      {% set _ym_raw = _period ?: _fallback_period %}
+      {# Normalize YYMM tokens like `2509` into `2025-09` so header never blanks #}
+      {% set _ym = _ym_raw %}
+      {% if _ym matches '/^\\d{4}$/' %}
+        {% set _ym = '20' ~ _ym|slice(0,2) ~ '-' ~ _ym|slice(2,2) %}
+      {% endif %}
+      {% set formatted_date = _ym ? ((_ym ~ '-01')|date('m-Y')) : '' %}
+      {# Unit label fallback #}
+      {% set unit_label = unit.unitName|default(unit.name|default('')) %}
+      {% if lang == 'en' %}
+        <div class="subtitle">Monthly Report | {{ unit_label }} | {{ formatted_date }}</div>
+      {% else %}
+        <div class="subtitle">Reporte Mensual | {{ unit_label }} | {{ formatted_date }}</div>
+      {% endif %}
+    </div>
+
+
+{# Housekeeping total (if provided separately in payload) #}
+{% set hk_total = housekeeping.totals.charged|default(0) %}
+{# Client + Summary combined #}
+    <div class="section">
+      <table class="twocol">
+        <tr>
+          <td>
+            {# --- Helpers for CLIENT payment type --- #}
+            {% set paymentType = (summary.paymentType ?? unit.paymentType ?? unit.payment_type ?? unit.paymenttype ?? 'OWNERS2')|upper %}
+            {# --- Replace summary-box conditional with explicit OWNERS2 / CLIENT / else branches --- #}
+            {% if paymentType == 'OWNERS2' %}
+              {# --- OWNERS2: Summary box (original ELSE branch content) --- #}
+              {% set client_commissions = 0 %}
+              {% if reservas is defined and reservas is iterable %}
+                {% for r in reservas %}
+                  {% set client_commissions = client_commissions + (r.ownerPayoutInMonth ?? 0) %}
+                {% endfor %}
+              {% endif %}
+              {% set gastos_total = (totals.gastosTotalClient|default(0)) + (hk_total|default(0)) %}
+              {% set abonos_total = totals.abonosTotalClient|default(0) %}
+              {% set monthly_result_owners2 = (client_commissions|default(0)) - (gastos_total|default(0)) + (abonos_total|default(0)) %}
+              {% set saldo_inicial = (closingBalance_value is not null and monthly_result_owners2 is not null)
+                  ? (closingBalance_value - monthly_result_owners2)
+                  : openingBalance_value %}
+              {% set balance_final_owners2 = (closingBalance_value is not null
+                  ? closingBalance_value
+                  : (saldo_inicial + monthly_result_owners2)) %}
+              <div class="boxed-section summary-box">
+                <h2>{{ L.summary }}</h2>
+                <table class="summary-table">
+                  <tr><td class="label">{{ L.clientCommissions }}:</td><td class="value">${{ client_commissions|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.o2Comm }}:</td><td class="value">${{ (totals.o2Commission|default(0))|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.totalExpenses }}:</td><td class="value">${{ gastos_total|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.totalDeposits }}:</td><td class="value">${{ abonos_total|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.monthlyResult }}:</td><td class="value">${{ monthly_result_owners2|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.openingBalance }}:</td><td class="value">${{ saldo_inicial|number_format(2, ',', '.') }}</td></tr>
+                  {% set close_label_o2 = balance_final_owners2 < 0 ? (lang == 'en' ? 'Amount Due' : 'A pagar') : L.closingBalance %}
+                  <tr><td class="label">{{ close_label_o2 }}:</td><td class="value">${{ (balance_final_owners2)|number_format(2, ',', '.') }}</td></tr>
+                </table>
+              </div>
+            {% elseif paymentType == 'CLIENT' %}
+              {# --- CLIENT: Summary box (original IF branch content) --- #}
+              {% set owners2_payout = 0 %}
+              {% set client_payout = 0 %}
+              {% if reservas is defined and reservas is iterable %}
+                {% for r in reservas %}
+                  {% set src = r.source ?? '' %}
+                  {% if src == 'Airbnb' %}
+                    {% set owners2_payout = owners2_payout + (r.cleaningFeeInMonth ?? 0) + (r.o2CommissionInMonth ?? 0) %}
+                  {% elseif src == 'Private' %}
+                    {% set client_payout = client_payout + (r.ownerPayoutInMonth ?? 0) %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+              {% set monthly_result = (client_payout|default(0) + (totals.abonosTotalClient|default(0)))
+                                    - (owners2_payout|default(0) + ((totals.gastosTotalClient|default(0)) + (hk_total|default(0)))) %}
+              {% set closing_balance_calc = (openingBalance_value|default(0)) + monthly_result %}
+              {% set left_side = (owners2_payout|default(0)) - (totals.gastosTotalClient|default(0)) + (totals.abonosTotalClient|default(0)) + (openingBalance_value|default(0)) %}
+              {% set isClientOwes = left_side > (client_payout|default(0)) %}
+              {% set directionLabel = isClientOwes ? 'Client → Owners2' : 'Owners2 → Client' %}
+              {% set directionColor = isClientOwes ? '#f57c4d' : '#0f766e' %}
+              <div class="boxed-section summary-box">
+                <h2>{{ L.summary }}</h2>
+                <table class="summary-table">
+                  <tr><td class="label">{{ L.owners2Payout }}:</td><td class="value">${{ (owners2_payout|default(0))|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.clientCommissions }}:</td><td class="value">${{ (client_payout|default(0))|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.totalExpenses }}:</td><td class="value">${{ ((totals.gastosTotalClient|default(0)) + (hk_total|default(0)))|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.totalDeposits }}:</td><td class="value">${{ (totals.abonosTotalClient|default(0))|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.monthlyResult }}:</td><td class="value">${{ monthly_result|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.openingBalance }}:</td><td class="value">${{ (openingBalance_value|default(0))|number_format(2, ',', '.') }}</td></tr>
+                  {% set close_label_client = closing_balance_calc < 0 ? (lang == 'en' ? 'Amount Due' : 'A pagar') : L.closingBalance %}
+                  <tr>
+                    <td class="label">{{ close_label_client }}:</td>
+                    <td class="value">
+                      <span style="color: {{ directionColor }};">
+                        {% if closing_balance_calc < 0 %}-{% endif %}${{ (closing_balance_calc|abs)|number_format(2, ',', '.') }}
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            {% else %}
+              {# --- Unknown payment type: show a subtle note and default to OWNERS2 formula semantics --- #}
+              <div class="boxed-section summary-box">
+                <h2>{{ L.summary }}</h2>
+                <tr>
+                  <td class="label" colspan="2">
+                    <span class="muted">Unknown payment type: {{ paymentType }} — using OWNERS2 summary rules</span>
+                  </td>
+                </tr>
+                {% set client_commissions = 0 %}
+                {% if reservas is defined and reservas is iterable %}
+                  {% for r in reservas %}
+                    {% set client_commissions = client_commissions + (r.ownerPayoutInMonth ?? 0) %}
+                  {% endfor %}
+                {% endif %}
+                {% set gastos_total = (totals.gastosTotalClient|default(0)) + (hk_total|default(0)) %}
+                {% set abonos_total = totals.abonosTotalClient|default(0) %}
+                {% set monthly_result_owners2 = (client_commissions|default(0)) - (gastos_total|default(0)) + (abonos_total|default(0)) %}
+                {% set saldo_inicial = (closingBalance_value is not null and monthly_result_owners2 is not null)
+                    ? (closingBalance_value - monthly_result_owners2)
+                    : openingBalance_value %}
+                {% set balance_final_owners2 = (closingBalance_value is not null
+                    ? closingBalance_value
+                    : (saldo_inicial + monthly_result_owners2)) %}
+                <table class="summary-table">
+                  <tr><td class="label">{{ L.clientCommissions }}:</td><td class="value">${{ client_commissions|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.o2Comm }}:</td><td class="value">${{ (totals.o2Commission|default(0))|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.totalExpenses }}:</td><td class="value">${{ gastos_total|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.totalDeposits }}:</td><td class="value">${{ abonos_total|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.monthlyResult }}:</td><td class="value">${{ monthly_result_owners2|number_format(2, ',', '.') }}</td></tr>
+                  <tr><td class="label">{{ L.openingBalance }}:</td><td class="value">${{ saldo_inicial|number_format(2, ',', '.') }}</td></tr>
+                  {% set close_label_o2 = balance_final_owners2 < 0 ? (lang == 'en' ? 'Amount Due' : 'A pagar') : L.closingBalance %}
+                  <tr><td class="label">{{ close_label_o2 }}:</td><td class="value">${{ (balance_final_owners2)|number_format(2, ',', '.') }}</td></tr>
+                </table>
+              </div>
+            {% endif %}
+          </td>
+          <td class="client-col">
+            {# (Preserve original client-col logic unchanged) #}
+            {% if paymentType == 'CLIENT' %}
+              {% set owners2Bank = {
+                name:  'Antonio Pedro Macedo',
+                email: 'admin@owners2.com',
+                bank:  'Santander',
+                account: '014 694 606 078 428 258'
+              } %}
+              {% set clientAccountMasked = client.bankAccountMasked
+                ?? (client.bankAccount is defined and client.bankAccount
+                      ? '******** ' ~ (client.bankAccount|slice(-3))
+                      : '—') %}
+              {% set left_side = (owners2_payout|default(0)) - (totals.gastosTotalClient|default(0)) + (totals.abonosTotalClient|default(0)) + (openingBalance_value|default(0)) %}
+              {% set isClientOwes = left_side > (client_payout|default(0)) %}
+              {% set directionLabel = isClientOwes ? 'Client → Owners2' : 'Owners2 → Client' %}
+              {% set directionColor = isClientOwes ? '#f57c4d' : '#0f766e' %}
+              {% if isClientOwes %}
+                <h2>{{ L.client }}</h2>
+                <div class="client-row"><span class="client-label">{{ L.name }}:</span><span class="client-value">{{ client.name|default('') }}</span></div>
+                <div class="client-row"><span class="client-label">{{ L.email }}:</span><span class="client-value">{{ client.email|default('') }}</span></div>
+                {% if closing_balance_calc >= 0 %}
+                <div class="client-row">
+                  <span class="client-label">{{ L.bank }}:</span>
+                  <span class="client-value">{{ client.bankName|default('') }}</span>
+                </div>
+                <div class="client-row">
+                  <span class="client-label">{{ L.clabe }}:</span>
+                  <span class="client-value">{{ clientAccountMasked }}</span>
+                </div>
+                {% endif %}
+                <div class="section-divider"></div>
+                <h2>Owners2</h2>
+                <div class="client-row"><span class="client-label">{{ L.name }}:</span><span class="client-value">{{ owners2Bank.name }}</span></div>
+                <div class="client-row"><span class="client-label">{{ L.email }}:</span><span class="client-value">{{ owners2Bank.email }}</span></div>
+                {% if closing_balance_calc < 0 %}
+                <div class="client-row"><span class="client-label">{{ L.bank }}:</span><span class="client-value">{{ owners2Bank.bank }}</span></div>
+                <div class="client-row"><span class="client-label">{{ L.clabe }}:</span><span class="client-value">{{ owners2Bank.account }}</span></div>
+                {% endif %}
+                <div class="client-row">
+                  <span class="client-label">{{ lang == 'en' ? 'Amount Due' : 'A pagar' }}:</span>
+                  <span class="client-value"><strong>${{ (closing_balance_calc|abs)|number_format(2, ',', '.') }}</strong></span>
+                </div>
+              {% else %}
+                <h2>{{ L.client }}</h2>
+                <div class="client-row"><span class="client-label">{{ L.name }}:</span><span class="client-value">{{ client.name|default('') }}</span></div>
+                <div class="section-divider"></div>
+                <h2>Owners2</h2>
+                <div class="client-row"><span class="client-label">{{ L.name }}:</span><span class="client-value">{{ owners2Bank.name }}</span></div>
+                <div class="client-row"><span class="client-label">{{ L.email }}:</span><span class="client-value">{{ owners2Bank.email }}</span></div>
+                {% if closing_balance_calc < 0 %}
+                <div class="client-row"><span class="client-label">{{ L.bank }}:</span><span class="client-value">{{ owners2Bank.bank }}</span></div>
+                <div class="client-row"><span class="client-label">{{ L.clabe }}:</span><span class="client-value">{{ owners2Bank.account }}</span></div>
+                {% endif %}
+                <div class="client-row">
+                  <span class="client-label">{{ lang == 'en' ? 'Amount Due' : 'A pagar' }}:</span>
+                  <span class="client-value"><strong>${{ (closing_balance_calc|abs)|number_format(2, ',', '.') }}</strong></span>
+                </div>
+              {% endif %}
+            {% else %}
+              <h2>{{ L.client }}</h2>
+              {% set owners2Bank = {
+                name:  'Antonio Pedro Macedo',
+                email: 'admin@owners2.com',
+                bank:  'Santander',
+                account: '014 694 606 078 428 258'
+              } %}
+              <div class="client-row"><span class="client-label">{{ L.name }}:</span><span class="client-value">{{ client.name|default('') }}</span></div>
+              <div class="client-row"><span class="client-label">{{ L.email }}:</span><span class="client-value">{{ client.email|default('') }}</span></div>
+              {% if balance_final_owners2 >= 0 %}
+              <div class="client-row">
+                <span class="client-label">{{ L.bank }}:</span>
+                <span class="client-value">{{ client.bankName|default('') }}</span>
+              </div>
+              <div class="client-row">
+                <span class="client-label">{{ L.clabe }}:</span>
+                <span class="client-value">
+                  {% if client.bankAccount is defined and client.bankAccount %}
+                    ********* {{ client.bankAccount|slice(-3) }}
+                  {% else %}
+                    {{ client.bankAccount|default('') }}
+                  {% endif %}
+                </span>
+              </div>
+              {% endif %}
+              {% if paymentType == 'OWNERS2' and balance_final_owners2 < 0 %}
+                {% set amount = (balance_final_owners2|abs)|number_format(2, ',', '.') %}
+                {% if balance_final_owners2 <= -1000 %}
+                  <div class="boxed-section" style="margin-top:15pt; border-color: var(--accent); max-width: 95%; text-align: left;">
+                    <h2 style="color: var(--accent); position: absolute; top: -6pt; left: 8pt; background: #fff; padding: 0 4pt;">
+                      {{ lang == 'en' ? 'Payment Request' : 'Solicitud de Pago' }}
+                    </h2>
+                    <div class="payment-notice-content">
+                      {% if lang == 'en' %}
+                        This month closed with a <strong>negative balance of ${{ amount }}</strong>.<br>
+                        To continue providing our services smoothly, we kindly ask you to transfer this amount to the account listed below and send the payment receipt to <strong>admin@owners2.com</strong>.<br>
+                        We greatly appreciate your prompt attention.
+                      {% else %}
+                        Este mes cerró con un <strong>resultado negativo de ${{ amount }}</strong>.<br>
+                        Para poder seguir ofreciendo nuestros servicios con normalidad, te pedimos amablemente que realices una transferencia por dicho monto a la cuenta indicada abajo y nos envíes el comprobante al correo <strong>admin@owners2.com</strong>.<br><br>
+                        Agradecemos mucho tu pronta atención.
+                      {% endif %}
+                    </div>
+                    <div class="section-divider"></div>
+                    <div class="payment-notice-content" style="margin-top:1pt;">
+                      <p><strong>Titular:</strong> Antonio Pedro Macedo</p>
+                      <p><strong>Banco:</strong> Santander</p>
+                      <p><strong>CLABE:</strong> 014 694 606 078 428 258</p>
+                    </div>
+                  </div>
+                {% else %}
+                  <div class="boxed-section" style="margin-top:15pt; border-color: #f59e0b; max-width: 95%; text-align: left;">
+                    <h2 style="color: #f59e0b; position: absolute; top: -6pt; left: 8pt; background: #fff; padding: 0 4pt;">
+                      {{ lang == 'en' ? 'Heads-up' : 'Aviso' }}
+                    </h2>
+                    <div class="payment-notice-content">
+                      {% if lang == 'en' %}
+                        This month closed with a <strong>negative result of ${{ amount }}</strong>.<br>
+                        We will carry this amount into <strong>next month’s report.</strong>
+                      {% else %}
+                        Este mes cerró con un <strong>resultado negativo de ${{ amount }}</strong>.<br>
+                        Trasladaremos este monto al <strong>reporte del próximo mes.</strong>
+                      {% endif %}
+                    </div>
+                    <div class="section-divider"></div>
+                    <div class="payment-notice-content" style="margin-top:1pt;">
+                      <p><strong>Titular:</strong> Antonio Pedro Macedo</p>
+                      <p><strong>Banco:</strong> Santander</p>
+                      <p><strong>CLABE:</strong> 014 694 606 078 428 258</p>
+                    </div>
+                  </div>
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    {# Comments, Bookings, Expenses, Credits (after summary) #}
+    <div class="after-summary">
+      {# Comments #}
+      <div class="boxed-section">
+        <h2>{{ L.comments }}</h2>
+        {% set comments_text = (comments is defined and comments is not iterable) ? comments : '' %}
+        <div class="muted">{{ comments_text }}</div>
+      </div>
+
+      {# Reservas (conditional layout by payment type) #}
+      {% if paymentType == 'OWNERS2' %}
+        {# --- OWNERS2: single combined table (original ELSE content) --- #}
+        <div class="boxed-section">
+          <h2>{{ L.bookings }}</h2>
+          <table class="reservas">
+            <colgroup>
+              <col style="width: 10%">
+              <col style="width: 12%">
+              <col style="width: 18%">
+              <col style="width: 12%">
+              <col style="width: 12%">
+              <col style="width: 7%">
+              <col style="width: 7%">
+              <col style="width: 8%">
+              <col style="width: 14%">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ L.source }}</th>
+                <th>{{ L.paymentCol }}</th>
+                <th>{{ L.guest }}</th>
+                <th>{{ L.stay }}</th>
+                <th class="num">{{ L.netPay }}</th>
+                <th class="num"><span style="white-space: nowrap;">{{ L.taxPct }}</span></th>
+                <th class="num">{{ L.o2Pct }}</th>
+                <th class="num">{{ L.o2Comm }}</th>
+                <th class="num">
+                  {{ L.clientPayout }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {# (Paste your original OWNERS2 rows_normal / rows_cancel building loop here unchanged) #}
+              {% set total_comm = 0 %}
+              {% set count_all = 0 %}
+              {% set total_client = 0 %}
+              {% set rows_normal = [] %}
+              {% set rows_cancel = [] %}
+              {% for r in reservas %}
+                {% set count_all = count_all + 1 %}
+                {# Coerce values to numbers (strip $ and commas) before arithmetic to handle string-formatted inputs #}
+                {% set _raw_net   = (r.commissionBaseInMonth is defined and r.commissionBaseInMonth is not null) ? r.commissionBaseInMonth : (r.netPay ?? 0) %}
+                {% set _raw_comm  = (r.o2CommissionInMonth ?? 0) %}
+                {% set _raw_owner = (r.ownerPayoutInMonth ?? null) %}
+                {% set net  = (_raw_net  is same as(null) ? 0 : (((_raw_net  ~ '')|replace({'$':'', ',':''})) + 0)) %}
+                {% set comm = (_raw_comm is same as(null) ? 0 : (((_raw_comm ~ '')|replace({'$':'', ',':''})) + 0)) %}
+                {% set owner = (_raw_owner is same as(null) ? null : (((_raw_owner ~ '')|replace({'$':'', ',':''})) + 0)) %}
+                {% set clientp = (owner is not null ? owner : (net - comm)) %}
+                {% set total_comm = total_comm + comm %}
+                {% set total_client = total_client + clientp %}
+                {% set is_cancelled = (r.status is defined and r.status == 'Cancelled') %}
+                {% set row_item = {
+                  source: r.source|default(''),
+                  payment: (r.paymentMethod|default(r.payment|default(''))),
+                  guestName: r.guestName|default(''),
+                  checkIn: r.checkIn|default(''),
+                  checkOut: r.checkOut|default(''),
+                  net: net,
+                  taxPct: (r.taxPercentInMonth is defined ? r.taxPercentInMonth : (r.taxPercent is defined ? r.taxPercent : null)),
+                  o2Pct:  (r.commissionPercent is defined ? r.commissionPercent : (r.commission_percent is defined ? r.commission_percent : null)),
+                  comm: comm,
+                  clientp: clientp,
+                  cancelled: is_cancelled
+                } %}
+                {% if is_cancelled %}
+                  {% set rows_cancel = rows_cancel|merge([row_item]) %}
+                {% else %}
+                  {% set rows_normal = rows_normal|merge([row_item]) %}
+                {% endif %}
+              {% else %}
+              {% endfor %}
+              {# Deterministic sort by check-in date to match UI cards #}
+              {% if rows_normal is iterable and rows_normal|length > 1 %}
+                {% set rows_normal = rows_normal|sort((a, b) => (a.checkIn ?? '') <=> (b.checkIn ?? '')) %}
+              {% endif %}
+              {% if rows_cancel is iterable and rows_cancel|length > 1 %}
+                {% set rows_cancel = rows_cancel|sort((a, b) => (a.checkIn ?? '') <=> (b.checkIn ?? '')) %}
+              {% endif %}
+              {% if count_all == 0 %}
+                <tr><td colspan="6" class="muted">{{ L.noBookings }}</td></tr>
+              {% else %}
+                {% for r in rows_normal %}
+                  <tr>
+                    <td>{{ r.source }}</td>
+                    <td>
+                      {% if lang == 'es' %}
+                        {% if r.payment == 'Cash' %}Efectivo{% elseif r.payment == 'Card' %}Tarjeta{% elseif r.payment == 'Platform' %}Plataforma{% elseif r.payment == 'no_pay' %}sin pago{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% else %}
+                        {% if r.payment == 'Cash' %}Cash{% elseif r.payment == 'Card' %}Card{% elseif r.payment == 'Platform' %}Platform{% elseif r.payment == 'no_pay' %}no pay{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% endif %}
+                    </td>
+                    <td>{% set parts = r.guestName|split(' ') %}{% if parts|length > 1 %}{{ parts|first }} {{ parts|last }}{% else %}{{ parts|first }}{% endif %}</td>
+                    <td>
+                      {% if r.checkIn and r.checkOut %}
+                        {{ r.checkIn|date('j M', 'Europe/Madrid')|replace({'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun','Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'}) }}
+                        a
+                        {{ r.checkOut|date('j M', 'Europe/Madrid')|replace({'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun','Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'}) }}
+                      {% endif %}
+                    </td>
+                    <td class="num">${{ r.net|number_format(2, ',', '.') }}</td>
+                    <td class="num">{% if r.taxPct is not null %}{{ r.taxPct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">{% if r.o2Pct is not null %}{{ r.o2Pct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">${{ r.comm|number_format(2, ',', '.') }}</td>
+                    <td class="num">
+                      ${{ r.clientp|number_format(2, ',', '.') }}
+                    </td>
+                  </tr>
+                {% endfor %}
+                {% for r in rows_cancel %}
+                  <tr>
+                    <td>{{ r.source }}</td>
+                    <td>
+                      {% if lang == 'es' %}
+                        {% if r.payment == 'Cash' %}Efectivo{% elseif r.payment == 'Card' %}Tarjeta{% elseif r.payment == 'Platform' %}Plataforma{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% else %}
+                        {{ r.payment|capitalize }}
+                      {% endif %}
+                    </td>
+                    <td>{% set parts = r.guestName|split(' ') %}<s>{% if parts|length > 1 %}{{ parts|first }} {{ parts|last }}{% else %}{{ parts|first }}{% endif %}</s></td>
+                    <td></td>
+                    <td class="num">${{ r.net|number_format(2, ',', '.') }}</td>
+                    <td class="num">{% if r.taxPct is not null %}{{ r.taxPct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">{% if r.o2Pct is not null %}{{ r.o2Pct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">${{ r.comm|number_format(2, ',', '.') }}</td>
+                    <td class="num">${{ r.clientp|number_format(2, ',', '.') }}</td>
+                  </tr>
+                {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      {% elseif paymentType == 'CLIENT' %}
+        {# --- CLIENT: two separate tables --- #}
+        <div class="boxed-section">
+          <h2>{{ L.bookingsAirbnb }}</h2>
+          <table class="reservas">
+            <colgroup>
+              <col style="width: 12%">
+              <col style="width: 20%">
+              <col style="width: 18%">
+              <col style="width: 12%">
+              <col style="width: 8%">
+              <col style="width: 8%">
+              <col style="width: 10%">
+              <col style="width: 12%">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ L.paymentCol }}</th>
+                <th>{{ L.guest }}</th>
+                <th>{{ L.stay }}</th>
+                <th class="num">{{ L.netPay }}</th>
+                <th class="num"><span style="white-space: nowrap;">{{ L.taxPct }}</span></th>
+                <th class="num">{{ L.o2Pct }}</th>
+                <th class="num">{{ L.o2Comm }}</th>
+                <th class="num">{{ L.clientPayout }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set rows_airbnb = [] %}
+              {% for r in reservas %}
+                {% if (r.source|default('')) == 'Airbnb' %}
+                  {% set rows_airbnb = rows_airbnb|merge([{
+                    payment: (r.paymentMethod|default(r.payment|default(''))),
+                    guestName: r.guestName|default(''),
+                    checkIn: r.checkIn|default(''),
+                    checkOut: r.checkOut|default(''),
+                    net: (r.commissionBaseInMonth is defined ? r.commissionBaseInMonth : (r.commissionBase is defined ? r.commissionBase : 0)),
+                    taxPct: (r.taxPercentInMonth is defined ? r.taxPercentInMonth : (r.taxPercent is defined ? r.taxPercent : null)),
+                    o2Pct:  (r.commissionPercent is defined ? r.commissionPercent : (r.commission_percent is defined ? r.commission_percent : null)),
+                    comm: (r.o2CommissionInMonth|default(0)),
+                    clientp: (r.ownerPayoutInMonth|default(0))
+                  }]) %}
+                {% endif %}
+              {% else %}
+              {% endfor %}
+              {% if rows_airbnb is empty %}
+                <tr><td colspan="8" class="muted">{{ L.noBookings }}</td></tr>
+              {% else %}
+                {% for r in rows_airbnb %}
+                  <tr>
+                    <td>
+                      {% if lang == 'es' %}
+                        {% if r.payment == 'Cash' %}Efectivo{% elseif r.payment == 'Card' %}Tarjeta{% elseif r.payment == 'Platform' %}Plataforma{% elseif r.payment == 'no_pay' %}sin pago{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% else %}
+                        {% if r.payment == 'Cash' %}Cash{% elseif r.payment == 'Card' %}Card{% elseif r.payment == 'Platform' %}Platform{% elseif r.payment == 'no_pay' %}no pay{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% endif %}
+                    </td>
+                    <td>{% set parts = r.guestName|split(' ') %}{% if parts|length > 1 %}{{ parts|first }} {{ parts|last }}{% else %}{{ parts|first }}{% endif %}</td>
+                    <td>
+                      {% if r.checkIn and r.checkOut %}
+                        {{ r.checkIn|date('j M', 'Europe/Madrid')|replace({'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun','Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'}) }}
+                        a
+                        {{ r.checkOut|date('j M', 'Europe/Madrid')|replace({'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun','Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'}) }}
+                      {% endif %}
+                    </td>
+                    <td class="num">${{ r.net|number_format(2, ',', '.') }}</td>
+                    <td class="num">{% if r.taxPct is not null %}{{ r.taxPct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">{% if r.o2Pct is not null %}{{ r.o2Pct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">${{ r.comm|number_format(2, ',', '.') }}</td>
+                    <td class="num">${{ r.clientp|number_format(2, ',', '.') }}</td>
+                  </tr>
+                {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div class="boxed-section">
+          <h2>{{ L.bookingsPrivate }}</h2>
+          <table class="reservas">
+            <colgroup>
+              <col style="width: 12%">
+              <col style="width: 20%">
+              <col style="width: 18%">
+              <col style="width: 12%">
+              <col style="width: 8%">
+              <col style="width: 8%">
+              <col style="width: 10%">
+              <col style="width: 12%">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ L.paymentCol }}</th>
+                <th>{{ L.guest }}</th>
+                <th>{{ L.stay }}</th>
+                <th class="num">{{ L.netPay }}</th>
+                <th class="num"><span style="white-space: nowrap;">{{ L.taxPct }}</span></th>
+                <th class="num">{{ L.o2Pct }}</th>
+                <th class="num">{{ L.o2Comm }}</th>
+                <th class="num">{{ L.clientPayout }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set rows_private = [] %}
+              {% for r in reservas %}
+                {% if (r.source|default('')) == 'Private' %}
+                  {% set rows_private = rows_private|merge([{
+                    payment: (r.paymentMethod|default(r.payment|default(''))),
+                    guestName: r.guestName|default(''),
+                    checkIn: r.checkIn|default(''),
+                    checkOut: r.checkOut|default(''),
+                    net: (r.commissionBaseInMonth is defined ? r.commissionBaseInMonth : (r.commissionBase is defined ? r.commissionBase : 0)),
+                    taxPct: (r.taxPercentInMonth is defined ? r.taxPercentInMonth : (r.taxPercent is defined ? r.taxPercent : null)),
+                    o2Pct:  (r.commissionPercent is defined ? r.commissionPercent : (r.commission_percent is defined ? r.commission_percent : null)),
+                    comm: (r.o2CommissionInMonth|default(0)),
+                    clientp: (r.ownerPayoutInMonth|default(0))
+                  }]) %}
+                {% endif %}
+              {% else %}
+              {% endfor %}
+              {% if rows_private is empty %}
+                <tr><td colspan="8" class="muted">{{ L.noBookings }}</td></tr>
+              {% else %}
+                {% for r in rows_private %}
+                  <tr>
+                    <td>
+                      {% if lang == 'es' %}
+                        {% if r.payment == 'Cash' %}Efectivo{% elseif r.payment == 'Card' %}Tarjeta{% elseif r.payment == 'Platform' %}Plataforma{% elseif r.payment == 'no_pay' %}sin pago{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% else %}
+                        {% if r.payment == 'Cash' %}Cash{% elseif r.payment == 'Card' %}Card{% elseif r.payment == 'Platform' %}Platform{% elseif r.payment == 'no_pay' %}no pay{% else %}{{ r.payment|capitalize }}{% endif %}
+                      {% endif %}
+                    </td>
+                    <td>{% set parts = r.guestName|split(' ') %}{% if parts|length > 1 %}{{ parts|first }} {{ parts|last }}{% else %}{{ parts|first }}{% endif %}</td>
+                    <td>
+                      {% if r.checkIn and r.checkOut %}
+                        {{ r.checkIn|date('j M', 'Europe/Madrid')|replace({'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun','Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'}) }}
+                        a
+                        {{ r.checkOut|date('j M', 'Europe/Madrid')|replace({'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun','Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'}) }}
+                      {% endif %}
+                    </td>
+                    <td class="num">${{ r.net|number_format(2, ',', '.') }}</td>
+                    <td class="num">{% if r.taxPct is not null %}{{ r.taxPct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">{% if r.o2Pct is not null %}{{ r.o2Pct|number_format(0, ',', '.') }}%{% endif %}</td>
+                    <td class="num">${{ r.comm|number_format(2, ',', '.') }}</td>
+                    <td class="num">${{ r.clientp|number_format(2, ',', '.') }}</td>
+                  </tr>
+                {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="boxed-section">
+          <h2>{{ L.bookings }}</h2>
+          <div class="muted">Unknown payment type: {{ paymentType }} — showing combined table with OWNERS2 semantics.</div>
+        </div>
+      {% endif %}
+
+      {# Gastos & Abonos side by side #}
+      {% set gastos_row_count_total = 0 %}
+      {% set abonos_row_count_total = 0 %}
+      <div class="side-by-side">
+        <div class="boxed-section">
+          <h2>{{ L.expenses }}</h2>
+          <div class="gastos-wrap">
+          <table class="gastos">
+            <colgroup>
+              <col style="width: 20%;">
+              <col style="width: 50%;">
+              <col style="width: 30%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ lang == 'en' ? 'Date' : 'Fecha' }}</th>
+                <th>{{ L.description }}</th>
+                <th class="num">{{ L.amount }}</th>
+              </tr>
+            </thead>
+          <tbody>
+            {% set gastos_total = 0 %}
+            {% set gastos_row_count = 0 %}
+
+            {# Merge housekeeping rows into gastos for display (if provided separately) #}
+            {% set _gastos = gastos|default([]) %}
+            {% if housekeeping is defined and housekeeping.rows is defined and housekeeping.rows is iterable %}
+              {% for hk in housekeeping.rows %}
+                {% set _gastos = _gastos|merge([{
+                  date: hk.date|default(null),
+                  description: (hk.description|default('Housekeeping') ~ (hk.categoryName is defined and hk.categoryName ? ' — ' ~ hk.categoryName : '')),
+                  amount: hk.charged|default(0),
+                  category: (hk.categoryName|default('Housekeeping'))
+                }]) %}
+              {% endfor %}
+            {% endif %}
+            {% set gastos = _gastos %}
+
+            {# --- Build groups: category => [rows] --- #}
+            {% set gastos_groups = {} %}
+            {% for g in gastos %}
+              {% set amt = (g.amount ?? 0) %}
+              {% set gastos_total = gastos_total + amt %}
+
+              {# compute category label for this row #}
+              {% set catLabel = '' %}
+              {% if g.category is defined and g.category %}
+                {% if g.category is iterable or (g.category is not same as(false) and g.category is not same as(true) and g.category is not same as(0) and g.category is not same as('')) %}
+                  {% set catLabel = (g.category.name ?? g.category.label ?? g.category)|default('') %}
+                {% else %}
+                  {% set catLabel = g.category %}
+                {% endif %}
+              {% elseif g.name is defined and g.name %}
+                {% set catLabel = g.name %}
+              {% endif %}
+              {% set catKey = (catLabel ?: '') %}
+
+              {% set existing = gastos_groups[catKey]|default([]) %}
+              {% set gastos_groups = gastos_groups|merge({ (catKey): existing|merge([g]) }) %}
+            {% else %}
+              {# No gastos at all #}
+            {% endfor %}
+
+            {# --- Order categories alphabetically, with "Otros" at the end --- #}
+            {% set cat_names = gastos_groups|keys %}
+            {% set normal_cats = [] %}
+            {% set otros_cats = [] %}
+            {% for name in cat_names|sort %}
+              {% if name|lower == 'otros' %}
+                {% set otros_cats = otros_cats|merge([name]) %}
+              {% else %}
+                {% set normal_cats = normal_cats|merge([name]) %}
+              {% endif %}
+            {% endfor %}
+
+            {% set ordered_cats = normal_cats|merge(otros_cats) %}
+
+            {% if ordered_cats is empty %}
+              <tr><td colspan="3" class="muted">{{ L.noExpenses }}</td></tr>
+              {% set gastos_row_count = gastos_row_count + 1 %}
+            {% else %}
+              {% for cname in ordered_cats %}
+                {% if cname is not empty %}
+                  <tr class="">
+                    {% set gastos_row_count = gastos_row_count + 1 %}
+                    <td colspan="3">
+                      <div class="gastos-subtitle">{{ cname }}</div>
+                    </td>
+                  </tr>
+                {% endif %}
+                {% for g in gastos_groups[cname] %}
+                  {% set amt = (g.amount ?? 0) %}
+                  <tr class="g-compact">
+                    {% set gastos_row_count = gastos_row_count + 1 %}
+                    <td>
+                      {% set _date = g.date is defined and g.date ? g.date : (g.createdAt is defined and g.createdAt ? g.createdAt : (g.created_at|default(null))) %}
+                      {% if _date %}{{ _date|date('d/m/y') }}{% endif %}
+                    </td>
+                    <td>
+                      <div class="gastos-desc">
+                        {% set _raw = g.description is defined and g.description ? g.description : (g.concept|default('')) %}
+                        {% set _clean = _raw|striptags|replace({'&nbsp;':' '}) %}
+                        {% set _norm = _clean
+                          |replace({'&mdash;':'—','&ndash;':'–'})
+                          |replace({' — ':' — '})
+                          |replace({'—':' — '})
+                          |replace({'–':' — '})
+                          |replace({' - ':' — '})
+                          |replace({' -':' — '})
+                          |replace({'- ':' — '})
+                        %}
+                        {% set desc = (_norm|split(' — ')|first)|trim %}
+                        {{ desc }}
+                      </div>
+                    </td>
+                    <td class="num">${{ amt|number_format(2, ',', '.') }}</td>
+                  </tr>
+                {% endfor %}
+              {% endfor %}
+            {% endif %}
+            {% set gastos_row_count_total = gastos_row_count %}
+          </tbody>
+          </table>
+        </div>
+        </div>
+        <div class="boxed-section">
+          <h2>{{ L.deposits }}</h2>
+          <div class="abonos-wrap">
+          <table class="abonos">
+            <colgroup>
+              <col style="width: 20%;">
+              <col style="width: 50%;">
+              <col style="width: 30%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ lang == 'en' ? 'Date' : 'Fecha' }}</th>
+                <th>{{ L.description }}</th>
+                <th class="num">{{ L.amount }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% set abonos_total = 0 %}
+              {% set abonos_row_count = 0 %}
+
+              {# --- Build groups: category => [rows] --- #}
+              {% set abonos_groups = {} %}
+              {% for a in abonos %}
+                {% set amt = (a.amount ?? 0) %}
+                {% set abonos_total = abonos_total + amt %}
+
+                {# compute category label for this row #}
+                {% set catLabel = '' %}
+                {% if a.category is defined and a.category %}
+                  {% if a.category is iterable or (a.category is not same as(false) and a.category is not same as(true) and a.category is not same as(0) and a.category is not same as('')) %}
+                    {% set catLabel = (a.category.name ?? a.category.label ?? a.category)|default('') %}
+                  {% else %}
+                    {% set catLabel = a.category %}
+                  {% endif %}
+                {% elseif a.name is defined and a.name %}
+                  {% set catLabel = a.name %}
+                {% endif %}
+                {% set catKey = (catLabel ?: '') %}
+
+                {% set existing = abonos_groups[catKey]|default([]) %}
+                {% set abonos_groups = abonos_groups|merge({ (catKey): existing|merge([a]) }) %}
+              {% else %}
+                {# No abonos at all #}
+              {% endfor %}
+
+              {# --- Order categories alphabetically, with "Otros" at the end --- #}
+              {% set cat_names = abonos_groups|keys %}
+              {% set normal_cats = [] %}
+              {% set otros_cats = [] %}
+              {% for name in cat_names|sort %}
+                {% if name|lower == 'otros' %}
+                  {% set otros_cats = otros_cats|merge([name]) %}
+                {% else %}
+                  {% set normal_cats = normal_cats|merge([name]) %}
+                {% endif %}
+              {% endfor %}
+
+              {% set ordered_cats = normal_cats|merge(otros_cats) %}
+
+              {% if ordered_cats is empty %}
+                <tr><td colspan="3" class="muted">{{ L.noDeposits }}</td></tr>
+                {% set abonos_row_count = abonos_row_count + 1 %}
+              {% else %}
+                {% for cname in ordered_cats %}
+                  {% if cname is not empty %}
+                    <tr>
+                      {% set abonos_row_count = abonos_row_count + 1 %}
+                      <td colspan="3">
+                        <div class="abonos-subtitle">{{ cname }}</div>
+                      </td>
+                    </tr>
+                  {% endif %}
+                  {% for a in abonos_groups[cname] %}
+                    {% set amt = (a.amount ?? 0) %}
+                    <tr class="ab-compact">
+                      {% set abonos_row_count = abonos_row_count + 1 %}
+                      <td>
+                        {% set _date = a.date is defined and a.date ? a.date : (a.createdAt is defined and a.createdAt ? a.createdAt : (a.created_at|default(null))) %}
+                        {% if _date %}{{ _date|date('d/m/y') }}{% endif %}
+                      </td>
+                      <td>
+                        <div class="abonos-desc">
+                          {% set _raw = a.description is defined and a.description ? a.description : (a.concept|default('')) %}
+                          {% set _clean = _raw|striptags|replace({'&nbsp;':' '}) %}
+                          {% set _norm = _clean
+                            |replace({'&mdash;':'—','&ndash;':'–'})
+                            |replace({' — ':' — '})
+                            |replace({'—':' — '})
+                            |replace({'–':' — '})
+                            |replace({' - ':' — '})
+                            |replace({' -':' — '})
+                            |replace({'- ':' — '})
+                          %}
+                          {% set desc = (_norm|split(' — ')|first)|trim %}
+                          {{ desc }}
+                        </div>
+                      </td>
+                      <td class="num">${{ amt|number_format(2, ',', '.') }}</td>
+                    </tr>
+                  {% endfor %}
+                {% endfor %}
+              {% endif %}
+              {% set abonos_row_count_total = abonos_row_count %}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    {# Definitions #}
+    {% if lang == 'en' %}
+      <div class="boxed-section definitions">
+        <h2>Definitions</h2>
+        <div class="definitions-content">
+          <p><strong>Month Result:</strong> Calculated as client commissions + credits − expenses.</p>
+          <p>
+            <strong>Opening Balance:</strong> The unit's balance at the beginning of the report month.&nbsp;&nbsp;&nbsp;
+            <strong>Closing Balance:</strong> Opening Balance + Month Result.
+          </p>
+          <p><strong>Net Payout:</strong> Result from Total Payout − Tax − Cleaning fee. If the reservation extends into the following month, it shows the proportional value for the current month.</p>
+          <p>
+            <strong>O2:</strong> Owners2 reservation commission.&nbsp;&nbsp;&nbsp;
+            <strong>Client:</strong> Client reservation commission.
+          </p>
+        </div>
+      </div>
+    {% else %}
+      <div class="boxed-section definitions">
+        <h2>Definiciones</h2>
+        <div class="definitions-content">
+          <p><strong>Resultado Mes:</strong> Calculado como comisiones Cliente (privadas) + abonos − comisiones O2 + Tasa de Limpieza (Airbnb) − gastos.</p>
+          <p>
+            <strong>Saldo Inicial:</strong> El saldo de la unidad al inicio del mes del reporte.&nbsp;&nbsp;&nbsp;
+            <strong>Balance Final:</strong> Saldo Inicial + Resultado Mes.
+          </p>
+          <p><strong>Pago Neto:</strong> Resultado de Pago Total − Limpieza.</p>
+          <p>
+            <strong>O2:</strong> Comisión de reserva de Owners2.&nbsp;&nbsp;&nbsp;
+            <strong>Cliente:</strong> Comisión de reserva del cliente.
+          </p>
+        </div>
+      </div>
+    {% endif %}
+
+  </body>
+</html>

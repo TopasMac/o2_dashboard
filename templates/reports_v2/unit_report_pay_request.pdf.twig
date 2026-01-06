@@ -1,0 +1,178 @@
+{% extends 'reports_v2/unit_report.pdf.twig' %}
+
+{#
+  Payment request PDF for unit monthly reports.
+
+  Expected context:
+  - meta: {
+      yearMonth: 'YYYY-MM',
+      monthLabel: 'November 2025' (optional),
+      generatedAt: \DateTimeInterface (optional),
+      language: 'es' | 'en' (optional)
+    }
+  - rows: [
+      {
+        unitName: string,
+        bankOwner: string|null,
+        bankName: string|null,
+        bankAccount: string|null,
+        amount: float|int|string
+      },
+      ...
+    ]
+#}
+
+{% set _lang = meta.language|default('es') %}
+
+{% block pdf_head_extra %}
+  {{ parent() }}
+  <style>
+    .pay-header {
+      margin-top: 8pt;
+      margin-bottom: 4pt;
+      font-size: 10pt;
+    }
+
+    .pay-header strong {
+      color: #1E6F68;
+    }
+
+    .pay-meta {
+      font-size: 8.5pt;
+      color: #6b7280;
+      margin-bottom: 10pt;
+    }
+
+    .pay-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+    }
+
+    .pay-table thead th {
+      border-bottom: 1px solid #d1d5db;
+      padding: 4pt 6pt;
+      text-align: left;
+      background: #f9fafb;
+    }
+
+    .pay-table tbody td {
+      padding: 3pt 6pt;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .pay-table tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .pay-table td.num {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .pay-table tfoot td {
+      padding: 5pt 6pt;
+      font-weight: bold;
+      border-top: 1px solid #d1d5db;
+    }
+  </style>
+{% endblock %}
+
+{% block pdf_title %}
+  {% if _lang == 'en' %}
+    Payment Request · {{ meta.monthLabel|default(meta.yearMonth|default('')) }}
+  {% else %}
+    Solicitud de pago · {{ meta.monthLabel|default(meta.yearMonth|default('')) }}
+  {% endif %}
+{% endblock %}
+
+{% block pdf_header_right %}
+  {{ meta.monthLabel|default(meta.yearMonth|default('')) }}
+{% endblock %}
+
+{% block pdf_content %}
+  {% set _mdec = ',' %}
+  {% set _mth  = '.' %}
+
+  {% set ym = meta.yearMonth|default(null) %}
+  {% if ym %}
+    {% set labelYm = (ym ~ '-01')|date('ym') %}
+  {% else %}
+    {% set labelYm = '' %}
+  {% endif %}
+
+  <table class="pay-table">
+    <thead>
+      <tr>
+        <th style="width: 30%;">
+          {% if _lang == 'en' %}Concept{% else %}Concepto{% endif %}
+        </th>
+        <th style="width: 18%;">
+          {% if _lang == 'en' %}Account holder{% else %}Titular{% endif %}
+        </th>
+        <th style="width: 16%;">
+          {% if _lang == 'en' %}Bank{% else %}Banco{% endif %}
+        </th>
+        <th style="width: 20%;">
+          {% if _lang == 'en' %}Account / CLABE{% else %}Cuenta / CLABE{% endif %}
+        </th>
+        <th style="width: 12%;" class="num">
+          {% if _lang == 'en' %}Amount{% else %}Monto{% endif %}
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set total = 0 %}
+
+      {% if rows is defined and rows %}
+        {% for r in rows %}
+          {% set amount = r.amount|default(0) %}
+          {% set total = total + amount %}
+          <tr>
+            <td>
+              {% if r.paymentLabel is defined and r.paymentLabel is not empty %}
+                {{ r.paymentLabel }}
+              {% elseif labelYm %}
+                {% if _lang == 'en' %}
+                  Payment Report {{ r.unitName|default('') }}_{{ labelYm }}
+                {% else %}
+                  Pago Reporte {{ r.unitName|default('') }}_{{ labelYm }}
+                {% endif %}
+              {% else %}
+                {{ r.unitName|default('') }}
+              {% endif %}
+            </td>
+            <td>{{ r.bankOwner|default('') }}</td>
+            <td>{{ r.bankName|default('') }}</td>
+            <td>{{ r.bankAccount|default('') }}</td>
+            <td class="num">
+              {{ '$' }}{{ amount|number_format(2, _mdec, _mth) }}
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center; padding:10pt 0; color:#6b7280;">
+            {% if _lang == 'en' %}
+              No units selected for this payment request.
+            {% else %}
+              No hay unidades seleccionadas para esta solicitud de pago.
+            {% endif %}
+          </td>
+        </tr>
+      {% endif %}
+    </tbody>
+    {% if rows is defined and rows %}
+      <tfoot>
+        <tr>
+          <td colspan="4" style="text-align: right;">
+            {% if _lang == 'en' %}Total{% else %}Total{% endif %}
+          </td>
+          <td class="num">
+            {{ '$' }}{{ total|number_format(2, _mdec, _mth) }}
+          </td>
+        </tr>
+      </tfoot>
+    {% endif %}
+  </table>
+{% endblock %}

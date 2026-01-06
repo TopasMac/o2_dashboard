@@ -1,0 +1,451 @@
+{% extends 'reports_v2/_base.html.twig' %}
+{% trans_default_domain 'unit_purchase_list' %}
+
+{# Locale for this PDF (wkhtmltopdf often has no reliable request object) #}
+{% set _lang = (client is defined and client.language is defined and client.language in ['es','en'])
+  ? client.language
+  : (meta.language|default('en'))
+%}
+
+{# Header title consumed by reports_v2/_base.html.twig -> reports_v2/_header.html.twig #}
+{% set header_title = ('Initial Kit'|trans({}, 'unit_purchase_list', _lang)) ~ ' | ' ~ (unit.name|default(unit.unit_name|default(''))) %}
+{% set header_title_domain = 'unit_purchase_list' %}
+
+{# --------------------------------------------------------------------------
+  Unit Purchase List – PDF
+--------------------------------------------------------------------------- #}
+
+
+{% block pdf_title %}{% endblock %}
+
+{# Override the shared PDF header title for Purchase List report #}
+{% block pdf_header_title %}
+  <span>{{ header_title }}</span>
+{% endblock %}
+
+{% block pdf_head_extra %}
+  <style>
+    /* Hide the standard footer (Owners2 contact line) for this report */
+    .pdf-footer { display: none !important; }
+
+    /* Shift the whole report body to the right so cards align with the header divider line */
+    .page {
+      padding-left: 18pt;
+      padding-right: 0;
+      box-sizing: border-box;
+    }
+
+    /* ===== Summary card (mirrors unit_report.pdf.twig; avoids CSS vars for wkhtmltopdf) ===== */
+    .summary-card {
+      position: relative;
+      border: 1px solid #d1d5db;
+      border-radius: 3pt;
+      padding: 14px 12px 10px 12px;
+      background: #fff;
+      font-size: 8.5pt;
+    }
+    .summary-card .card-title {
+      position: absolute;
+      top: -9px;
+      left: 10px;
+      padding: 0 8px;
+      background: #fff;
+      color: #1E7668;
+      font-weight: 700;
+      font-size: 8.5pt;
+    }
+    .summary-card .summary-table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+    .summary-card .summary-table td { padding: 4.5pt 6pt; }
+    .summary-card .summary-table tr:nth-child(odd) td { background: #f9fafb; }
+    .summary-card .summary-table .label { color: #6b7280; font-weight: 700; width: 55%; }
+    .summary-card .summary-table .value { text-align: right; white-space: nowrap; }
+
+    /* ===== Header (Option A) ===== */
+    .pl-header {
+      border: none;
+      border-radius: 0;
+      padding: 6pt 0 10pt 0; /* add top padding */
+      background: transparent;
+      margin-bottom: 10pt;
+    }
+    .pl-header .title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8pt;
+      margin-bottom: 3pt;
+    }
+    .pl-header .title {
+      font-size: 11pt;
+      font-weight: 800;
+      color: #1E7668;
+      margin: 0;
+      line-height: 1.05;
+    }
+    .pl-header .status-pill {
+      font-size: 8pt;
+      font-weight: 800;
+      letter-spacing: 0.3pt;
+      color: #111827;
+      text-transform: uppercase;
+    }
+    .pl-header .subline {
+      font-size: 7.5pt;
+      color: #6b7280;
+      margin: 0 0 5pt 0;
+    }
+    /* Use table layout instead of flex for wkhtmltopdf reliability */
+    .pl-header .cards-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 4pt; /* add vertical breathing room */
+      table-layout: fixed;
+    }
+    .pl-header .cards-table td {
+      vertical-align: top;
+      padding: 0;
+    }
+    .pl-header .mini-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 3pt;
+      padding: 6pt 7pt 5pt 7pt;
+      background: #fff;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .pl-header .mini-card.report-card {
+      border: none;
+      background: transparent;
+      padding: 0;
+    }
+    .pl-header .mini-title {
+      position: absolute;
+      top: -7pt;
+      left: 10px;          /* align with category card titles */
+      transform: none;     /* remove centering */
+      padding: 0 8px;
+      background: #fff;
+      font-size: 7.5pt;
+      font-weight: 800;
+      color: #1E7668;
+      margin: 0;
+      line-height: 1;
+    }
+    .pl-header .kv {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      table-layout: fixed;
+    }
+    .pl-header .kv td {
+      padding: 2pt 0;
+      vertical-align: top;
+    }
+    .pl-header .kv .k {
+      color: #6b7280;
+      font-weight: 700;
+      width: 38%;
+      padding-right: 6pt;
+      white-space: nowrap;
+    }
+    .pl-header .kv .v {
+      color: #111827;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .pl-header .kv .v-left {
+      color: #111827;
+      text-align: left;
+      white-space: normal;
+    }
+    .pl-header .total {
+      font-size: 8pt;        /* match unit details values */
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .pl-header .meta-grid {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 8pt;
+    }
+    .pl-header .meta-grid td {
+      vertical-align: top;
+      padding: 0;
+    }
+    .pl-header .meta-block {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+    }
+    .pl-header .meta-block td {
+      padding: 2pt 0;
+    }
+    .pl-header .meta-label {
+      color: #6b7280;
+      font-weight: 700;
+      padding-right: 8pt;
+      white-space: nowrap;
+    }
+    .pl-header .meta-value {
+      color: #111827;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .pl-header .meta-value.left {
+      text-align: left;
+      white-space: normal;
+    }
+    .pl-header .total {
+      font-size: 8pt;        /* same as Pax / Beds values */
+      font-weight: 700;
+      color: #111827;
+    }
+
+    /* ===== Category cards (one per category) ===== */
+    .items-card {
+      border: none;
+      border-radius: 3pt;
+      position: relative;
+      padding: 10pt 8pt 8pt 8pt;
+      margin-top: 10pt;
+      background: #fff;
+
+      /* Narrow the cards so the right border aligns closer to the totals column */
+      width: 70%;
+      margin-left: 0;
+      margin-right: auto;
+    }
+    .items-card::before {
+      content: "";
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 0; right: 0;
+      border: 1px solid #d1d5db;
+      border-radius: 3pt;
+      pointer-events: none;
+      background: transparent;
+    }
+    .items-card .card-title {
+      position: absolute;
+      top: -9px;
+      left: 10px;
+      padding: 0 8px;
+      background: #fff;
+      color: #1E7668;
+      font-weight: 700;
+      font-size: 9pt;
+    }
+
+    .items-card .mini-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+
+    .items-card .mini-table th {
+      padding: 0.5pt 4pt 1.5pt 4pt; /* tight top */
+      vertical-align: top;
+      font-size: 9pt;
+      font-weight: 400; /* normal weight */
+    }
+    .items-card .mini-table td {
+      padding: 1.5pt 4pt;
+      vertical-align: top;
+      font-size: 9pt;
+    }
+    .items-card .mini-table .num { text-align: right; white-space: nowrap; }
+
+    /* No inner row separators */
+    .items-card .mini-table thead th { border-bottom: none; }
+    .items-card .mini-table tbody td { border-bottom: none; }
+
+    /* Item + notes typography */
+    .items-card .item-name {
+      font-size: 9pt;
+      font-weight: 400;
+      color: #111827;
+      line-height: 1.25;
+    }
+    .items-card .item-note {
+      font-size: 8pt;
+      color: #6b7280;
+      line-height: 1.2;
+    }
+  </style>
+{% endblock %}
+
+{% block pdf_content %}
+  <div class="page">
+
+    {# ===== HEADER (Option A) ===== #}
+    <div class="pl-header">
+      <table class="cards-table">
+        <tr>
+          <td style="width:42%; padding-right:28pt;">
+            <div class="mini-card" style="position:relative;">
+              <p class="mini-title">{{ 'unit_details'|trans({}, 'unit_purchase_list', _lang) }}</p>
+              <table class="kv">
+                <tr>
+                  <td class="k">{{ 'unit'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v"><b>{{ unit.name }}</b></td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'type'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v">{{ unit.type is not empty ? unit.type : ('na'|trans({}, 'unit_purchase_list', _lang)) }}</td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'pax'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v">{{ unit.pax is not null ? unit.pax : ('na'|trans({}, 'unit_purchase_list', _lang)) }}</td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'beds'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v">
+                    {% if unit.bedSummary is defined and unit.bedSummary %}
+                      {{ unit.bedSummary }}
+                    {% elseif unit.bed_config is defined and unit.bed_config %}
+                      {{ unit.bed_config|json_encode }}
+                    {% else %}
+                      {{ unit.beds is not null ? unit.beds : ('na'|trans({}, 'unit_purchase_list', _lang)) }}
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'baths'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v">{{ unit.baths is not null ? unit.baths : ('na'|trans({}, 'unit_purchase_list', _lang)) }}</td>
+                </tr>
+              </table>
+            </div>
+          </td>
+          <td style="width:58%;">
+            <div class="mini-card report-card">
+              <p class="mini-title">{{ 'report'|trans({}, 'unit_purchase_list', _lang) }}</p>
+              <table class="kv">
+                <tr>
+                  <td class="k">{{ 'client'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v-left">
+                    <b>
+                      {{ (client.name is defined and client.name)
+                        ? client.name
+                        : ((list.client_name is defined and list.client_name)
+                            ? list.client_name
+                            : ('na'|trans({}, 'unit_purchase_list', _lang))
+                          )
+                      }}
+                    </b>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'report_code'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v-left"><b>{{ (list.reportCode is defined and list.reportCode) ? list.reportCode : ('na'|trans({}, 'unit_purchase_list', _lang)) }}</b></td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'issued'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v-left">{{ (list.issuedAt is defined and list.issuedAt) ? (list.issuedAt|date('Y-m-d')) : ('na'|trans({}, 'unit_purchase_list', _lang)) }}</td>
+                </tr>
+                <tr>
+                  <td class="k">{{ 'total'|trans({}, 'unit_purchase_list', _lang) }}</td>
+                  <td class="v-left total">
+                  {# Totals come from the report service as totals.totalSellPrice; list does not include totals #}
+                    {% if totals is defined and totals.totalSellPrice is defined and totals.totalSellPrice is not null and totals.totalSellPrice != '' %}
+                      ${{ totals.totalSellPrice|number_format(2, ',', '.') }}
+                    {% elseif list.totalSellPrice is defined and list.totalSellPrice is not null and list.totalSellPrice != '' %}
+                      ${{ list.totalSellPrice|number_format(2, ',', '.') }}
+                    {% elseif list.total_sell_price is defined and list.total_sell_price is not null and list.total_sell_price != '' %}
+                      ${{ list.total_sell_price|number_format(2, ',', '.') }}
+                    {% else %}
+                      {{ 'na'|trans({}, 'unit_purchase_list', _lang) }}
+                    {% endif %}
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    {# ===== ITEMS (one card per category) ===== #}
+    {% set currentCategory = null %}
+    {% set cardOpen = false %}
+
+    {% for line in lines %}
+      {# Robust category extraction #}
+      {% set rawCategory = attribute(line, 'category') is not null ? attribute(line, 'category') : (attribute(line, 'category_name') is not null ? attribute(line, 'category_name') : (attribute(line, 'Category') is not null ? attribute(line, 'Category') : null)) %}
+      {% set lineCategory = rawCategory is not null ? (rawCategory ~ '')|trim : 'Other' %}
+
+      {% if lineCategory != currentCategory %}
+        {# close previous category card #}
+        {% if cardOpen %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+
+        {% set currentCategory = lineCategory %}
+        {% set cardOpen = true %}
+
+        <div class="items-card">
+          <div class="card-title">{{ currentCategory|trans({}, 'unit_purchase_list', _lang) }}</div>
+          <div style="padding-top:2pt;">
+            <table class="mini-table">
+              <thead>
+                <tr>
+                  <th style="width:46%; text-align:left;"></th>
+                  <th class="num" style="width:10%;">{{ 'min'|trans({}, 'unit_purchase_list', _lang) }}</th>
+                  <th class="num" style="width:10%;">{{ 'have'|trans({}, 'unit_purchase_list', _lang) }}</th>
+                  <th class="num" style="width:10%;">{{ 'buy'|trans({}, 'unit_purchase_list', _lang) }}</th>
+                  <th class="num" style="width:12%;">{{ 'unit_price'|trans({}, 'unit_purchase_list', _lang) }}</th>
+                  <th class="num" style="width:12%;">{{ 'sub_total'|trans({}, 'unit_purchase_list', _lang) }}</th>
+                </tr>
+              </thead>
+              <tbody>
+      {% endif %}
+
+      {% set muted = (line.neededQty is defined and line.neededQty == 0) %}
+      <tr class="item-row"{% if muted %} style="color:#9ca3af;"{% endif %}>
+        <td>
+          {# Translate item names. If description is like "Name (Size)", translate both parts. #}
+          {% set rawDesc = (line.description is defined and line.description is not null) ? (line.description ~ '') : '' %}
+          {% set descTrim = rawDesc|trim %}
+          {% set hasParen = descTrim is not empty and ('(' in descTrim) and (')' in descTrim) %}
+
+          {% if hasParen %}
+            {% set parts = descTrim|split('(') %}
+            {% set baseName = (parts|length > 0) ? (parts[0]|trim) : descTrim %}
+            {% set sizePart = (parts|length > 1) ? (parts[1]|replace({')':''})|trim) : '' %}
+            <div class="item-name">
+              {{ baseName|trans({}, 'unit_purchase_list', _lang) }}{% if sizePart %} ({{ sizePart|trans({}, 'unit_purchase_list', _lang) }}){% endif %}
+            </div>
+          {% else %}
+            <div class="item-name">{{ descTrim|trans({}, 'unit_purchase_list', _lang) }}</div>
+          {% endif %}
+        </td>
+        <td class="num">{{ line.targetQty is defined ? line.targetQty : (line.qty is defined ? line.qty : '—') }}</td>
+        <td class="num">{{ line.existingQty is defined ? line.existingQty : '—' }}</td>
+        <td class="num"><b>{{ line.neededQty is defined ? line.neededQty : '—' }}</b></td>
+        <td class="num">
+          {% if line.unitSellPrice is defined and line.unitSellPrice is not null %}
+            {{ line.unitSellPrice|number_format(2, ',', '.') }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="num"><b>
+          {% if line.lineTotalSellPrice is defined and line.lineTotalSellPrice is not null %}
+            {{ line.lineTotalSellPrice|number_format(2, ',', '.') }}
+          {% else %}
+            —
+          {% endif %}
+        </b></td>
+      </tr>
+    {% endfor %}
+
+    {# close final category card #}
+    {% if cardOpen %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+{% endblock %}

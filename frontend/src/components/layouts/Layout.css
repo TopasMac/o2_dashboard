@@ -1,0 +1,27 @@
+/* Global page layout styles */
+
+/* Container class for page-level content */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Utility flex layout for full-page sections */
+.page-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Header and footer spacing utilities */
+.page-header,
+.page-footer {
+  padding: 1rem 2rem;
+  background-color: var(--color-light-sand);
+}
+
+.page-content {
+  flex: 1;
+  padding: 2rem;
+}

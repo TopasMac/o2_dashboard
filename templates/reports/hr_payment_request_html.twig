@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Solicitud de Pagos – {{ division|default('All') }}</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      color: #222;
+      margin: 0;
+      padding: 24px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .header img {
+      height: 40px;
+    }
+    h1 {
+      font-size: 18px;
+      margin: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px 6px;
+      border: 1px solid #ccc;
+    }
+    th {
+      background: #f2f2f2;
+      text-align: left;
+    }
+    td.amount {
+      text-align: right;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 11px;
+      color: #555;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Solicitud de Pagos</h1>
+      <div><strong>Division:</strong> {{ division|default('All') }}</div>
+      <div><strong>Fecha:</strong> {{ today|date('d-m-Y') }}</div>
+    </div>
+    {% if company.logoData is defined and company.logoData %}
+      <img src="{{ company.logoData }}" alt="Company Logo" />
+    {% endif %}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Código de Empleado</th>
+        <th>Titular</th>
+        <th>Banco</th>
+        <th>CLABE</th>
+        <th style="text-align:right">Monto</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if rows is defined and rows|length > 0 %}
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.employee_code }}</td>
+            <td>{{ r.bank_holder }}</td>
+            <td>{{ r.bank_name }}</td>
+            <td>{{ r.bank_account }}</td>
+            <td class="amount">{{ r.amount|number_format(2, ',', '.') }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="5" style="text-align:center;color:#777">No employees selected</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>Owners2 Management System – Payment Request Report generated on {{ today|date('Y-m-d H:i') }}</p>
+  </div>
+</body>
+</html>

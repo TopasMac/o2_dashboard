@@ -1,0 +1,317 @@
+/* Table base styles */
+.custom-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-primary);
+}
+
+/* Header styles */
+.custom-data-table thead {
+  background-color: transparent;
+  color: var(--color-teal);
+  text-align: center;
+  border-bottom: 1px solid #ccc;
+}
+
+.custom-data-table thead th {
+  padding: 12px 16px 12px 12px; /* L=12, R=16 */
+  font-weight: 600;
+  font-size: var(--fs-14);
+  border-bottom: 1px solid #ccc;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Row styles */
+.custom-data-table tbody tr:nth-child(even) {
+  background-color: var(--color-light-sand);
+}
+
+.custom-data-table tbody tr:hover {
+  background-color: #f1f1f1;
+}
+
+.custom-data-table tbody tr {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.custom-data-table tbody td {
+  text-align: center;
+  padding: 10px 8px;
+  font-size: var(--fs-13);
+}
+
+/* Notes/comments columns take more space */
+.custom-data-table td.notes,
+.custom-data-table th.notes {
+  width: 30%;
+  text-align: left;
+}
+
+/* Sorting/filter icons or controls (if added via React table lib) */
+.custom-data-table .sorting,
+.custom-data-table .filter {
+  margin-left: 5px;
+  font-size: var(--fs-13);
+  cursor: pointer;
+}
+
+
+/* Status text styles (no pill) */
+.status-pill {
+  font-weight: bold;
+  text-transform: capitalize;
+  display: inline;
+  font-size: var(--fs-14);
+}
+
+.status-pill.upcoming {
+  color: #2E86DE;
+}
+
+.status-pill.ongoing {
+  color: #28B463;
+}
+
+.status-pill.past {
+  color: var(--color-slate-gray);
+}
+
+.status-pill.cancelled {
+  color: #E74C3C;
+}
+
+/* Custom link styling inside the bookings table */
+.custom-data-table a {
+  color: var(--color-teal);
+  text-decoration: none;
+}
+
+.custom-data-table a:hover,
+.custom-data-table a:visited:hover {
+  color: var(--color-coral);
+  text-decoration: underline;
+}
+
+.custom-data-table a:visited {
+  color: var(--color-teal);
+}
+
+/* Optional: Limit certain column widths and allow wrap */
+.custom-data-table th,
+.custom-data-table td {
+  word-wrap: break-word;
+  box-sizing: border-box;
+}
+
+.table-wrapper {
+  position: relative;
+  max-width: none;      /* allow table to grow horizontally */
+  margin: 0 auto;
+  overflow-x: auto;     /* horizontal scroll when needed */
+  max-height: none;     /* remove internal vertical constraint */
+  overflow-y: visible;  /* let the page handle vertical scrolling */
+
+  /* Reserve space for sticky header/footer so rows don't slide behind */
+  --dt-head-h: 44px;      /* header height (approx) */
+  --dt-foot-h: 56px;      /* footer/pagination height (approx) */
+  padding-top: var(--dt-head-h);
+  padding-bottom: var(--dt-foot-h);
+  scroll-padding-top: calc(var(--ps-sticky-offset, 0) + var(--dt-head-h));
+}
+
+/* Make header group sticky (helps in some table implementations) */
+.custom-data-table thead {
+  position: sticky;
+  top: var(--ps-sticky-offset, 0);
+  z-index: 4;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+/* Confirmation code button/link styling (used in SeeBookings and SeeBookingsBasic) */
+.confirmation-code {
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  color: var(--color-teal);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: normal;
+  font-size: var(--fs-13);
+}
+
+.confirmation-code:hover {
+  color: var(--color-coral);
+}
+
+.dt-link {
+  color: var(--color-teal);
+  text-decoration: none;
+}
+
+.dt-link:hover {
+  color: var(--color-coral);
+  text-decoration: none;
+}
+
+/* Ensure filter row inputs align with table row height */
+.custom-data-table .MuiTableCell-root .MuiInputBase-root {
+  height: 32px; /* match tbody td height */
+  font-size: var(--fs-13);
+}
+
+.custom-data-table .MuiTableCell-root .MuiInputBase-input {
+  padding: 6px 8px;
+  font-size: var(--fs-13);
+}
+
+/* Uniform body row height */
+.custom-data-table tbody tr {
+  height: 36px; /* adjust as needed */
+}
+
+.custom-data-table tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Flash highlight effect for newly saved/edited rows */
+@keyframes rowFlash {
+  0%   { background-color: rgba(30, 111, 104, 0.35); }
+  60%  { background-color: rgba(30, 111, 104, 0.15); }
+  100% { background-color: transparent; }
+}
+
+.custom-data-table .row-highlight {
+  animation: rowFlash 1.6s ease-out;
+}
+
+/* === Column Resizer (DataTable) ===========================================
+   Adds a thin draggable handle at the right edge of header cells.
+   Pair this with a small JSX hook that injects a `.col-resizer` element
+   inside each header cell you want resizable.
+   ------------------------------------------------------------------------ */
+
+   .custom-data-table thead .MuiTableCell-root {
+    position: relative; /* anchor for the handle */
+  }
+  
+  .custom-data-table thead .MuiTableCell-root .col-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;            /* hit area */
+    height: 100%;
+    cursor: col-resize;
+    user-select: none;
+    touch-action: none;
+    opacity: 0;            /* keep UI clean; show on hover */
+    transition: opacity 120ms ease-in-out, background-color 120ms ease-in-out;
+  }
+  
+  .custom-data-table thead .MuiTableCell-root:hover .col-resizer {
+    opacity: 1;
+  }
+  
+  .custom-data-table thead .MuiTableCell-root .col-resizer::after {
+    content: "";
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 2px;             /* centered within the 6px handle */
+    width: 2px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 1px;
+  }
+  
+  /* Leave a bit of room so the handle doesn’t overlap text */
+  .custom-data-table thead .MuiTableCell-root {
+    padding-right: 16px !important; /* space for the 6px handle */
+  }
+  
+  /* Stronger cue while dragging (we’ll toggle this class from JS) */
+  .custom-data-table thead .MuiTableCell-root .col-resizer.is-dragging::after {
+    background: rgba(0,0,0,0.45);
+  }
+  
+  /* Prevent text selection while resizing */
+  .custom-data-table.is-resizing,
+  .custom-data-table.is-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+/* === Uniform Header Cell Padding ========================================= */
+.custom-data-table thead th,
+.custom-data-table thead .MuiTableCell-root {
+  padding-left: 12px !important;
+  padding-right: 16px !important;
+  box-sizing: border-box;
+}
+
+/* Header overflow safety and full-width controls */
+.custom-data-table thead .MuiTableCell-root {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.custom-data-table thead .MuiFormControl-root,
+.custom-data-table thead .MuiInputBase-root,
+.custom-data-table thead .MuiOutlinedInput-root {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Add extra space on the right for the resizer handle */
+.custom-data-table thead .MuiTableCell-root {
+  padding-right: 16px !important; /* 12px base + 4px buffer for handle */
+}
+
+/* Constrain date columns */
+.custom-data-table th.date,
+.custom-data-table td.date {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Also constrain the <col> so the whole column can't exceed 120px */
+.custom-data-table col.date-col {
+  width: 120px;           /* preferred width */
+  max-width: 120px;       /* hard ceiling */
+}
+
+/* Ensure the header filter control (MUI Select / Input) respects the cap */
+.custom-data-table th.date .MuiInputBase-root,
+.custom-data-table th.date .MuiSelect-select {
+  max-width: 120px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* === Sticky Header ======================================================= */
+.custom-data-table thead th,
+.custom-data-table thead .MuiTableCell-root {
+  position: sticky;
+  top: var(--ps-sticky-offset, 0);
+  z-index: 5;                 /* above body rows */
+  background: #fff;           /* solid bg so it doesn't show rows through */
+  /* keep current padding/alignment from earlier rules */
+}
+
+/* === Sticky Footer (MUI Pagination) ===================================== */
+.table-wrapper .MuiTablePagination-root,
+.table-wrapper .MuiToolbar-root.MuiTablePagination-toolbar {
+  position: sticky;
+  bottom: 0;                    /* stick to bottom of the scroll area */
+  z-index: 6;                   /* above body rows */
+  background: #fff;             /* solid background so rows don't show through */
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.06); /* subtle separation from rows */
+}

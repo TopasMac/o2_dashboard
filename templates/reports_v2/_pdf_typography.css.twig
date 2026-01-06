@@ -1,0 +1,99 @@
+/* ==========================================================
+   Owners2 PDF Typography Base
+   Extracted from original owner_report.pdf.twig
+   ========================================================== */
+
+:root {
+  --ink: #1f2937;      /* main text */
+  --muted: #6b7280;    /* lighter grey for secondary text */
+  --brand: #0f766e;    /* teal, Owners2 brand color */
+  --accent: #f57c4d;   /* coral/orange accent */
+  --bg-card: #f8fafc;  /* light grey card background */
+  --border: #e5e7eb;   /* neutral border grey */
+}
+
+/* Base text and layout */
+body {
+  font: 11pt/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Arial, sans-serif;
+  color: var(--ink);
+  margin: 24pt;
+  position: relative;
+}
+
+/* Headings */
+h1, h2, h3 {
+  color: var(--brand);
+  font-weight: 600;
+  margin: 0 0 6pt 0;
+  line-height: 1.2;
+}
+
+h1 { font-size: 14pt; letter-spacing: 0.2pt; }
+h2 { font-size: 12pt; letter-spacing: 0.15pt; }
+h3 { font-size: 10.5pt; letter-spacing: 0.1pt; }
+
+/* Muted text */
+.muted {
+  color: var(--muted);
+}
+
+/* Section and box headers */
+.section h2 {
+  margin: 0 0 6pt;
+  font-size: 12pt;
+  color: var(--brand);
+  letter-spacing: 0.2pt;
+}
+
+.boxed-section h2 {
+  font-size: 10pt;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+/* Summary table */
+.summary-table td.label {
+  font-weight: 700;
+  font-size: 10pt;
+}
+.summary-table td.value {
+  font-weight: 400;
+  font-size: 10pt;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  font-size: 10pt;
+  padding: 2pt 4pt;
+  vertical-align: middle;
+}
+th {
+  font-weight: 600;
+  color: var(--brand);
+  text-align: left;
+}
+td {
+  color: var(--ink);
+}
+
+/* Small definitions / footnotes */
+.definitions-content, .footnote {
+  font-size: 8pt;
+  color: var(--muted);
+  text-align: justify;
+  margin-top: 6pt;
+}
+
+/* Muted no-data message */
+.no-data {
+  color: var(--muted);
+  font-size: 9pt;
+  text-align: center;
+  padding: 4pt 0;
+}

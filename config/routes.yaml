@@ -1,0 +1,46 @@
+controllers:
+    resource:
+        path: ../src/Controller/
+        namespace: App\Controller
+    type: attribute
+
+upload_unit_document:
+  path: /api/unit-documents/upload
+  controller: App\Controller\Api\UnitDocumentUploadController::upload
+  methods: [POST]
+
+api_login_check:
+  path: /api/login_check
+  methods: [POST]
+
+api_month_summary:
+  path: /api/month-summary
+  controller: App\Controller\DashboardMonthSummaryController::monthSummary
+  methods: [GET]
+
+hk_cleanings_bulk:
+  path: /api/hk-cleanings/bulk
+  controller: App\Controller\HKCleaningController::bulk
+  methods: [POST]
+
+api_housekeepers_summary:
+  path: /api/housekeepers/summary
+  controller: App\Controller\Api\HKSummaryController::summary
+  methods: [GET]
+
+api_hk_cleanings_list:
+  path: /api/hk-cleanings
+  controller: App\Controller\Api\HKCleaningsReadController::list
+  methods: [GET]
+
+api_hk_cleanings_units:
+  path: /api/hk-cleanings/units
+  controller: App\Controller\Api\HKCleaningsReadController::units
+  methods: [GET]
+
+api_units_list:
+  path: /api/unit-list
+  controller: App\Controller\Api\UnitsController::getUnitList
+  methods: [GET]
+
+

@@ -1,0 +1,39 @@
+unit_details: "Unit details"
+client: "Client"
+report_code: "Report code"
+issued: "Issued"
+total: "Total"
+
+min: "Min"
+have: "Have"
+buy: "Buy"
+unit_price: "U. Price"
+sub_total: "Sub.Total"
+
+unit: "Unit"
+type: "Type"
+pax: "Pax"
+beds: "Beds"
+baths: "Baths"
+
+Basics: "Basics"
+Bedroom: "Bedroom"
+Towels: "Towels"
+Other: "Other"
+
+Ironing Board: "Ironing Board"
+Lockbox: "Lockbox"
+Mattress Protector: "Mattress Protector"
+Pillows: "Pillows"
+Sheets: "Sheets"
+
+King: "King"
+Queen: "Queen"
+Single: "Single"
+
+Bath Mat: "Bath Mat"
+Face Towel: "Face Towel"
+Pool Towel: "Pool Towel"
+Shower Towel: "Shower Towel"
+
+Initial Kit: "Initial Kit"

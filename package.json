@@ -1,0 +1,9 @@
+{
+  "devDependencies": {
+    "source-map-explorer": "^2.5.3",
+    "webpack-bundle-analyzer": "^4.10.2"
+  },
+  "scripts": {
+    "start-clean": "kill -9 $(lsof -t -i:3000) 2>/dev/null || true && npm start"
+  }
+}

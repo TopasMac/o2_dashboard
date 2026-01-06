@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 11px;
+      color: #333;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    td {
+      vertical-align: middle;
+      padding: 4px 8px;
+    }
+    .brand-left {
+      font-weight: 700;
+      font-size: 12px;
+      color: #1E6F68; /* Owners2 teal */
+      white-space: nowrap;
+    }
+    .right-label {
+      text-align: right;
+      font-weight: 600;
+      font-size: 12px;
+      color: #1E6F68; /* Owners2 teal */
+      white-space: nowrap;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #ddd;
+      margin: 4px 0 0 0;
+    }
+  </style>
+</head>
+<body>
+  <table>
+    <tr>
+      <td class="brand-left">
+        Owners2
+      </td>
+      <td class="right-label">
+        {{ header_right_label|default('Owners2 Report') }}
+      </td>
+    </tr>
+  </table>
+  <hr/>
+</body>
+</html>

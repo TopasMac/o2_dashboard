@@ -1,0 +1,139 @@
+/* Global reset for full-bleed app layout */
+html, body, #root {
+  height: 100%;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+:root {
+  /* Color palette */
+  --color-teal: #1E6F68;
+  --color-coral: #F57C4D;
+  --color-light-sand: #F9F9F6;
+  --color-slate-gray: #4B4F56;
+  --color-white: #FFFFFF;
+
+  /* Typography */
+  --font-primary: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+
+  /* Type scale (compact) */
+  --fs-12: 0.75rem;   /* 12px */
+  --fs-13: 0.8125rem; /* 13px */
+  --fs-14: 0.875rem;  /* 14px */
+  --fs-16: 1rem;      /* 16px */
+  --fs-18: 1.125rem;  /* 18px */
+  --fs-20: 1.25rem;   /* 20px */
+
+  /* Layout */
+  --app-header-height: 56px;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-primary);
+  font-weight: 700;
+}
+
+p, body, button, input, select, textarea {
+  font-family: var(--font-primary);
+  font-weight: 400;
+  font-size: var(--fs-14);
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+
+/* Owners2 Drawer size overrides */
+.o2-drawer--compact {
+  width: 280px !important;
+}
+@media (min-width: 900px) {
+  .o2-drawer--compact {
+    width: 320px !important;
+  }
+}
+
+.o2-drawer--default {
+  width: 320px !important;
+}
+@media (min-width: 900px) {
+  .o2-drawer--default {
+    width: 360px !important;
+  }
+}
+
+.o2-drawer--large {
+  width: 440px !important;
+}
+@media (min-width: 900px) {
+  .o2-drawer--large {
+    width: 520px !important;
+  }
+}
+
+/* Container class (moved from tailwind.output.css) */
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Font size utilities */
+.fs-12 { font-size: var(--fs-12) !important; }
+.fs-13 { font-size: var(--fs-13) !important; }
+.fs-14 { font-size: var(--fs-14) !important; }
+.fs-16 { font-size: var(--fs-16) !important; }
+.fs-18 { font-size: var(--fs-18) !important; }
+.fs-20 { font-size: var(--fs-20) !important; }
+
+/* Mobile page utility */
+.mobile-page {
+  max-width: 100vw;
+  overflow-x: clip; /* newer and safer than hidden */
+}
+
+/* ===============================
+   MUI Autocomplete – global fixes
+   Removes top empty space + tightens rows
+   Applies to portaled poppers as well
+   =============================== */
+
+.MuiAutocomplete-popper .MuiAutocomplete-paper,
+.MuiAutocomplete-popper .MuiPaper-root {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+ul.MuiAutocomplete-listbox,
+.MuiAutocomplete-popper .MuiAutocomplete-listbox {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.MuiAutocomplete-popper .MuiAutocomplete-option,
+li.MuiAutocomplete-option {
+  min-height: 32px !important;
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+/* Nudge Autocomplete dropdown slightly closer to input */
+.MuiAutocomplete-popper {
+  transform: translateY(-4px);
+}

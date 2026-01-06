@@ -1,0 +1,2094 @@
+Received: from QR2P297MB0140.MEXP297.PROD.OUTLOOK.COM (2603:10b6:3d0:6d::8) by
+ QR2P297MB0240.MEXP297.PROD.OUTLOOK.COM with HTTPS; Wed, 18 Jun 2025 01:38:44
+ +0000
+Received: from QR2P297CA0001.MEXP297.PROD.OUTLOOK.COM (2603:10b6:3d0:6a::19)
+ by QR2P297MB0140.MEXP297.PROD.OUTLOOK.COM (2603:10b6:3d0:6d::8) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.8835.29; Wed, 18 Jun
+ 2025 01:38:43 +0000
+Received: from QR1PEPF00000248.MEXP297.PROD.OUTLOOK.COM
+ (2603:10b6:3d0:6a:cafe::8d) by QR2P297CA0001.outlook.office365.com
+ (2603:10b6:3d0:6a::19) with Microsoft SMTP Server (version=TLS1_3,
+ cipher=TLS_AES_256_GCM_SHA384) id 15.20.8792.35 via Frontend Transport; Wed,
+ 18 Jun 2025 01:38:43 +0000
+Authentication-Results: spf=pass (sender IP is 167.89.102.173)
+ smtp.mailfrom=email.airbnb.com; dkim=pass (signature was verified)
+ header.d=email.airbnb.com;dmarc=pass action=none
+ header.from=airbnb.com;compauth=pass reason=100
+Received-SPF: Pass (protection.outlook.com: domain of email.airbnb.com
+ designates 167.89.102.173 as permitted sender)
+ receiver=protection.outlook.com; client-ip=167.89.102.173;
+ helo=xtrwssxd.outbound-mail.sendgrid.net; pr=C
+Received: from xtrwssxd.outbound-mail.sendgrid.net (167.89.102.173) by
+ QR1PEPF00000248.mail.protection.outlook.com (10.167.241.68) with Microsoft
+ SMTP Server (version=TLS1_3, cipher=TLS_AES_256_GCM_SHA384) id 15.20.8857.21
+ via Frontend Transport; Wed, 18 Jun 2025 01:38:42 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=email.airbnb.com;
+	h=content-type:from:mime-version:subject:reply-to:to:cc:content-type:
+	from:subject:to;
+	s=s20150428; bh=7DQetK0KW3Gy5RCaf9iWbx8j26xWongbkFB0MVuz3h4=;
+	b=bwTDSTVJo4GcuoGRAWtnEsXL1tyxAEwUqa3jwRnizYVZKMDCkBrX9J2yHa1WKOrRdnXr
+	je6k1QAOPqUtoFemjfqX7ocO7PCH8ADosnFnx5FXPcKNx4tpKRCRNZhAvEq3Cie0sSGUWh
+	3fW1bKyqvloxoy0/3TMXCp0b198EvkuSw=
+Received: by recvd-668bb697c5-tz2s9 with SMTP id recvd-668bb697c5-tz2s9-1-685218A0-2C
+	2025-06-18 01:38:40.467173038 +0000 UTC m=+1156105.078639736
+Received: from MTY5MzAz (unknown)
+	by geopod-ismtpd-31 (SG) with HTTP
+	id wPFJF5igRfWTptQlvxAyuQ
+	Wed, 18 Jun 2025 01:38:40.459 +0000 (UTC)
+Content-Type: multipart/alternative; boundary=82cec271fd462f77f53ea430351523648d2ef2e12d61cb3880b7bf8a28eb
+Date: Wed, 18 Jun 2025 01:38:40 +0000
+From: Airbnb <automated@airbnb.com>
+Message-ID: <wPFJF5igRfWTptQlvxAyuQ@geopod-ismtpd-31>
+Subject: Reservation confirmed - Laura Juliana Gonzalez arrives 6 Nov
+Reply-To: "Laura Juliana (Airbnb)"
+	<3eufte7a336qwk19a59708aft1bm5bbz@reply.airbnb.com>
+BIMI-Selector: v=BIMI1; s=belov2;
+Return-Path: bounces+169303-1b5c-admin=owners2.com@email.airbnb.com
+X-Category: support
+X-Locale: en-GB
+X-Message-Package-UUID: 4151e2be-ca84-49cf-79ae-8cb6d241c025
+X-Strategy: email
+X-Template: booking/v2_migration/reservation_host_confirmation
+X-User-ID: 93752149
+X-rpcampaign: airbnb20250618222037388902357090341287344254544743471
+X-SG-EID: =?us-ascii?Q?u001=2E373TPjtMqGbzwgRnUiLO4XljsWSZKewimAbF7sau2vF2RcaqvXC4aBu98?=
+ =?us-ascii?Q?qmouqE3Clw5cd1SGqZ1dU2BcCouOxlHX6C6T3VE?=
+ =?us-ascii?Q?=2FV0lCfU6oXvXjwajx+W+w6ekW7jT9+2yIaxLjtL?=
+ =?us-ascii?Q?DXzt5rVpuenkXzPI90zGQCDYXxs5yn128mjitBF?=
+ =?us-ascii?Q?dEkhkhD8tmSLII+S3VNbeMtQqU4jtAvQut4PSNH?=
+ =?us-ascii?Q?uvrwR=2Fd4ZINrs=2FraADBb5U=3D?=
+X-SG-ID: =?us-ascii?Q?u001=2ESdBcvi+Evd=2FbQef8eZF3BgIJHvZMm=2F83c8KgBB9OmLZKwyR8JhoGd5Oqi?=
+ =?us-ascii?Q?3E2B9l8wHoV2nqZjdg9lWbmsPSOl=2FKcmMJPnreO?=
+ =?us-ascii?Q?wvvMTZKGp7Scqtu2KDoT9uQC3HbeIGKLOZwrkDp?=
+ =?us-ascii?Q?w52=2FPGrvV90v+A8Q3bdsKTaCazG=2FsYENsjR4Otp?=
+ =?us-ascii?Q?0832Q71R8uvMAbT1ClmLcr4QEkQk=2FjNr9C96RAr?=
+ =?us-ascii?Q?mgp6bnub4JjjppjPVe4cnAqRtpylSK0DbXDMvRG?=
+ =?us-ascii?Q?BhhR3prRKrkulatTV5wrXobuDZz5NLPYDdQFYsm?=
+ =?us-ascii?Q?8pqr6ca5WQbBY0JPuZ8KSLpewX9JHT4Gspvd+b9?=
+ =?us-ascii?Q?5X0Vfn136qAJXzRbzQ2VJL5HsW0QYTZ4xzl00yN?=
+ =?us-ascii?Q?oymOt9xNOeG2E80kjMqgIo5h5Zb06rvt7VySVbH?=
+ =?us-ascii?Q?PMFpj1suZ2ZNJDoL9Tyqo120bb5rYOnwwE9j1i5?=
+ =?us-ascii?Q?C+=2Fak0jWlj9FBUqkeVcHMaBrUzlbtQRo=2FPjgIuo?=
+ =?us-ascii?Q?T2UQHnKCuQnCzAtIwDAwLNCoEPKQv1WioectjhN?=
+ =?us-ascii?Q?tBwre7PZviXZuwBIhcw2ePpMrou5wg1lPGOmau1?=
+ =?us-ascii?Q?7Az5IxIUOcfNbKCEWngGpayadGieZrKavA=3D=3D?=
+To: admin@owners2.com
+X-Entity-ID: u001./H5mzSYUmGGnQUq8WJ0Pfw==
+X-MS-Exchange-Organization-ExpirationStartTime: 18 Jun 2025 01:38:42.5384
+ (UTC)
+X-MS-Exchange-Organization-ExpirationStartTimeReason: OriginalSubmit
+X-MS-Exchange-Organization-ExpirationInterval: 1:00:00:00.0000000
+X-MS-Exchange-Organization-ExpirationIntervalReason: OriginalSubmit
+X-MS-Exchange-Organization-Network-Message-Id: a3d5bff1-b1e1-45a3-e687-08ddae08dbb2
+X-EOPAttributedMessage: 0
+X-EOPTenantAttributedMessage: c8eefc8c-9bb6-4125-a6b1-f4ea7b8e7ee1:0
+X-MS-Exchange-Organization-MessageDirectionality: Incoming
+X-MS-PublicTrafficType: Email
+X-MS-TrafficTypeDiagnostic: QR1PEPF00000248:EE_|QR2P297MB0140:EE_|QR2P297MB0240:EE_
+X-MS-Exchange-Organization-AuthSource: QR1PEPF00000248.MEXP297.PROD.OUTLOOK.COM
+X-MS-Exchange-Organization-AuthAs: Anonymous
+X-MS-Office365-Filtering-Correlation-Id: a3d5bff1-b1e1-45a3-e687-08ddae08dbb2
+X-MS-Exchange-Organization-SCL: 1
+X-Microsoft-Antispam: BCL:2;ARA:13230040|12012899012|1032899013|3072899012|69100299015|13012899012|29132699027|3092899012|5062899012|4092899012|13102899012|2092899012|13003099007|8096899003|2066899003;
+X-Forefront-Antispam-Report: CIP:167.89.102.173;CTRY:US;LANG:en;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:xtrwssxd.outbound-mail.sendgrid.net;PTR:xtrwssxd.outbound-mail.sendgrid.net;CAT:NONE;SFS:(13230040)(12012899012)(1032899013)(3072899012)(69100299015)(13012899012)(29132699027)(3092899012)(5062899012)(4092899012)(13102899012)(2092899012)(13003099007)(8096899003)(2066899003);DIR:INB;
+X-MS-Exchange-CrossTenant-OriginalArrivalTime: 18 Jun 2025 01:38:42.0480
+ (UTC)
+X-MS-Exchange-CrossTenant-Network-Message-Id: a3d5bff1-b1e1-45a3-e687-08ddae08dbb2
+X-MS-Exchange-CrossTenant-Id: c8eefc8c-9bb6-4125-a6b1-f4ea7b8e7ee1
+X-MS-Exchange-CrossTenant-AuthSource: QR1PEPF00000248.MEXP297.PROD.OUTLOOK.COM
+X-MS-Exchange-CrossTenant-AuthAs: Anonymous
+X-MS-Exchange-CrossTenant-FromEntityHeader: Internet
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: QR2P297MB0140
+X-MS-Exchange-Transport-EndToEndLatency: 00:00:02.7631879
+X-MS-Exchange-Processed-By-BccFoldering: 15.20.8835.025
+Importance: high
+X-Priority: 1
+X-Microsoft-Antispam-Mailbox-Delivery:
+	ucf:1;jmr:0;auth:0;dest:C;OFR:CustomRules;ENG:(910005)(944506478)(944626604)(920097)(930097)(140003);
+X-Microsoft-Antispam-Message-Info:
+	=?utf-8?B?dTlMZVVId2x5d3pWZWZXT2pHNjQ3YTJTSUt3WkJYU1NYZ0pSQlN6dHpTNk55?=
+ =?utf-8?B?V1h4QmhXeEZIWS9CREppUkRiTUx0YWkwNmR1OG8zVjVCQ0hGeFRNWnVtbFcy?=
+ =?utf-8?B?YXprRy9GUEU1dWlYMjlabHJmRE4vb0VLd3pTcnRsd2NScHlQb3Y0TWw4OFVu?=
+ =?utf-8?B?RFVVL3dlT01DM0JVc0UxN1NaejNqYW9GQ2dNNy9tSEpuOHByVXRCMmtyQllx?=
+ =?utf-8?B?WjI0VzhTQTRhSThHM1BacG40bjdXLzRhRXlSNEV6SjZTdzlIL2sxbWRRNnJP?=
+ =?utf-8?B?dE04ZGRRRXNJSFJISkVYS20rdU1zRHU4YUY2RUJMdmxLbEJCU1Z3SUdNeEto?=
+ =?utf-8?B?bno2NGg0Z0VZcFBxYml4Nm81aDBud3dqajZ2YXZjeHJpUHNObkRZVVBMMnpv?=
+ =?utf-8?B?Y0ZFZndnUnFERTdPeitCZ2ErMXBtVWZ2NHlKUDRqQ093UXNMeC8yNFhadE5D?=
+ =?utf-8?B?Q2tkUWVaYUl0RnFvSWpHN094ZnNpOXhCTWN5S0VZMTAvZkFWdjVOT0I2ZjR0?=
+ =?utf-8?B?ZStYYzBWenZJU1NOL1NhMGdNai9GY08zN1FtL3U2TC9Fc25keWtTcVRiWjdu?=
+ =?utf-8?B?Y1RXcmhrTlpuL0lxOVVFQzAzOTdkL0ZtYkF6WThUYlE2SGZCVjIxU2JNaGlD?=
+ =?utf-8?B?S0p4OGNyQld4eHU3R29HK25CbGFIMldkaTJ1cWZHdnZ2NkpMeDV6aVoxRnRq?=
+ =?utf-8?B?UWpXMTVqSndrUWFjSlBNUVV0UnRDbnk1V0hIVDlZT01HMzYvMHphQlo2enhU?=
+ =?utf-8?B?UjNmSEtWQUhDTEtpYm1keW1Jb3ZSQjV6TS82NEFuTUFTZjlGK040UG8rU1cr?=
+ =?utf-8?B?TXQ1RGVOeVVHSUhXd2pZQ3BJRHFpWExrZTZpeHd3VDFNOFQ2YSt0ZHlXcnlU?=
+ =?utf-8?B?amoxdU5kQ0t6U2pKSlN5VEpvRzBVWmhVbzVlQW1ObThLUllOOTM2MCtGanVR?=
+ =?utf-8?B?amIwZlZYdnZnSXNEdVBZQTh1YVJwNWpiVVJkbW9QQysvWjZUa2tSQjhTb0ph?=
+ =?utf-8?B?M1czTmh4WWh6T1BNaUNvNVVVcTl6SUZueFVmalB5NWV0TFh0UGJtWjFzQ3Jk?=
+ =?utf-8?B?YXFxbEVLWEpkNWtsNGZyOUtyb1VRenlERWVOYjJUQWFDOFFtU2twL3hBYW1w?=
+ =?utf-8?B?cUU2RmJCRXdZMTFnNjdUVTR3SFpseVdYTVlOMERkenR3RW9mQUpyUW9lYWlp?=
+ =?utf-8?B?MTY5aU4zOVdiaEpvVXNQYkQxREFzZ2l1dG1KeVhJeE1SNEg5d1k2UTg0TjlW?=
+ =?utf-8?B?V1RUVU0ydFJmRDhoK3pLU3J3NWVKYU9ZRXMvZlF2cFBEQ0pkNkljeUU3MUtG?=
+ =?utf-8?B?cUNUZjNnRENwVDF6MUE5WnRDTS9OeHU4UHIvSnNHWXlrZzJlZTByVGdKbEdM?=
+ =?utf-8?B?TUpqV3NCQjV4OXVpNFRCMWZMQUxkSmcwcnQvZTZUUkcvMEdCejdmemVKQXg0?=
+ =?utf-8?B?UGZHTjl4d2VuWXlTUVYwUTNGNDVFdHFMMXEvYkFXSmY1Z2gzalFYMDcvcEU3?=
+ =?utf-8?B?TWJMNXgrV0MxQUo3eDk4aTg1S2hhUlV0czhobEYrRnlhclQzQkZaaDREQlNS?=
+ =?utf-8?B?ZlpZbzd4YlNhb0VMVVhRN3BHSjlnU25jZWovS1Z1ejZaZE1ZQ2NNS3NEVzN6?=
+ =?utf-8?B?SndXaEFJaDkwU0R3eEs5RU1uTDNsQUVDdGtIbUVBMVRXbG5xL3BVVEVoSGpa?=
+ =?utf-8?B?RCs0ZmR3TXdSQjk5dXdpVGxtS3JKTGM5cnJ6UkdieG5uTTJCemhsK3ZYc00r?=
+ =?utf-8?B?TEhmOC9TYitUNDI2ODVvaE5qb29kUjdVWnpXcG0wVmJyV3lmengrd0hrcFV5?=
+ =?utf-8?B?ejdTdk9ieXJJcmxGakU3UHdUYXJSM1RNVlJKNTJQcDhWWGV3UXB0ckhZaTFQ?=
+ =?utf-8?B?SG1lOXdhK0VQcFZUOVRBbThEMGlKc0EvNzR4TDVETmJTd3NVN1podWx0QkJk?=
+ =?utf-8?B?QmZkWTc5b2I1bWFTYThVVWc3bXBVcHpkZjhpM0lGdVg1K1FlcE16OWtXM3lu?=
+ =?utf-8?B?SHNZcThKVXdRd3pEYzFjQmloTlRTa0pGQnZscnF1L1hHQ25NMGptWWRTYkc3?=
+ =?utf-8?B?cUFINzYwaXM1SlcyMEhxdnVsZU5nMnhXQjU5eG1QL0wwU0pvNUtuUUNvY2RO?=
+ =?utf-8?B?bWxNaDZ5SUlGMFREb0hQeHhvc2pIS0U5TFloZVpSS2h5cWozNmszb1k4REEx?=
+ =?utf-8?B?M0lXQ3N1MGs3NWprMFppeHdsUHA0bHVCOHlFRmdtYWtHRHQzVG8zbDV6NTVY?=
+ =?utf-8?B?aHdpNlBsM3VsVUFHT0VlL1dFdURJZlZIdXowL2ZpSFpTdEhQdEYvV2RteHFY?=
+ =?utf-8?B?SzA3Uy9wSjlqVHM0RXNjb3lyb3Zib3dUcDJYellWTFgvb2F4Y0RzQlJLdmNP?=
+ =?utf-8?B?Sy9TOU5vSENhakJWK2pRVzVFdzJtc3ltaVNvdmVnQ2h5RFJOTktTTENHRThS?=
+ =?utf-8?B?aU14K1FTd0F3dmwrTG1ZSEt6YXhlTjhsdUI3OU5CeWtDRWJqaUhUajl1NDR5?=
+ =?utf-8?B?QkdoZHhwcmZkUmhzTjV5Z1VpZWNmd2UyZk43T1dZSVQ3N05PUHVIaklTQTBJ?=
+ =?utf-8?B?Zkxrdlk1elRkeDloaFg5N3V1NlE0SkxkWkVzS1NmaEYxY0ZSbm0xY2ZUTi9L?=
+ =?utf-8?B?ZklKRGwyeE5JRmc5eExqanhFVkhCWXdidnV1M2hGWFpkVUg4SGJ2SEN1Uk84?=
+ =?utf-8?B?cENGMjU3bmJiZjNoRmw3S1VuekY5ZnRtT3VaSUN5U2JCb3VvTmhtT1hzVDFB?=
+ =?utf-8?B?MUR0dDF0WFFaMzZOR3FvQ2gxUUpMU0Faa0NzMG9tZHVDaHlKZktTNjZLUmR3?=
+ =?utf-8?Q?fKI41b0MBW8mqS4QQUeio9MDYZNPdj2Dk9hzcWuTR4?=
+MIME-Version: 1.0
+
+--82cec271fd462f77f53ea430351523648d2ef2e12d61cb3880b7bf8a28eb
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/plain; charset=utf-8
+
+%opentrack%
+
+https://www.airbnb.co.uk/?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2Y=
+XRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c0=
+25
+
+NEW BOOKING CONFIRMED! LAURA JULIANA ARRIVES 6 NOV.
+
+Send a message to confirm check-in details or welcome Laura
+Juliana.
+
+https://www.airbnb.co.uk/hosting/reservations/details/HMMJ43JMYZ?c=3D.pi80.=
+pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&eu=
+id=3D4151e2be-ca84-49cf-79ae-8cb6d241c025   Laura Juliana
+                                                                           =
+                                                                           =
+                                     =20
+                                                                           =
+                                                                           =
+                                      [https://www.airbnb.co.uk/hosting/res=
+ervations/details/HMMJ43JMYZ?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZX=
+J2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49cf-79ae-8cb6d24=
+1c025]
+                                                                           =
+                                                                           =
+                                     =20
+                                                                           =
+                                                                           =
+                                      Identity verified
+                                                                           =
+                                                                           =
+                                     =20
+                                                                           =
+                                                                           =
+                                      CO
+
+Send Laura Juliana a MessageSend Laura Juliana a Message
+[https://www.airbnb.co.uk/hosting/thread/2198502050?c=3D.pi80.pkYm9va2luZy9=
+2Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be=
+-ca84-49cf-79ae-8cb6d241c025&thread_type=3Dhome_booking&email_cta=3Dlink_ho=
+sting_message_thread]
+
+https://www.airbnb.co.uk/rooms/1268292624033835072?c=3D.pi80.pkYm9va2luZy92=
+Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-=
+ca84-49cf-79ae-8cb6d241c025
+
+DREAM GETAWAY | LUXURY 2BD STEPS FROM THE BEACH
+
+Entire home/flat
+
+[https://www.airbnb.co.uk/rooms/1268292624033835072?c=3D.pi80.pkYm9va2luZy9=
+2Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be=
+-ca84-49cf-79ae-8cb6d241c025]
+
+Check-in    Checkout
+           =20
+Thu 6 Nov   Mon 10 Nov
+           =20
+15:00       11:00
+
+GUESTS
+
+4 adults
+
+MORE DETAILS ABOUT WHO=E2=80=99S COMING
+
+Guests will now let you know if they=E2=80=99re bringing children
+and infants. Let them know upfront if your listing is
+suitable for children by updating your House Rules.
+[https://www.airbnb.com/hosting/listings/1268292624033835072/details/safety=
+-info]
+
+CONFIRMATION CODE
+HMMJ43JMYZ
+
+GUEST PAID
+
+$1,722.75 x 4 nights   $6,891.00
+
+Cleaning fee   $1,200.00
+
+Guest service fee   $1,579.05
+
+Occupancy taxes   $1,780.02
+
+TOTAL (MXN)   $11,450.07
+
+HOST PAYOUT
+
+4-night room fee   $6,891.00
+
+Cleaning fee   $1,200.00
+
+Host service fee (3.0% + VAT)   -$281.57
+
+Remitted occupancy tax   $1,294.56
+
+YOU EARN   $9,103.99
+
+The money you earn hosting will be sent to you 24 hours
+after your guest arrives. You can check your upcoming
+payments in your Transaction History
+[https://www.airbnb.com/users/transaction_history].
+
+Your guest paid $1,780.02 in Occupancy Taxes. Airbnb remits
+these taxes on your behalf.
+
+CANCELLATIONS
+Your cancellation policy for guests is Strict
+[https://www.airbnb.com/help/article/149].
+
+The penalties for cancelling this reservation include
+getting a public review that shows you cancelled, paying a
+cancellation fee and having the cancelled nights blocked on
+your calendar.
+
+Read cancellation penalties
+[https://www.airbnb.co.uk/help/article/990?c=3D.pi80.pkYm9va2luZy92Ml9taWdy=
+YXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49c=
+f-79ae-8cb6d241c025]
+
+GET READY FOR LAURA JULIANA=E2=80=99S ARRIVAL
+
+REVIEW THE COVID-19 SAFETY PRACTICES
+We=E2=80=99ve created a set of mandatory COVID-19 safety practices
+for both Airbnb hosts and guests. These include practising
+social distancing and wearing a mask.
+
+Review practices
+[https://www.airbnb.co.uk/help/article/2839?c=3D.pi80.pkYm9va2luZy92Ml9taWd=
+yYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49=
+cf-79ae-8cb6d241c025]
+
+FOLLOW THE 5-STEP ENHANCED CLEANING PROCESS
+All hosts are required to follow the enhanced cleaning
+process between guest stays. They were developed in
+partnership with experts in an effort to curb the spread of
+COVID-19.
+
+Review process
+[https://www.airbnb.co.uk/help/article/2809?c=3D.pi80.pkYm9va2luZy92Ml9taWd=
+yYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49=
+cf-79ae-8cb6d241c025]
+
+PROVIDE DIRECTIONS
+Check that your guest knows how to get to your place.
+
+Send message
+[https://www.airbnb.co.uk/hosting/thread/2198502050?c=3D.pi80.pkYm9va2luZy9=
+2Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be=
+-ca84-49cf-79ae-8cb6d241c025&thread_type=3Dhome_booking]
+
+Top-to-bottom protection, included every time you host.
+Learn more
+[https://www.airbnb.co.uk/help/article/3142/getting-protected-through-airco=
+ver-for-hosts?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zd=
+F9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025&email_cta=
+=3D]
+
+CUSTOMER SUPPORT
+Contact our support team 24/7 from anywhere in the world.
+
+Visit Help Centre
+[https://www.airbnb.co.uk/help?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVz=
+ZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49cf-79ae-8cb6d=
+241c025]Contact
+Airbnb
+[https://www.airbnb.co.uk/help/contact_us?c=3D.pi80.pkYm9va2luZy92Ml9taWdyY=
+XRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49cf=
+-79ae-8cb6d241c025]
+
+Airbnb Ireland UC
+
+8 Hanover Quay
+
+Dublin 2, Ireland
+
+Payment Terms between you and:
+
+Airbnb Payments UK Ltd.
+
+Suite 1, 3rd Floor
+
+11-12 St. James=E2=80=99s Square
+
+London, SW1Y 4LB
+
+United Kingdom
+
+Get the Airbnb app
+
+https://www.airbnb.co.uk/external_link?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRp=
+b24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=3D4151e2be-ca84-49cf-79=
+ae-8cb6d241c025&url=3Dhttps%3A%2F%2Fairbnb.sng.link%2FA6f9up%2Fdvs6%3F_smty=
+pe%3D3%26pcid%3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9=
+jb25maXJtYXRpb24%3D   https://www.airbnb.co.uk/external_link?c=3D.pi80.pkYm=
+9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&euid=
+=3D4151e2be-ca84-49cf-79ae-8cb6d241c025&url=3Dhttps%3A%2F%2Fairbnb.sng.link=
+%2FA6f9up%2Fqh0lc%3Fid%3Dcom.airbnb.android%26pcid%3D.pi80.pkYm9va2luZy92Ml=
+9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24%3D  =20
+
+=C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=
+=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =
+=C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0 =C2=A0
+--82cec271fd462f77f53ea430351523648d2ef2e12d61cb3880b7bf8a28eb
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=utf-8
+
+<html lang=3D"en"><head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Dutf-8"><m=
+eta name=3D"viewport" content=3D"width=3Ddevice-width, initial-scale=3D1"><=
+style type=3D"text/css">
+@font-face {
+  font-family: Cereal;
+  src: url("https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/font=
+s/Airbnb_Cereal-Book-9a1c9cca9bb3d65fefa2aa487617805e.woff2") format("woff2=
+"), url("https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/A=
+irbnb_Cereal-Book-aa38e86e3f98554f9f7053d7b713b4db.woff") format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;}
+@font-face {
+  font-family: Cereal;
+  src: url("https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/font=
+s/Airbnb_Cereal-Medium-50fc004b3082375f12ff0cfb67bf8e56.woff2") format("wof=
+f2"), url("https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts=
+/Airbnb_Cereal-Medium-4bc8dafd2e0fd8914bf4d5edce9acd24.woff") format('woff'=
+);
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;}
+@font-face {
+  font-family: Cereal;
+  src: url("https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/font=
+s/Airbnb_Cereal-Bold-bdfb98485e7836ba31b456f65cded088.woff2") format("woff2=
+"), url("https://a0.muscache.com/airbnb/static/airbnb-dls-web/build/fonts/A=
+irbnb_Cereal-Bold-a188841af78481a25b7bb2316a5f5716.woff") format('woff');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;}
+</style><div><!--[if (mso)|(IE)]>
+<style type=3D"text/css">
+h1, h2, h3, h4, h5, h6, a, p, li, div, span {
+  font-family: Cereal, Helvetica Neue, Helvetica, sans-serif !important;
+}
+
+a {
+  color: #222222 !important;
+}
+
+h1, h2, h3, h4, h5, h6, a, p, li, div, span {
+  color: #222222 !important;
+}
+
+.outlook-row-container {
+  padding-bottom: 24px !important;
+  padding-left: 48px !important;
+  padding-right: 48px !important;
+  padding-top: 24px !important;
+}
+
+a.base-button {
+  border: 1px solid #222222 !important;
+  color: #222222 !important;
+  display: inline-block !important;
+  font-size: 18px !important;
+  font-weight: bold !important;
+  padding-top: 16px !important;
+}
+
+a.embedded-button {
+  border: 1px solid #222222 !important;
+  color: #222222 !important;
+  display: inline-block !important;
+  font-size: 18px !important;
+  font-weight: bold !important;
+  padding-top: 8px !important;
+}
+
+div#brand-header {
+  padding-bottom: 24px !important;
+  padding-top: 48px !important;
+}
+
+.outlook-only {
+  display: block !important;
+}
+
+.non-outlook-only {
+  background-color: red;
+  display: none !important;
+  height: 0 !important;
+  max-height: 0px !important;
+  mso-hide: all !important;
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+  width: 0 !important;
+}
+</style>
+<![endif]--></div><style type=3D"text/css">
+@media only screen and (max-width: 560px) {
+  table .height_12_10 {
+    height: 10px !important;
+  }
+
+  table .height_18_16 {
+    height: 16px !important;
+  }
+
+  table .height_32_24 {
+    height: 24px !important;
+  }
+
+  table .height_48_24 {
+    height: 24px !important;
+  }
+
+  table .height_64_48 {
+    height: 48px !important;
+  }
+
+  table .bottom_0_1 {
+    padding-bottom: 8px !important;
+  }
+
+  table .bottom_1_1 {
+    padding-bottom: 8px !important;
+  }
+
+  table .bottom_1_0 {
+    padding-bottom: 0px !important;
+  }
+
+  table .bottom_3_2 {
+    padding-bottom: 16px !important;
+  }
+
+  table .bottom_3_3 {
+    padding-bottom: 24px !important;
+  }
+
+  table .bottom_4_2 {
+    padding-bottom: 16px !important;
+  }
+
+  table .bottom_4_3 {
+    padding-bottom: 24px !important;
+  }
+
+  table .bottom_5_3 {
+    padding-bottom: 24px !important;
+  }
+
+  table .bottom_5_4 {
+    padding-top: 32px !important;
+  }
+
+  table .bottom_6_4 {
+    padding-bottom: 32px !important;
+  }
+
+  table .left_0-5_0-25 {
+    padding-left: 2px !important;
+  }
+
+  table .left_1-25_1-5 {
+    padding-left: 12px !important;
+  }
+
+  table .left_2_0 {
+    padding-left: 0px !important;
+  }
+
+  table .left_2_1-5 {
+    padding-left: 12px !important;
+  }
+
+  table .left_3_2 {
+    padding-left: 16px !important;
+  }
+
+  table .left_6_2 {
+    padding-left: 16px !important;
+  }
+
+  table .left_6_3 {
+    padding-left: 24px !important;
+  }
+
+  table .left_9_6 {
+    padding-left: 48px !important;
+  }
+
+  table .right_0-5_0-25 {
+    padding-right: 2px !important;
+  }
+
+  table .right_1_0 {
+    padding-right: 0px !important;
+  }
+
+  table .right_1-25_1-5 {
+    padding-right: 12px !important;
+  }
+
+  table .right_2_0 {
+    padding-right: 0px !important;
+  }
+
+  table .right_3_2 {
+    padding-right: 16px !important;
+  }
+
+  table .right_6_2 {
+    padding-right: 16px !important;
+  }
+
+  table .right_6_3 {
+    padding-right: 24px !important;
+  }
+
+  table .right_9_6 {
+    padding-right: 48px !important;
+  }
+
+  table .top_0-5_1 {
+    padding-top: 8px !important;
+  }
+
+  table .top_0-75_0-5 {
+    padding-top: 4px !important;
+  }
+
+  table .top_0_3 {
+    padding-top: 24px !important;
+  }
+
+  table .top_1_0 {
+    padding-top: 0px !important;
+  }
+
+  table .top_1_0-5 {
+    padding-top: 4px !important;
+  }
+
+  table .top_1-25_0-5 {
+    padding-top: 4px !important;
+  }
+
+  table .top_1-5_0-5 {
+    padding-top: 4px !important;
+  }
+
+  table .top_1-5_1 {
+    padding-top: 8px !important;
+  }
+
+  table .top_1-5_1-5 {
+    padding-top: 12px !important;
+  }
+
+  table .top_1-75_0-5 {
+    padding-top: 4px !important;
+  }
+
+  table .top_1-75_1-25 {
+    padding-top: 10px !important;
+  }
+
+  table .top_2_1 {
+    padding-top: 8px !important;
+  }
+
+  table .top_2_1-25 {
+    padding-top: 10px !important;
+  }
+
+  table .top_2-25_1-5 {
+    padding-top: 12px;
+  }
+
+  table .top_2_3 {
+    padding-top: 24px !important;
+  }
+
+  table .top_3_1 {
+    padding-top: 8px !important;
+  }
+
+  table .top_3_2 {
+    padding-top: 16px !important;
+  }
+
+  table .top_3_3 {
+    padding-top: 24px !important;
+  }
+
+  table .top_4_2 {
+    padding-top: 16px !important;
+  }
+
+  table .top_4_3 {
+    padding-top: 24px !important;
+  }
+
+  table .top_5_4 {
+    padding-top: 32px !important;
+  }
+
+  table .top_6_4 {
+    padding-top: 32px !important;
+  }
+
+  table .width_12_10 {
+    width: 10px !important;
+  }
+
+  table .width_18_16 {
+    width: 16px !important;
+  }
+
+  table .width_20_24 {
+    width: 24px !important;
+  }
+
+  table .width_28_20 {
+    width: 20px !important;
+  }
+
+  table .width_32_24 {
+    width: 24px !important;
+  }
+
+  table .width_46_30 {
+    width: 30.67px;
+  }
+
+  table .width_48_24 {
+    width: 24px !important;
+  }
+
+  table .width_64_48 {
+    width: 48px !important;
+  }
+
+  table .width_64_48 {
+    width: 48px !important;
+  }
+
+  table .hide_small {
+    display: block !important;
+  }
+
+  table .hide_large {
+    display: none !important;
+  }
+
+  table a.base-button {
+    display: block !important;
+    font-size: 16px !important;
+    line-height: 20px !important;
+    padding: 14px 24px !important;
+    font-weight: 500 !important;
+  }
+
+  table a.embedded-button {
+    display: block !important;
+    font-size: 14px !important;
+    line-height: 18px !important;
+    padding: 8px 14px !important;
+  }
+
+  table div.base-button-container {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  table div.base-button-container,
+table div.base-button-no-resize {
+    font-size: 16px !important;
+    line-height: 20px !important;
+  }
+
+  table .brand-header {
+    padding-bottom: 0px !important;
+    padding-top: 32px !important;
+  }
+
+  table a.header-nav {
+    font-size: 12px !important;
+  }
+
+  table div.full-width {
+    width: 100% !important;
+  }
+
+  table div.normal-container {
+    border: none !important;
+    border-radius: unset !important;
+    overflow: visible !important;
+  }
+
+  table div.header-middle {
+    background-color: transparent !important;
+    border: none !important;
+  }
+
+  table div.header-bottom {
+    border: none !important;
+  }
+
+  table div.hero-container-top-style {
+    margin-top: 0px !important;
+    border: none !important;
+    border-radius: unset !important;
+    overflow: visible !important;
+  }
+
+  table div.hero-container-bottom-style {
+    margin-bottom: 0px !important;
+    border-radius: 0px !important;
+  }
+
+  table .heading1 {
+    font-size: 24px !important;
+    line-height: 28px !important;
+  }
+
+  table .heading2 {
+    font-size: 18px !important;
+    line-height: 22px !important;
+  }
+
+  table .heading3 {
+    font-size: 16px !important;
+    line-height: 20px !important;
+  }
+
+  table .heading4 {
+    font-size: 14px !important;
+    line-height: 18px !important;
+  }
+
+  table h1.super1 {
+    font-size: 32px !important;
+    line-height: 36px !important;
+  }
+
+  table h1.super2,
+table h2.super2 {
+    font-size: 32px !important;
+    line-height: 36px !important;
+  }
+
+  table p.heading-level-2-3 {
+    font-size: 16px !important;
+    line-height: 20px !important;
+  }
+
+  table p.heading-32-24 {
+    font-size: 24px !important;
+    line-height: 28px !important;
+  }
+
+  table p.medium {
+    font-size: 16px !important;
+    line-height: 22px !important;
+  }
+
+  table a.regular,
+table p.regular,
+table div.regular {
+    font-size: 14px !important;
+    line-height: 20px !important;
+  }
+
+  table a.small,
+table p.small,
+table div.small {
+    font-size: 12px !important;
+    line-height: 18px !important;
+  }
+
+  table p.ui-large,
+table div.ui-large {
+    font-size: 14px !important;
+    line-height: 18px !important;
+  }
+
+  table p.ui-medium,
+table div.ui-medium {
+    font-size: 12px !important;
+    line-height: 16px !important;
+  }
+
+  table p.ui-small,
+table div.ui-small {
+    font-size: 10px !important;
+    line-height: 12px !important;
+  }
+
+  table p.ui-xlarge,
+table div.ui-xlarge {
+    font-size: 14px !important;
+    line-height: 18px !important;
+  }
+
+  table p.ui-xxlarge,
+table div.ui-xxlarge {
+    font-size: 22px !important;
+    line-height: 26px !important;
+  }
+
+  table a.x-small,
+table p.x-small,
+table div.x-small {
+    font-size: 12px !important;
+    line-height: 18px !important;
+  }
+
+  table td.cell-padding-bottom {
+    padding-bottom: 24px !important;
+  }
+
+  table td.height_715_546 {
+    height: 546px !important;
+  }
+
+  table.mobile-view,
+table .mobile-view {
+    display: table !important;
+  }
+
+  div.mobile-view-block,
+div .mobile-view-block {
+    display: block !important;
+  }
+
+  table.desktop-view,
+table .desktop-view {
+    display: none !important;
+  }
+
+  table.desktop-view-for-mobile-default,
+table .desktop-view-for-mobile-default {
+    display: none !important;
+  }
+}
+@media only screen and (min-width: 561px) {
+  table.desktop-view-for-mobile-default,
+table .desktop-view-for-mobile-default {
+    display: table !important;
+  }
+
+  table.mobile-view-for-mobile-default,
+table .mobile-view-for-mobile-default {
+    display: none;
+  }
+}
+</style></head><body style=3D"margin:0 auto!important;padding:0" id=3D"body=
+"><div style=3D"color:transparent;display:none !important;font-size:0px;hei=
+ght:0;opacity:0;width:0"><img src=3D"http://email.airbnbmail.com/wf/open?up=
+n=3Du001.lOrJom8ZyqKWyhVVfwZSijP0lWQjLJ-2FDy9o1llaqs4OrVMu0F5Z2EMTXitb-2BSJ=
+LfivNB-2Fa33RaBn7IrBO1uRhFMKFz7HYjgBRBOIdwhkpOdykAmnwUwx-2FqxVCap9nv3E9UgYd=
+sWrIcnd9yzA0uenotNJFCqWnk2CSixJMpnbVTAjYfc8oYbJvVKNozB77SdWsJl52w8l7QWGUahl=
+OpRo3WCNrh5qsXnJVwUJSPwbc02C5bNRf9RhruZiztb7mxwnNECWYlbwvN9drWMEgltkNTlMezg=
+JIVtelggq-2BiDY5QqNCaxO90jvpmxb5dviwFuHqJflYubb5hPplqTTLTuSvnZ5EoTHk4StI78x=
+9pGXvSRr8tz9e0HlHvpvDoqZPU7eK93P-2FtwdvsEu1nL10CC6mmmvu9FasJh50kbvFQrCaTwze=
+dARWiXFv6-2F3UJwRyLAdPFeK9xfHIXhQpyyFdkAQJWHh8JVOwnMqwGPFnWRHCvkaffiNzmMX6z=
+wrc9esJnCjM8OQyH3bq-2FI0Bz5KgEdeH2VW2MpsfAC4CSGeZVXygOMTn-2BYLuTD80B0RwqZRn=
+n7gmcjerqrQmkRAsjZKOB4HrI99t-2F48SwYV2pmhOoErhpu36LmF8Hamtunlkg71KwY1-2BEJx=
+-2BB-2BZ39GBpPKJGWJi1KqF-2F5CDS7ZR2nPkmpKo1nTqBu8jViP1Y9225cly1-2BD1npux-2F=
+kEE6R02YpZDaPS8WIIQJTNcegnGpyaZf-2BZ6mUfSkMGaTq0rCp1xSxHuP5PkQzN-2BYWnQDBa4=
+gPSrFoa8Ew-3D-3D" alt=3D"" width=3D"1" height=3D"1" border=3D"0" style=3D"h=
+eight:1px !important;width:1px !important;border-width:0 !important;margin-=
+top:0 !important;margin-bottom:0 !important;margin-right:0 !important;margi=
+n-left:0 !important;padding-top:0 !important;padding-bottom:0 !important;pa=
+dding-right:0 !important;padding-left:0 !important;"></div><div id=3D"app">=
+<div dir=3D"ltr"><table cellpadding=3D"0" class=3D"_1vaxv5w" style=3D"max-w=
+idth: 640px; border-collapse: collapse !important; border-spacing: 0px !imp=
+ortant; color: #222222 !important; display: table !important; font-family: =
+Cereal, Helvetica Neue, Helvetica, sans-serif !important; margin-left: auto=
+ !important; margin-right: auto !important; padding: 0px !important; positi=
+on: relative !important; vertical-align: top !important; width: 100% !impor=
+tant;" role=3D"presentation" width=3D"100% !important" valign=3D"top !impor=
+tant"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td c=
+lass=3D""><div class=3D"normal-container" style=3D"border: 1px solid #DDDDD=
+D; border-radius: 12px; overflow: hidden;"><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D"outlook-row-container left_6_2 right_6_2" style=3D"padd=
+ing-left: 48px; padding-right: 48px;"><table cellpadding=3D"0" class=3D"" s=
+tyle=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"prese=
+ntation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><t=
+d style=3D"padding-top: 48px; padding-bottom: 0px;" class=3D"brand-header">=
+<a target=3D"_self" rel=3D"noreferrer" data-eon-role=3D"link" data-eon-prop=
+=3D"href" href=3D"https://www.airbnb.co.uk/?c=3D.pi80.pkYm9va2luZy92Ml9taWd=
+yYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca8=
+4-49cf-79ae-8cb6d241c025" class=3D"regular underline display-block" style=
+=3D"font-family: Cereal, Helvetica Neue, Helvetica; font-size: 18px; line-h=
+eight: 28px; height: 32px; width: 32px; font-weight: 800; color: #222222; d=
+isplay: block !important; text-decoration: underline !important;"><img data=
+-eon-role=3D"image" data-eon-prop=3D"src" alt=3D"Airbnb" src=3D"https://a0.=
+muscache.com/pictures/d5e805e2-dfa8-4a7d-b06f-c5910be9a725.jpg" style=3D"he=
+ight: 32px; width: 32px; border: 0 !important;" width=3D"32" height=3D"32">=
+</a></td></tr></tbody></table></td></tr></tbody></table><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td style=3D"padding-left: 48px; padding-right: 48px; padd=
+ing-bottom: 24px; padding-top: 24px;" class=3D"outlook-row-container left_6=
+_2 right_6_2"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:=
+collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr clas=
+s=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D"bottom_3_2" s=
+tyle=3D"padding-bottom: 24px;"><div><h1 class=3D"heading1" style=3D"font-si=
+ze: 32px; line-height: 36px; color: #222222; font-family: Cereal, Helvetica=
+ Neue, Helvetica, sans-serif; font-weight: 800; margin: 0;">New booking con=
+firmed! Laura Juliana arrives 6 Nov.</h1></div></td></tr></tbody></table><t=
+able cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-=
+spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" s=
+tyle=3D"margin: 0px !important;"><td class=3D""><div class=3D"regular book"=
+ style=3D"font-size: 18px; line-height: 28px; margin: 0; font-weight: 400 !=
+important;"><p class=3D"regular book" style=3D"font-size: 18px; line-height=
+: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin:=
+ 0 !important; font-weight: 400 !important;">Send a message to confirm chec=
+k-in details or welcome Laura Juliana.</p></div></td></tr></tbody></table><=
+/td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"borde=
+r-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbo=
+dy><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"pa=
+dding-left: 48px; padding-right: 48px; padding-bottom: 0px; padding-top: 24=
+px;" class=3D"left_6_2 right_6_2"><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td wi=
+dth=3D"64px" style=3D"padding-left:0px" class=3D""><a target=3D"_self" rel=
+=3D"noreferrer" aria-label=3D"Laura Juliana" data-eon-role=3D"link" data-eo=
+n-prop=3D"href" href=3D"https://www.airbnb.co.uk/hosting/reservations/detai=
+ls/HMMJ43JMYZ?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zd=
+F9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025" clas=
+s=3D"regular underline-none" style=3D"font-family: Cereal, Helvetica Neue, =
+Helvetica; font-size: 18px; line-height: 28px; font-weight: 800; color: #22=
+2222; text-decoration: none !important;"><img alt=3D"" class=3D"_difbtg" st=
+yle=3D"border: 0 !important; border-radius: 50% !important; width: 64px !im=
+portant; height: 64px !important;" src=3D"https://a0.muscache.com/im/pictur=
+es/user/6a88fd90-502a-4c64-bcf9-9e4c3b3ce432.jpg?aki_policy=3Dprofile_x_med=
+ium" width=3D"64 !important" height=3D"64 !important"></a></td><td style=3D=
+"padding-left:24px" class=3D""><table cellpadding=3D"0" class=3D"" style=3D=
+"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation=
+"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=
+=3D""><a target=3D"_self" rel=3D"noreferrer" aria-label=3D"Laura Juliana" d=
+ata-eon-role=3D"link" data-eon-prop=3D"href" href=3D"https://www.airbnb.co.=
+uk/hosting/reservations/details/HMMJ43JMYZ?c=3D.pi80.pkYm9va2luZy92Ml9taWdy=
+YXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84=
+-49cf-79ae-8cb6d241c025" class=3D"regular underline-none" style=3D"font-fam=
+ily: Cereal, Helvetica Neue, Helvetica; font-size: 18px; line-height: 28px;=
+ font-weight: 800; color: #222222; text-decoration: none !important;"><div =
+class=3D"regular bold" style=3D"font-size: 18px; line-height: 28px; margin:=
+ 0; font-weight: 700 !important;"><p class=3D"regular bold" style=3D"font-s=
+ize: 18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetic=
+a, sans-serif; margin: 0 !important; font-weight: 700 !important;">Laura Ju=
+liana</p></div></a></td></tr></tbody></table><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D""><p class=3D"regular" style=3D"font-size: 18px; line-h=
+eight: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; ma=
+rgin: 0 !important;"><img data-eon-role=3D"image" data-eon-prop=3D"src" src=
+=3D"https://a0.muscache.com/im/pictures/0d520e2d-fe10-4292-a6b5-3616cbae5d9=
+4.jpg" role=3D"presentation" aria-hidden=3D"true" style=3D"height: 14px; wi=
+dth: 14px; margin-right: 16px; border: 0 !important;" width=3D"14" height=
+=3D"14">Identity verified</p></td></tr></tbody></table><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td class=3D""><p class=3D"regular" style=3D"font-size: 18=
+px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans=
+-serif; margin: 0 !important;"><img data-eon-role=3D"image" data-eon-prop=
+=3D"src" src=3D"https://a0.muscache.com/im/pictures/d109f44f-35a7-4336-9420=
+-750576bec06f.jpg" role=3D"presentation" aria-hidden=3D"true" style=3D"heig=
+ht: 14px; width: 14px; margin-right: 16px; border: 0 !important;" width=3D"=
+14" height=3D"14">CO</p></td></tr></tbody></table></td></tr></tbody></table=
+></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"bor=
+der-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><t=
+body><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"=
+padding-left: 48px; padding-right: 48px; padding-bottom: 24px; padding-top:=
+ 24px;" class=3D"outlook-row-container left_6_2 right_6_2"><table cellpaddi=
+ng=3D"0" class=3D"_1cap30x" style=3D"border-collapse: collapse !important; =
+width: 100% !important;" role=3D"presentation" width=3D"100% !important"><t=
+body><tr><td><div class=3D"base-button-container " style=3D"display: inline=
+-block; font-size: 18px; line-height: 24px; background: linear-gradient(90d=
+eg, #E61E4D 1.83%, #E31C5F 50.07%, #D70466 96.34%); background-color: #FF38=
+5C; border-radius: 8px; font-family: Cereal, Helvetica Neue, Helvetica, san=
+s-serif; font-weight: 500; text-align: center; width: auto !important;"><a =
+class=3D"base-button " style=3D"font-family: Cereal, Helvetica Neue, Helvet=
+ica; font-size: 18px; line-height: 24px; padding: 16px 24px; font-weight: 5=
+00; color: #FFFFFF; text-align: center; text-decoration: none; display: blo=
+ck;" data-eon-role=3D"button" data-eon-prop=3D"href" href=3D"https://www.ai=
+rbnb.co.uk/hosting/thread/2198502050?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb2=
+4vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-=
+79ae-8cb6d241c025&amp;thread_type=3Dhome_booking&amp;email_cta=3Dlink_hosti=
+ng_message_thread"><span class=3D"_vz5kef" style=3D"color: #FFFFFF !importa=
+nt;"><span style=3D"max-height:0;max-width:0;display:inline-block;white-spa=
+ce:nowrap;font-size:1px;text-indent:9px;color:rgba(0, 0, 0, 0);opacity:0">S=
+end Laura Juliana a Message</span><span aria-hidden=3D"true">Send Laura Jul=
+iana a Message</span></span></a></div></td></tr></tbody></table></td></tr><=
+/tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse=
+:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr cla=
+ss=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-left=
+: 48px; padding-right: 48px; padding-top: 24px;" class=3D"outlook-row-conta=
+iner left_6_2 right_6_2"><a target=3D"_self" rel=3D"noreferrer" data-eon-ro=
+le=3D"link" data-eon-prop=3D"href" href=3D"https://www.airbnb.co.uk/rooms/1=
+268292624033835072?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25f=
+aG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025"=
+ class=3D"" style=3D"font-family: Cereal, Helvetica Neue, Helvetica; font-w=
+eight: 800; color: #222222;"><div class=3D"non-outlook-only"><table cellpad=
+ding=3D"0" class=3D"non-outlook-only" style=3D"border-collapse:collapse;bor=
+der-spacing:0;width:100%;max-height:none;mso-hide:all" role=3D"presentation=
+"><tbody><tr><td background=3D"https://a0.muscache.com/ac/pictures/miso/Hos=
+ting-1268292624033835072/original/ff83cab2-1fb4-443b-81f4-aa1fbc984d39.jpeg=
+?interpolation=3Dlanczos-none&amp;size=3Dlarge_cover&amp;output-format=3Djp=
+g&amp;output-quality=3D70" class=3D"_jty32mr" data-eon-prop=3D"imageUrl" da=
+ta-eon-role=3D"image" aria-label=3D"Dream Getaway | Luxury 2Bd steps from t=
+he beach" role=3D"img" style=3D"padding-bottom: 56.2%; background-position:=
+ center; background-color: #F1F1F1; background-repeat: no-repeat !important=
+; background-size: cover !important; height: 0px !important; max-height: 0p=
+x !important; overflow: hidden !important; width: 100% !important; border-r=
+adius: 8px !important;" width=3D"100% !important" height=3D"0 !important" b=
+gcolor=3D"#F1F1F1"></td></tr></tbody></table></div><table cellpadding=3D"0"=
+ class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" =
+role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !i=
+mportant;"><td class=3D"outlook-only" style=3D"display: none;"><img alt=3D"=
+Dream Getaway | Luxury 2Bd steps from the beach" src=3D"https://a0.muscache=
+.com/ac/pictures/miso/Hosting-1268292624033835072/original/ff83cab2-1fb4-44=
+3b-81f4-aa1fbc984d39.jpeg?interpolation=3Dlanczos-none&amp;size=3Dlarge_cov=
+er&amp;output-format=3Djpg&amp;output-quality=3D70" style=3D"border: 0 !imp=
+ortant;"></td></tr></tbody></table></a></td></tr></tbody></table><table cel=
+lpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:=
+0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"=
+margin: 0px !important;"><td class=3D"bottom_1_0 top_1_0" style=3D"padding-=
+bottom: 8px; padding-top: 8px;"><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td st=
+yle=3D"padding-left: 48px; padding-right: 48px; padding-bottom: 24px; paddi=
+ng-top: 24px;" class=3D"outlook-row-container left_6_2 right_6_2"><table ce=
+llpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing=
+:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D=
+"margin: 0px !important;"><td class=3D""><a target=3D"_self" rel=3D"norefer=
+rer" data-eon-role=3D"link" data-eon-prop=3D"href" href=3D"https://www.airb=
+nb.co.uk/rooms/1268292624033835072?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24v=
+cmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79=
+ae-8cb6d241c025" class=3D"regular underline-none" style=3D"font-family: Cer=
+eal, Helvetica Neue, Helvetica; font-size: 18px; line-height: 28px; font-we=
+ight: 400; color: #222222; text-decoration: none !important;"><table cellpa=
+dding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;w=
+idth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"mar=
+gin: 0px !important;"><td class=3D""><div><h2 class=3D"heading2" style=3D"f=
+ont-size: 22px; line-height: 26px; color: #222222; font-family: Cereal, Hel=
+vetica Neue, Helvetica, sans-serif; font-weight: 800; margin: 0;">Dream Get=
+away | Luxury 2Bd steps from the beach</h2></div></td></tr></tbody></table>=
+<table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;borde=
+r-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n"=
+ style=3D"margin: 0px !important;"><td class=3D"top_1_0-5" style=3D"padding=
+-top: 8px;"><div class=3D"regular book" style=3D"font-size: 18px; line-heig=
+ht: 28px; margin: 0; font-weight: 400 !important;"><p class=3D"regular book=
+" style=3D"font-size: 18px; line-height: 28px; font-family: Cereal, Helveti=
+ca Neue, Helvetica, sans-serif; margin: 0 !important; font-weight: 400 !imp=
+ortant;">Entire home/flat</p></div></td></tr></tbody></table></a></td></tr>=
+</tbody></table></td></tr></tbody></table></td></tr></tbody></table><table =
+cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spaci=
+ng:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=
+=3D"margin: 0px !important;"><td style=3D"padding-left: 48px; padding-right=
+: 48px; padding-top: 0px;" class=3D"outlook-row-container left_6_2 right_6_=
+2"><table width=3D"100%" class=3D"_1xb19es" style=3D"border-spacing: 0px !i=
+mportant;" role=3D"presentation"><tbody><tr><td class=3D"_1rd2b9oa" style=
+=3D"padding: 0px !important; border-top: 1px solid #DDDDDD !important;" wid=
+th=3D"100%" role=3D"separator"></td></tr></tbody></table></td></tr></tbody>=
+</table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collap=
+se;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_=
+16pg94n" style=3D"margin: 0px !important;"><td class=3D"bottom_1_0 top_1_0"=
+ style=3D"padding-bottom: 8px; padding-top: 8px;"><table cellpadding=3D"0" =
+class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" r=
+ole=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !im=
+portant;"><td style=3D"padding-left: 48px; padding-right: 48px; padding-bot=
+tom: 24px; padding-top: 24px;" class=3D"outlook-row-container left_6_2 righ=
+t_6_2"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collaps=
+e;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_1=
+6pg94n" style=3D"margin: 0px !important;"><td width=3D"50%" style=3D"paddin=
+g-right:24px;vertical-align:top" class=3D""><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D""><div><p class=3D"heading4" style=3D"font-size: 16px; =
+line-height: 20px; color: #222222; font-family: Cereal, Helvetica Neue, Hel=
+vetica, sans-serif; font-weight: 800; margin: 0 !important;">Check-in</p></=
+div></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"=
+border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"=
+><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=
+=3D""><div><p class=3D"heading2" style=3D"font-size: 22px; line-height: 26p=
+x; color: #222222; font-family: Cereal, Helvetica Neue, Helvetica, sans-ser=
+if; font-weight: 800; margin: 0 !important;">Thu 6 Nov</p></div></td></tr><=
+/tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse=
+:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr cla=
+ss=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><p class=
+=3D"regular book" style=3D"font-size: 18px; line-height: 28px; font-family:=
+ Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !important; font-=
+weight: 400 !important;">15:00</p></td></tr></tbody></table></td><td style=
+=3D"padding-left:24px;border-left:1px solid #DDDDDD;vertical-align:top" cla=
+ss=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collap=
+se;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_=
+16pg94n" style=3D"margin: 0px !important;"><td class=3D""><div><p class=3D"=
+heading4" style=3D"font-size: 16px; line-height: 20px; color: #222222; font=
+-family: Cereal, Helvetica Neue, Helvetica, sans-serif; font-weight: 800; m=
+argin: 0 !important;">Checkout</p></div></td></tr></tbody></table><table ce=
+llpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing=
+:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D=
+"margin: 0px !important;"><td class=3D""><div><p class=3D"heading2" style=
+=3D"font-size: 22px; line-height: 26px; color: #222222; font-family: Cereal=
+, Helvetica Neue, Helvetica, sans-serif; font-weight: 800; margin: 0 !impor=
+tant;">Mon 10 Nov</p></div></td></tr></tbody></table><table cellpadding=3D"=
+0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%=
+" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px =
+!important;"><td class=3D""><p class=3D"regular book" style=3D"font-size: 1=
+8px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, san=
+s-serif; margin: 0 !important; font-weight: 400 !important;">11:00</p></td>=
+</tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></=
+td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border=
+-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbod=
+y><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"pad=
+ding-left: 48px; padding-right: 48px; padding-top: 0px;" class=3D"outlook-r=
+ow-container left_6_2 right_6_2"><table width=3D"100%" class=3D"_1xb19es" s=
+tyle=3D"border-spacing: 0px !important;" role=3D"presentation"><tbody><tr><=
+td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; border-top: 1px so=
+lid #DDDDDD !important;" width=3D"100%" role=3D"separator"></td></tr></tbod=
+y></table></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" sty=
+le=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"present=
+ation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td =
+style=3D"padding-left: 48px; padding-right: 48px; padding-top: 24px;" class=
+=3D"outlook-row-container left_6_2 right_6_2"><table cellpadding=3D"0" clas=
+s=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td style=3D"padding-bottom:8px" class=3D""><div><h2 class=3D"headin=
+g2" style=3D"font-size: 22px; line-height: 26px; color: #222222; font-famil=
+y: Cereal, Helvetica Neue, Helvetica, sans-serif; font-weight: 800; margin:=
+ 0;">Guests</h2></div></td></tr></tbody></table><table cellpadding=3D"0" cl=
+ass=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" rol=
+e=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impo=
+rtant;"><td class=3D""><div class=3D"regular book" style=3D"font-size: 18px=
+; line-height: 28px; margin: 0; font-weight: 400 !important;"><p class=3D"r=
+egular book" style=3D"font-size: 18px; line-height: 28px; font-family: Cere=
+al, Helvetica Neue, Helvetica, sans-serif; margin: 0 !important; font-weigh=
+t: 400 !important;">4 adults</p></div></td></tr></tbody></table></td></tr><=
+/tbody></table><table cellpadding=3D"0" class=3D"mobile-view" style=3D"disp=
+lay: none; border-collapse: collapse; border-spacing: 0; width: 100%;" role=
+=3D"presentation" width=3D"100%"><tbody><tr class=3D"_16pg94n" style=3D"mar=
+gin: 0px !important;"><td style=3D"padding-top:24px" class=3D""><table cell=
+padding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0=
+;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"m=
+argin: 0px !important;"><td style=3D"padding-left: 48px; padding-right: 48p=
+x; padding-top: 0px;" class=3D"outlook-row-container left_6_2 right_6_2"><t=
+able width=3D"100%" class=3D"_1xb19es" style=3D"border-spacing: 0px !import=
+ant;" role=3D"presentation"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"pad=
+ding: 0px !important; border-top: 1px solid #DDDDDD !important;" width=3D"1=
+00%" role=3D"separator"></td></tr></tbody></table></td></tr></tbody></table=
+></td></tr></tbody></table><table cellpadding=3D"0" class=3D"desktop-view" =
+style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pres=
+entation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><=
+td style=3D"padding-top:24px" class=3D""><table cellpadding=3D"0" class=3D"=
+" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pr=
+esentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"=
+><td style=3D"padding-left: 48px; padding-right: 48px; padding-top: 0px;" c=
+lass=3D"outlook-row-container left_6_2 right_6_2"><table width=3D"100%" cla=
+ss=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=3D"presentat=
+ion"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; b=
+order-top: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"separator"=
+></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></ta=
+ble><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;b=
+order-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg=
+94n" style=3D"margin: 0px !important;"><td style=3D"padding-left: 48px; pad=
+ding-right: 48px; padding-top: 24px;" class=3D"outlook-row-container left_6=
+_2 right_6_2"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:=
+collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr clas=
+s=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-botto=
+m:8px" class=3D""><div><h2 class=3D"heading2" style=3D"font-size: 22px; lin=
+e-height: 26px; color: #222222; font-family: Cereal, Helvetica Neue, Helvet=
+ica, sans-serif; font-weight: 800; margin: 0;">More details about who=E2=80=
+=99s coming</h2></div></td></tr></tbody></table><table cellpadding=3D"0" cl=
+ass=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" rol=
+e=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impo=
+rtant;"><td class=3D""><div class=3D"regular book" style=3D"font-size: 18px=
+; line-height: 28px; margin: 0; font-weight: 400 !important;"><p class=3D"r=
+egular book" style=3D"font-size: 18px; line-height: 28px; font-family: Cere=
+al, Helvetica Neue, Helvetica, sans-serif; margin: 0 !important; font-weigh=
+t: 400 !important;">Guests will now let you know if they=E2=80=99re bringin=
+g children and infants. Let them know upfront if your listing is suitable f=
+or children by <a class=3D"underline" href=3D"https://www.airbnb.com/hostin=
+g/listings/1268292624033835072/details/safety-info" target=3D"_blank" style=
+=3D"color: #222222; font-family: Cereal, Helvetica Neue, Helvetica; font-we=
+ight: 700; text-decoration: underline !important;">updating your House Rule=
+s.</a></p></div></td></tr></tbody></table></td></tr></tbody></table><table =
+cellpadding=3D"0" class=3D"mobile-view" style=3D"display: none; border-coll=
+apse: collapse; border-spacing: 0; width: 100%;" role=3D"presentation" widt=
+h=3D"100%"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;">=
+<td style=3D"padding-top:24px" class=3D""><table cellpadding=3D"0" class=3D=
+"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"p=
+resentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;=
+"><td style=3D"padding-left: 48px; padding-right: 48px; padding-top: 0px;" =
+class=3D"outlook-row-container left_6_2 right_6_2"><table width=3D"100%" cl=
+ass=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=3D"presenta=
+tion"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; =
+border-top: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"separator=
+"></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></t=
+able><table cellpadding=3D"0" class=3D"desktop-view" style=3D"border-collap=
+se:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr c=
+lass=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-to=
+p:24px" class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-coll=
+apse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr=
+ class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-=
+left: 48px; padding-right: 48px; padding-top: 0px;" class=3D"outlook-row-co=
+ntainer left_6_2 right_6_2"><table width=3D"100%" class=3D"_1xb19es" style=
+=3D"border-spacing: 0px !important;" role=3D"presentation"><tbody><tr><td c=
+lass=3D"_1rd2b9oa" style=3D"padding: 0px !important; border-top: 1px solid =
+#DDDDDD !important;" width=3D"100%" role=3D"separator"></td></tr></tbody></=
+table></td></tr></tbody></table></td></tr></tbody></table><table cellpaddin=
+g=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width=
+:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin:=
+ 0px !important;"><td style=3D"padding-left: 48px; padding-right: 48px; pad=
+ding-bottom: 24px; padding-top: 24px;" class=3D"outlook-row-container left_=
+6_2 right_6_2"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse=
+:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr cla=
+ss=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><table cel=
+lpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:=
+0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"=
+margin: 0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D""=
+ style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pre=
+sentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;">=
+<td style=3D"padding-bottom:8px" class=3D""><div><h2 role=3D"heading" aria-=
+level=3D"2" class=3D"heading2" style=3D"font-size: 22px; line-height: 26px;=
+ color: #222222; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif=
+; font-weight: 800; margin: 0;">Confirmation code</h2></div></td></tr></tbo=
+dy></table></td></tr><tr class=3D"_16pg94n" style=3D"margin: 0px !important=
+;"><td style=3D"padding-right:8px" class=3D""><table cellpadding=3D"0" clas=
+s=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td style=3D"padding-bottom:0px" class=3D""><div class=3D"regular bo=
+ok" style=3D"font-size: 18px; line-height: 28px; margin: 0; font-weight: 40=
+0 !important;"><p class=3D"regular book" style=3D"font-size: 18px; line-hei=
+ght: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; marg=
+in: 0 !important; font-weight: 400 !important;">HMMJ43JMYZ</p></div></td></=
+tr></tbody></table></td><td align=3D"right" style=3D"padding-left:8px" clas=
+s=3D""><a target=3D"_self" rel=3D"noreferrer" data-eon-role=3D"link" data-e=
+on-prop=3D"href" href=3D"https://www.airbnb.co.uk/hosting/reservations/deta=
+ils/HMMJ43JMYZ?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9z=
+dF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025" cla=
+ss=3D"regular underline display-block" style=3D"font-family: Cereal, Helvet=
+ica Neue, Helvetica; font-size: 18px; line-height: 28px; font-weight: 800; =
+color: #222222; display: block !important; text-decoration: underline !impo=
+rtant;">View itinerary</a></td></tr><tr class=3D"_16pg94n" style=3D"margin:=
+ 0px !important;"><td class=3D""></td></tr></tbody></table></td></tr></tbod=
+y></table></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" sty=
+le=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"present=
+ation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td =
+style=3D"padding-left: 48px; padding-right: 48px; padding-top: 0px;" class=
+=3D"outlook-row-container left_6_2 right_6_2"><table width=3D"100%" class=
+=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=3D"presentatio=
+n"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; bor=
+der-top: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"separator"><=
+/td></tr></tbody></table></td></tr></tbody></table><table cellpadding=3D"0"=
+ class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" =
+role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !i=
+mportant;"><td style=3D"padding-left: 48px; padding-right: 48px; padding-to=
+p: 24px;" class=3D"outlook-row-container left_6_2 right_6_2"><table cellpad=
+ding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wi=
+dth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"marg=
+in: 0px !important;"><td class=3D""><div><h2 class=3D"heading2" style=3D"fo=
+nt-size: 22px; line-height: 26px; color: #222222; font-family: Cereal, Helv=
+etica Neue, Helvetica, sans-serif; font-weight: 800; margin: 0;">Guest paid=
+</h2></div></td></tr></tbody></table></td></tr></tbody></table><table cellp=
+adding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;=
+width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"ma=
+rgin: 0px !important;"><td style=3D"padding-top:24px" class=3D""><table cel=
+lpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:=
+0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"=
+margin: 0px !important;"><td class=3D"outlook-row-container bottom_2_1 left=
+_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16px; padding-left: 48px; =
+padding-right: 48px; padding-top: 16px;"><table cellpadding=3D"0" class=3D"=
+" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pr=
+esentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"=
+><td valign=3D"top" width=3D"70%" class=3D""><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D""><p class=3D"regular book" style=3D"font-size: 18px; l=
+ine-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-seri=
+f; margin: 0 !important; font-weight: 400 !important;">$1,722.75 x 4 nights=
+</p></td></tr></tbody></table></td><td valign=3D"top" class=3D"left_2_1" st=
+yle=3D"padding-left: 16px;"><table cellpadding=3D"0" class=3D"" style=3D"bo=
+rder-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><=
+tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D=
+"right" style=3D"text-align: right !important;" align=3D"right !important">=
+<p class=3D"regular book" style=3D"font-size: 18px; line-height: 28px; font=
+-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !importan=
+t; font-weight: 400 !important;">$6,891.00</p></td></tr></tbody></table></t=
+d></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table>=
+<table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;borde=
+r-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n"=
+ style=3D"margin: 0px !important;"><td style=3D"padding-top:0px" class=3D""=
+><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;bord=
+er-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n=
+" style=3D"margin: 0px !important;"><td class=3D"outlook-row-container bott=
+om_2_1 left_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16px; padding-l=
+eft: 48px; padding-right: 48px; padding-top: 16px;"><table cellpadding=3D"0=
+" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%"=
+ role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !=
+important;"><td valign=3D"top" width=3D"70%" class=3D""><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td class=3D""><p class=3D"regular book" style=3D"font-siz=
+e: 18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica,=
+ sans-serif; margin: 0 !important; font-weight: 400 !important;">Cleaning f=
+ee</p></td></tr></tbody></table></td><td valign=3D"top" class=3D"left_2_1" =
+style=3D"padding-left: 16px;"><table cellpadding=3D"0" class=3D"" style=3D"=
+border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"=
+><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=
+=3D"right" style=3D"text-align: right !important;" align=3D"right !importan=
+t"><p class=3D"regular book" style=3D"font-size: 18px; line-height: 28px; f=
+ont-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !impor=
+tant; font-weight: 400 !important;">$1,200.00</p></td></tr></tbody></table>=
+</td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></tab=
+le><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;bo=
+rder-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg9=
+4n" style=3D"margin: 0px !important;"><td style=3D"padding-top:0px" class=
+=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse=
+;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16=
+pg94n" style=3D"margin: 0px !important;"><td class=3D"outlook-row-container=
+ bottom_2_1 left_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16px; padd=
+ing-left: 48px; padding-right: 48px; padding-top: 16px;"><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td valign=3D"top" width=3D"70%" class=3D""><table cellpad=
+ding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wi=
+dth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"marg=
+in: 0px !important;"><td class=3D""><p class=3D"regular book" style=3D"font=
+-size: 18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvet=
+ica, sans-serif; margin: 0 !important; font-weight: 400 !important;">Guest =
+service fee</p></td></tr></tbody></table></td><td valign=3D"top" class=3D"l=
+eft_2_1" style=3D"padding-left: 16px;"><table cellpadding=3D"0" class=3D"" =
+style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pres=
+entation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><=
+td class=3D"right" style=3D"text-align: right !important;" align=3D"right !=
+important"><p class=3D"regular book" style=3D"font-size: 18px; line-height:=
+ 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: =
+0 !important; font-weight: 400 !important;">$1,579.05</p></td></tr></tbody>=
+</table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbo=
+dy></table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:col=
+lapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=
+=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-top:0p=
+x" class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:=
+collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr clas=
+s=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D"outlook-row-c=
+ontainer bottom_2_1 left_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16=
+px; padding-left: 48px; padding-right: 48px; padding-top: 16px;"><table cel=
+lpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:=
+0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"=
+margin: 0px !important;"><td valign=3D"top" width=3D"70%" class=3D""><table=
+ cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spac=
+ing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=
+=3D"margin: 0px !important;"><td class=3D""><p class=3D"regular book" style=
+=3D"font-size: 18px; line-height: 28px; font-family: Cereal, Helvetica Neue=
+, Helvetica, sans-serif; margin: 0 !important; font-weight: 400 !important;=
+">Occupancy taxes</p></td></tr></tbody></table></td><td valign=3D"top" clas=
+s=3D"left_2_1" style=3D"padding-left: 16px;"><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D"right" style=3D"text-align: right !important;" align=3D=
+"right !important"><p class=3D"regular book" style=3D"font-size: 18px; line=
+-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; =
+margin: 0 !important; font-weight: 400 !important;">$1,780.02</p></td></tr>=
+</tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></=
+tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-coll=
+apse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr=
+ class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-=
+left: 48px; padding-right: 48px; padding-top: 24px; padding-bottom: 24px;" =
+class=3D"outlook-row-container bottom_2_1 left_6_2 right_6_2 top_3_2"><tabl=
+e cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spa=
+cing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" styl=
+e=3D"margin: 0px !important;"><td valign=3D"top" width=3D"70%" class=3D""><=
+table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border=
+-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" =
+style=3D"margin: 0px !important;"><td class=3D""><div><h3 class=3D"heading3=
+" style=3D"font-size: 18px; line-height: 22px; color: #222222; font-family:=
+ Cereal, Helvetica Neue, Helvetica, sans-serif; font-weight: 800; margin: 0=
+;">Total (MXN)</h3></div></td></tr></tbody></table></td><td valign=3D"top" =
+class=3D"left_2_1" style=3D"padding-left: 16px;"><table cellpadding=3D"0" c=
+lass=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" ro=
+le=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !imp=
+ortant;"><td class=3D"right" style=3D"text-align: right !important;" align=
+=3D"right !important"><div><h3 class=3D"right heading3" style=3D"font-size:=
+ 18px; line-height: 22px; color: #222222; font-family: Cereal, Helvetica Ne=
+ue, Helvetica, sans-serif; font-weight: 800; margin: 0; text-align: right !=
+important;">$11,450.07</h3></div></td></tr></tbody></table></td></tr></tbod=
+y></table></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" sty=
+le=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"present=
+ation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td =
+style=3D"padding-left: 48px; padding-right: 48px; padding-top: 0px;" class=
+=3D"outlook-row-container left_6_2 right_6_2"><table width=3D"100%" class=
+=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=3D"presentatio=
+n"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; bor=
+der-top: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"separator"><=
+/td></tr></tbody></table></td></tr></tbody></table><table cellpadding=3D"0"=
+ class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" =
+role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !i=
+mportant;"><td style=3D"padding-left: 48px; padding-right: 48px; padding-to=
+p: 24px;" class=3D"outlook-row-container left_6_2 right_6_2"><table cellpad=
+ding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wi=
+dth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"marg=
+in: 0px !important;"><td class=3D""><div><h2 class=3D"heading2" style=3D"fo=
+nt-size: 22px; line-height: 26px; color: #222222; font-family: Cereal, Helv=
+etica Neue, Helvetica, sans-serif; font-weight: 800; margin: 0;">Host payou=
+t</h2></div></td></tr></tbody></table></td></tr></tbody></table><table cell=
+padding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0=
+;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"m=
+argin: 0px !important;"><td style=3D"padding-top:24px" class=3D""><table ce=
+llpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing=
+:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D=
+"margin: 0px !important;"><td class=3D"outlook-row-container bottom_2_1 lef=
+t_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16px; padding-left: 48px;=
+ padding-right: 48px; padding-top: 16px;"><table cellpadding=3D"0" class=3D=
+"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"p=
+resentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;=
+"><td valign=3D"top" width=3D"70%" class=3D""><table cellpadding=3D"0" clas=
+s=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D""><p class=3D"regular book" style=3D"font-size: 18px; l=
+ine-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-seri=
+f; margin: 0 !important; font-weight: 400 !important;">4-night room fee</p>=
+</td></tr></tbody></table></td><td valign=3D"top" class=3D"left_2_1" style=
+=3D"padding-left: 16px;"><table cellpadding=3D"0" class=3D"" style=3D"borde=
+r-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbo=
+dy><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D"ri=
+ght" style=3D"text-align: right !important;" align=3D"right !important"><p =
+class=3D"regular book" style=3D"font-size: 18px; line-height: 28px; font-fa=
+mily: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !important; =
+font-weight: 400 !important;">$6,891.00</p></td></tr></tbody></table></td><=
+/tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><ta=
+ble cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-s=
+pacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" st=
+yle=3D"margin: 0px !important;"><td style=3D"padding-top:0px" class=3D""><t=
+able cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-=
+spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" s=
+tyle=3D"margin: 0px !important;"><td class=3D"outlook-row-container bottom_=
+2_1 left_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16px; padding-left=
+: 48px; padding-right: 48px; padding-top: 16px;"><table cellpadding=3D"0" c=
+lass=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" ro=
+le=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !imp=
+ortant;"><td valign=3D"top" width=3D"70%" class=3D""><table cellpadding=3D"=
+0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%=
+" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px =
+!important;"><td class=3D""><p class=3D"regular book" style=3D"font-size: 1=
+8px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, san=
+s-serif; margin: 0 !important; font-weight: 400 !important;">Cleaning fee</=
+p></td></tr></tbody></table></td><td valign=3D"top" class=3D"left_2_1" styl=
+e=3D"padding-left: 16px;"><table cellpadding=3D"0" class=3D"" style=3D"bord=
+er-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tb=
+ody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D"r=
+ight" style=3D"text-align: right !important;" align=3D"right !important"><p=
+ class=3D"regular book" style=3D"font-size: 18px; line-height: 28px; font-f=
+amily: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !important;=
+ font-weight: 400 !important;">$1,200.00</p></td></tr></tbody></table></td>=
+</tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><t=
+able cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-=
+spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" s=
+tyle=3D"margin: 0px !important;"><td style=3D"padding-top:0px" class=3D""><=
+table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border=
+-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" =
+style=3D"margin: 0px !important;"><td class=3D"outlook-row-container bottom=
+_2_1 left_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 16px; padding-lef=
+t: 48px; padding-right: 48px; padding-top: 16px;"><table cellpadding=3D"0" =
+class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" r=
+ole=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !im=
+portant;"><td valign=3D"top" width=3D"70%" class=3D""><table cellpadding=3D=
+"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100=
+%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px=
+ !important;"><td class=3D""><p class=3D"regular book" style=3D"font-size: =
+18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sa=
+ns-serif; margin: 0 !important; font-weight: 400 !important;">Host service =
+fee (3.0% + VAT)</p></td></tr></tbody></table></td><td valign=3D"top" class=
+=3D"left_2_1" style=3D"padding-left: 16px;"><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D"right" style=3D"text-align: right !important;" align=3D=
+"right !important"><p class=3D"regular book" style=3D"font-size: 18px; line=
+-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; =
+margin: 0 !important; font-weight: 400 !important;">-$281.57</p></td></tr><=
+/tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></t=
+r></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-colla=
+pse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr =
+class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-t=
+op:0px" class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-coll=
+apse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr=
+ class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D"outlook-=
+row-container bottom_2_1 left_6_2 right_6_2 top_2_1" style=3D"padding-botto=
+m: 16px; padding-left: 48px; padding-right: 48px; padding-top: 16px;"><tabl=
+e cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spa=
+cing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" styl=
+e=3D"margin: 0px !important;"><td valign=3D"top" width=3D"70%" class=3D""><=
+table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border=
+-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" =
+style=3D"margin: 0px !important;"><td class=3D""><p class=3D"regular book" =
+style=3D"font-size: 18px; line-height: 28px; font-family: Cereal, Helvetica=
+ Neue, Helvetica, sans-serif; margin: 0 !important; font-weight: 400 !impor=
+tant;">Remitted occupancy tax</p></td></tr></tbody></table></td><td valign=
+=3D"top" class=3D"left_2_1" style=3D"padding-left: 16px;"><table cellpaddin=
+g=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width=
+:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin:=
+ 0px !important;"><td class=3D"right" style=3D"text-align: right !important=
+;" align=3D"right !important"><p class=3D"regular book" style=3D"font-size:=
+ 18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica, s=
+ans-serif; margin: 0 !important; font-weight: 400 !important;">$1,294.56</p=
+></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></ta=
+ble></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"=
+border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"=
+><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=
+=3D"padding-left: 48px; padding-right: 48px; padding-top: 24px; padding-bot=
+tom: 24px;" class=3D"outlook-row-container bottom_2_1 left_6_2 right_6_2 to=
+p_3_2"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collaps=
+e;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_1=
+6pg94n" style=3D"margin: 0px !important;"><td valign=3D"top" width=3D"70%" =
+class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:col=
+lapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=
+=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><div><h3 cla=
+ss=3D"heading3" style=3D"font-size: 18px; line-height: 22px; color: #222222=
+; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; font-weight: =
+800; margin: 0;">You earn</h3></div></td></tr></tbody></table></td><td vali=
+gn=3D"top" class=3D"left_2_1" style=3D"padding-left: 16px;"><table cellpadd=
+ing=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wid=
+th:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margi=
+n: 0px !important;"><td class=3D"right" style=3D"text-align: right !importa=
+nt;" align=3D"right !important"><div><h3 class=3D"right heading3" style=3D"=
+font-size: 18px; line-height: 22px; color: #222222; font-family: Cereal, He=
+lvetica Neue, Helvetica, sans-serif; font-weight: 800; margin: 0; text-alig=
+n: right !important;">$9,103.99</h3></div></td></tr></tbody></table></td></=
+tr></tbody></table></td></tr></tbody></table><table cellpadding=3D"0" class=
+=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td style=3D"padding-left: 48px; padding-right: 48px; padding-top: 0=
+px;" class=3D"outlook-row-container left_6_2 right_6_2"><table width=3D"100=
+%" class=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=3D"pre=
+sentation"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !import=
+ant; border-top: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"sepa=
+rator"></td></tr></tbody></table></td></tr></tbody></table><table cellpaddi=
+ng=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;widt=
+h:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin=
+: 0px !important;"><td style=3D"padding-left: 48px; padding-right: 48px; pa=
+dding-top: 24px;" class=3D"outlook-row-container left_6_2 right_6_2"><table=
+ cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spac=
+ing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=
+=3D"margin: 0px !important;"><td class=3D""><div class=3D"regular book" sty=
+le=3D"font-size: 18px; line-height: 28px; margin: 0; font-weight: 400 !impo=
+rtant;"><p class=3D"regular book" style=3D"font-size: 18px; line-height: 28=
+px; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !=
+important; font-weight: 400 !important;">The money you earn hosting will be=
+ sent to you 24 hours after your guest arrives.  You can check your upcomin=
+g payments in your <a href=3D"https://www.airbnb.com/users/transaction_hist=
+ory" style=3D"color: #222222; font-family: Cereal, Helvetica Neue, Helvetic=
+a; font-weight: 700;">Transaction History</a>.</p></div></td></tr></tbody><=
+/table></td></tr></tbody></table><table cellpadding=3D"0" class=3D"mobile-v=
+iew" style=3D"display: none; border-collapse: collapse; border-spacing: 0; =
+width: 100%;" role=3D"presentation" width=3D"100%"><tbody><tr class=3D"_16p=
+g94n" style=3D"margin: 0px !important;"><td style=3D"padding-top:24px" clas=
+s=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collaps=
+e;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_1=
+6pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-left: 48px; =
+padding-right: 48px; padding-top: 0px;" class=3D"outlook-row-container left=
+_6_2 right_6_2"><table width=3D"100%" class=3D"_1xb19es" style=3D"border-sp=
+acing: 0px !important;" role=3D"presentation"><tbody><tr><td class=3D"_1rd2=
+b9oa" style=3D"padding: 0px !important; border-top: 1px solid #DDDDDD !impo=
+rtant;" width=3D"100%" role=3D"separator"></td></tr></tbody></table></td></=
+tr></tbody></table></td></tr></tbody></table><table cellpadding=3D"0" class=
+=3D"desktop-view" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td style=3D"padding-top:24px" class=3D""><table cellpaddi=
+ng=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;widt=
+h:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin=
+: 0px !important;"><td style=3D"padding-left: 48px; padding-right: 48px; pa=
+dding-top: 0px;" class=3D"outlook-row-container left_6_2 right_6_2"><table =
+width=3D"100%" class=3D"_1xb19es" style=3D"border-spacing: 0px !important;"=
+ role=3D"presentation"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding:=
+ 0px !important; border-top: 1px solid #DDDDDD !important;" width=3D"100%" =
+role=3D"separator"></td></tr></tbody></table></td></tr></tbody></table></td=
+></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-c=
+ollapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody>=
+<tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"paddi=
+ng-left: 48px; padding-right: 48px; padding-top: 24px;" class=3D"outlook-ro=
+w-container left_6_2 right_6_2"><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td cl=
+ass=3D""><div class=3D"regular book" style=3D"font-size: 18px; line-height:=
+ 28px; margin: 0; font-weight: 400 !important;"><p class=3D"regular book" s=
+tyle=3D"font-size: 18px; line-height: 28px; font-family: Cereal, Helvetica =
+Neue, Helvetica, sans-serif; margin: 0 !important; font-weight: 400 !import=
+ant;">Your guest paid $1,780.02 in Occupancy Taxes. Airbnb remits these tax=
+es on your behalf.</p></div></td></tr></tbody></table></td></tr></tbody></t=
+able><table cellpadding=3D"0" class=3D"mobile-view" style=3D"display: none;=
+ border-collapse: collapse; border-spacing: 0; width: 100%;" role=3D"presen=
+tation" width=3D"100%"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !=
+important;"><td style=3D"padding-top:24px" class=3D""><table cellpadding=3D=
+"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100=
+%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px=
+ !important;"><td style=3D"padding-left: 48px; padding-right: 48px; padding=
+-top: 0px;" class=3D"outlook-row-container left_6_2 right_6_2"><table width=
+=3D"100%" class=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=
+=3D"presentation"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px =
+!important; border-top: 1px solid #DDDDDD !important;" width=3D"100%" role=
+=3D"separator"></td></tr></tbody></table></td></tr></tbody></table></td></t=
+r></tbody></table><table cellpadding=3D"0" class=3D"desktop-view" style=3D"=
+border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"=
+><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=
+=3D"padding-top:24px" class=3D""><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td st=
+yle=3D"padding-left: 48px; padding-right: 48px; padding-top: 0px;" class=3D=
+"outlook-row-container left_6_2 right_6_2"><table width=3D"100%" class=3D"_=
+1xb19es" style=3D"border-spacing: 0px !important;" role=3D"presentation"><t=
+body><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; border-t=
+op: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"separator"></td><=
+/tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><ta=
+ble cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-s=
+pacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" st=
+yle=3D"margin: 0px !important;"><td style=3D"padding-left: 48px; padding-ri=
+ght: 48px; padding-bottom: 24px; padding-top: 24px;" class=3D"outlook-row-c=
+ontainer left_6_2 right_6_2"><table cellpadding=3D"0" class=3D"" style=3D"b=
+order-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation">=
+<tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=
+=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse=
+;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16=
+pg94n" style=3D"margin: 0px !important;"><td class=3D""><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td style=3D"padding-bottom:8px" class=3D""><div><h2 role=
+=3D"heading" aria-level=3D"2" class=3D"heading2" style=3D"font-size: 22px; =
+line-height: 26px; color: #222222; font-family: Cereal, Helvetica Neue, Hel=
+vetica, sans-serif; font-weight: 800; margin: 0;">Cancellations</h2></div><=
+/td></tr></tbody></table></td></tr><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td st=
+yle=3D"padding-bottom:8px" class=3D""><div class=3D"regular book" style=3D"=
+font-size: 18px; line-height: 28px; margin: 0; font-weight: 400 !important;=
+"><p class=3D"regular book" style=3D"font-size: 18px; line-height: 28px; fo=
+nt-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !import=
+ant; font-weight: 400 !important;">Your cancellation policy for guests is <=
+a href=3D"https://www.airbnb.com/help/article/149" style=3D"color: #222222;=
+ font-family: Cereal, Helvetica Neue, Helvetica; font-weight: 700;">Strict<=
+/a>.<br><br>The penalties for cancelling this reservation include getting a=
+ public review that shows you cancelled, paying a cancellation fee and havi=
+ng the cancelled nights blocked on your calendar.</p></div></td></tr></tbod=
+y></table></td></tr><tr valign=3D"top" class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td class=3D""></td></tr><tr class=3D"_16pg94n" style=3D"m=
+argin: 0px !important;"><td colspan=3D"2" class=3D""><a target=3D"_self" re=
+l=3D"noreferrer" data-eon-role=3D"link" data-eon-prop=3D"href" href=3D"http=
+s://www.airbnb.co.uk/help/article/990?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb=
+24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf=
+-79ae-8cb6d241c025" class=3D"regular underline" style=3D"font-family: Cerea=
+l, Helvetica Neue, Helvetica; font-size: 18px; line-height: 28px; font-weig=
+ht: 800; color: #222222; text-decoration: underline !important;">Read cance=
+llation penalties</a></td></tr></tbody></table></td></tr></tbody></table></=
+td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border=
+-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbod=
+y><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"pad=
+ding-left: 48px; padding-right: 48px; padding-top: 0px;" class=3D"outlook-r=
+ow-container left_6_2 right_6_2"><table width=3D"100%" class=3D"_1xb19es" s=
+tyle=3D"border-spacing: 0px !important;" role=3D"presentation"><tbody><tr><=
+td class=3D"_1rd2b9oa" style=3D"padding: 0px !important; border-top: 1px so=
+lid #DDDDDD !important;" width=3D"100%" role=3D"separator"></td></tr></tbod=
+y></table></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" sty=
+le=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"present=
+ation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td =
+style=3D"padding-left: 48px; padding-right: 48px; padding-top: 24px;" class=
+=3D"outlook-row-container left_6_2 right_6_2"><table cellpadding=3D"0" clas=
+s=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td class=3D""><div><h2 class=3D"heading2" style=3D"font-size: 22px;=
+ line-height: 26px; color: #222222; font-family: Cereal, Helvetica Neue, He=
+lvetica, sans-serif; font-weight: 800; margin: 0;">Get ready for Laura Juli=
+ana=E2=80=99s arrival</h2></div></td></tr></tbody></table></td></tr></tbody=
+></table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:colla=
+pse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"=
+_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-bottom:0px=
+" class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:c=
+ollapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=
+=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D"outlook-row-co=
+ntainer bottom_1_1 left_6_2 right_6_2 top_2_1" style=3D"padding-bottom: 8px=
+; padding-left: 48px; padding-right: 48px; padding-top: 16px;"><table cellp=
+adding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;=
+width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"ma=
+rgin: 0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D"" s=
+tyle=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"prese=
+ntation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><t=
+d class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:c=
+ollapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=
+=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-bottom=
+:8px" class=3D""><div><h3 role=3D"heading" aria-level=3D"3" class=3D"headin=
+g3" style=3D"font-size: 18px; line-height: 22px; color: #222222; font-famil=
+y: Cereal, Helvetica Neue, Helvetica, sans-serif; font-weight: 800; margin:=
+ 0;">Review the COVID-19 safety practices</h3></div></td></tr></tbody></tab=
+le></td></tr><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td c=
+lass=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:coll=
+apse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D=
+"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-bottom:8p=
+x" class=3D""><div class=3D"regular book" style=3D"font-size: 18px; line-he=
+ight: 28px; margin: 0; font-weight: 400 !important;"><p class=3D"regular bo=
+ok" style=3D"font-size: 18px; line-height: 28px; font-family: Cereal, Helve=
+tica Neue, Helvetica, sans-serif; margin: 0 !important; font-weight: 400 !i=
+mportant;">We=E2=80=99ve created a set of mandatory COVID-19 safety practic=
+es for both Airbnb hosts and guests. These include practising social distan=
+cing and wearing a mask.</p></div></td></tr></tbody></table></td></tr><tr v=
+align=3D"top" class=3D"_16pg94n" style=3D"margin: 0px !important;"><td clas=
+s=3D""></td></tr><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><=
+td colspan=3D"2" class=3D""><a target=3D"_self" rel=3D"noreferrer" data-eon=
+-role=3D"link" data-eon-prop=3D"href" href=3D"https://www.airbnb.co.uk/help=
+/article/2839?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zd=
+F9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025" clas=
+s=3D"regular underline display-block" style=3D"font-family: Cereal, Helveti=
+ca Neue, Helvetica; font-size: 18px; line-height: 28px; font-weight: 800; c=
+olor: #222222; display: block !important; text-decoration: underline !impor=
+tant;">Review practices</a></td></tr></tbody></table></td></tr></tbody></ta=
+ble></td></tr></tbody></table></td></tr></tbody></table><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td style=3D"padding-bottom:0px" class=3D""><table cellpad=
+ding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wi=
+dth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"marg=
+in: 0px !important;"><td class=3D"outlook-row-container bottom_1_1 left_6_2=
+ right_6_2 top_1_0" style=3D"padding-bottom: 8px; padding-left: 48px; paddi=
+ng-right: 48px; padding-top: 8px;"><table cellpadding=3D"0" class=3D"" styl=
+e=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presenta=
+tion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td c=
+lass=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:coll=
+apse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D=
+"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><table cellpadd=
+ing=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wid=
+th:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margi=
+n: 0px !important;"><td style=3D"padding-bottom:8px" class=3D""><div><h3 ro=
+le=3D"heading" aria-level=3D"3" class=3D"heading3" style=3D"font-size: 18px=
+; line-height: 22px; color: #222222; font-family: Cereal, Helvetica Neue, H=
+elvetica, sans-serif; font-weight: 800; margin: 0;">Follow the 5-step enhan=
+ced cleaning process</h3></div></td></tr></tbody></table></td></tr><tr clas=
+s=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><table cell=
+padding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0=
+;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"m=
+argin: 0px !important;"><td style=3D"padding-bottom:8px" class=3D""><div cl=
+ass=3D"regular book" style=3D"font-size: 18px; line-height: 28px; margin: 0=
+; font-weight: 400 !important;"><p class=3D"regular book" style=3D"font-siz=
+e: 18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helvetica,=
+ sans-serif; margin: 0 !important; font-weight: 400 !important;">All hosts =
+are required to follow the enhanced cleaning process between guest stays. T=
+hey were developed in partnership with experts in an effort to curb the spr=
+ead of COVID-19.</p></div></td></tr></tbody></table></td></tr><tr valign=3D=
+"top" class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><=
+/td></tr><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td colsp=
+an=3D"2" class=3D""><a target=3D"_self" rel=3D"noreferrer" data-eon-role=3D=
+"link" data-eon-prop=3D"href" href=3D"https://www.airbnb.co.uk/help/article=
+/2809?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25ma=
+XJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025" class=3D"reg=
+ular underline display-block" style=3D"font-family: Cereal, Helvetica Neue,=
+ Helvetica; font-size: 18px; line-height: 28px; font-weight: 800; color: #2=
+22222; display: block !important; text-decoration: underline !important;">R=
+eview process</a></td></tr></tbody></table></td></tr></tbody></table></td><=
+/tr></tbody></table></td></tr></tbody></table><table cellpadding=3D"0" clas=
+s=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td style=3D"padding-bottom:24px" class=3D""><table cellpadding=3D"0=
+" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%"=
+ role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !=
+important;"><td class=3D"outlook-row-container bottom_0_0 left_6_2 right_6_=
+2 top_1_0" style=3D"padding-left: 48px; padding-right: 48px; padding-top: 8=
+px;"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;=
+border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16p=
+g94n" style=3D"margin: 0px !important;"><td class=3D""><table cellpadding=
+=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:=
+100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: =
+0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td st=
+yle=3D"padding-bottom:8px" class=3D""><div><h3 role=3D"heading" aria-level=
+=3D"3" class=3D"heading3" style=3D"font-size: 18px; line-height: 22px; colo=
+r: #222222; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; fon=
+t-weight: 800; margin: 0;">Provide directions</h3></div></td></tr></tbody><=
+/table></td></tr><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><=
+td class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:=
+collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr clas=
+s=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-botto=
+m:8px" class=3D""><div class=3D"regular book" style=3D"font-size: 18px; lin=
+e-height: 28px; margin: 0; font-weight: 400 !important;"><p class=3D"regula=
+r book" style=3D"font-size: 18px; line-height: 28px; font-family: Cereal, H=
+elvetica Neue, Helvetica, sans-serif; margin: 0 !important; font-weight: 40=
+0 !important;">Check that your guest knows how to get to your place.</p></d=
+iv></td></tr></tbody></table></td></tr><tr valign=3D"top" class=3D"_16pg94n=
+" style=3D"margin: 0px !important;"><td class=3D""></td></tr><tr class=3D"_=
+16pg94n" style=3D"margin: 0px !important;"><td colspan=3D"2" class=3D""><a =
+target=3D"_self" rel=3D"noreferrer" data-eon-role=3D"link" data-eon-prop=3D=
+"href" href=3D"https://www.airbnb.co.uk/hosting/thread/2198502050?c=3D.pi80=
+.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&a=
+mp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025&amp;thread_type=3Dhome_booki=
+ng" class=3D"regular underline display-block" style=3D"font-family: Cereal,=
+ Helvetica Neue, Helvetica; font-size: 18px; line-height: 28px; font-weight=
+: 800; color: #222222; display: block !important; text-decoration: underlin=
+e !important;">Send message</a></td></tr></tbody></table></td></tr></tbody>=
+</table></td></tr></tbody></table></td></tr></tbody></table><table cellpadd=
+ing=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wid=
+th:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margi=
+n: 0px !important;"><td style=3D"padding-left: 48px; padding-right: 48px; p=
+adding-top: 0px;" class=3D"outlook-row-container left_6_2 right_6_2"><table=
+ width=3D"100%" class=3D"_1xb19es" style=3D"border-spacing: 0px !important;=
+" role=3D"presentation"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding=
+: 0px !important; border-top: 1px solid #DDDDDD !important;" width=3D"100%"=
+ role=3D"separator"></td></tr></tbody></table></td></tr></tbody></table><ta=
+ble cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-s=
+pacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" st=
+yle=3D"margin: 0px !important;"><td style=3D"padding-left: 48px; padding-ri=
+ght: 48px; padding-top: 24px;" class=3D"outlook-row-container left_6_2 righ=
+t_6_2"><img src=3D"https://a0.muscache.com/im/pictures/a6482f81-2fc0-4b92-a=
+b35-cf25602f115c.jpg" alt=3D"AirCover for Hosts" height=3D"48" style=3D"bor=
+der: 0 !important;"></td></tr></tbody></table><table cellpadding=3D"0" clas=
+s=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=
+=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !impor=
+tant;"><td style=3D"padding-left: 48px; padding-right: 48px; padding-bottom=
+: 24px; padding-top: 16px;" class=3D"outlook-row-container left_6_2 right_6=
+_2"><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;b=
+order-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg=
+94n" style=3D"margin: 0px !important;"><td class=3D""><table cellpadding=3D=
+"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100=
+%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px=
+ !important;"><td class=3D""></td></tr><tr class=3D"_16pg94n" style=3D"marg=
+in: 0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D"" sty=
+le=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"present=
+ation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td =
+style=3D"padding-bottom:8px" class=3D""><div class=3D"regular book" style=
+=3D"font-size: 18px; line-height: 28px; margin: 0; font-weight: 400 !import=
+ant;"><p class=3D"regular book" style=3D"font-size: 18px; line-height: 28px=
+; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif; margin: 0 !im=
+portant; font-weight: 400 !important;">Top-to-bottom protection, included e=
+very time you host.</p></div></td></tr></tbody></table></td></tr><tr class=
+=3D"_16pg94n" style=3D"margin: 0px !important;"><td colspan=3D"2" class=3D"=
+"><a target=3D"_self" rel=3D"noreferrer" data-eon-role=3D"link" data-eon-pr=
+op=3D"href" href=3D"https://www.airbnb.co.uk/help/article/3142/getting-prot=
+ected-through-aircover-for-hosts?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcm=
+VzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae=
+-8cb6d241c025&amp;email_cta=3D" class=3D"regular underline" style=3D"font-f=
+amily: Cereal, Helvetica Neue, Helvetica; font-size: 18px; line-height: 28p=
+x; font-weight: 800; color: #222222; text-decoration: underline !important;=
+">Learn more</a></td></tr></tbody></table></td></tr></tbody></table></td></=
+tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-coll=
+apse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr=
+ class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-=
+left: 48px; padding-right: 48px; padding-top: 0px;" class=3D"outlook-row-co=
+ntainer left_6_2 right_6_2"><table width=3D"100%" class=3D"_1xb19es" style=
+=3D"border-spacing: 0px !important;" role=3D"presentation"><tbody><tr><td c=
+lass=3D"_1rd2b9oa" style=3D"padding: 0px !important; border-top: 1px solid =
+#DDDDDD !important;" width=3D"100%" role=3D"separator"></td></tr></tbody></=
+table></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td st=
+yle=3D"padding-left: 48px; padding-right: 48px; padding-bottom: 24px; paddi=
+ng-top: 24px;" class=3D"outlook-row-container left_6_2 right_6_2"><table ce=
+llpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing=
+:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D=
+"margin: 0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D"=
+" style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pr=
+esentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"=
+><td class=3D""><table cellpadding=3D"0" class=3D"" style=3D"border-collaps=
+e:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr cl=
+ass=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padding-bot=
+tom:8px" class=3D""><div><h2 role=3D"heading" aria-level=3D"2" class=3D"hea=
+ding2" style=3D"font-size: 22px; line-height: 26px; color: #222222; font-fa=
+mily: Cereal, Helvetica Neue, Helvetica, sans-serif; font-weight: 800; marg=
+in: 0;">Customer support</h2></div></td></tr></tbody></table></td></tr><tr =
+class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><table =
+cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spaci=
+ng:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=
+=3D"margin: 0px !important;"><td style=3D"padding-bottom:8px" class=3D""><d=
+iv class=3D"regular book" style=3D"font-size: 18px; line-height: 28px; marg=
+in: 0; font-weight: 400 !important;"><p class=3D"regular book" style=3D"fon=
+t-size: 18px; line-height: 28px; font-family: Cereal, Helvetica Neue, Helve=
+tica, sans-serif; margin: 0 !important; font-weight: 400 !important;">Conta=
+ct our support team 24/7 from anywhere in the world.</p></div></td></tr></t=
+body></table></td></tr><tr valign=3D"top" class=3D"_16pg94n" style=3D"margi=
+n: 0px !important;"><td class=3D""></td></tr><tr class=3D"_16pg94n" style=
+=3D"margin: 0px !important;"><td colspan=3D"2" class=3D""><a target=3D"_sel=
+f" rel=3D"noreferrer" data-eon-role=3D"link" data-eon-prop=3D"href" href=3D=
+"https://www.airbnb.co.uk/help?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVz=
+ZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8=
+cb6d241c025" class=3D"regular underline" style=3D"font-family: Cereal, Helv=
+etica Neue, Helvetica; font-size: 18px; line-height: 28px; font-weight: 800=
+; color: #222222; text-decoration: underline !important;">Visit Help Centre=
+</a><a target=3D"_self" rel=3D"noreferrer" data-eon-role=3D"link" data-eon-=
+prop=3D"href" href=3D"https://www.airbnb.co.uk/help/contact_us?c=3D.pi80.pk=
+Ym9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;=
+euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025" class=3D"regular underline" st=
+yle=3D"font-family: Cereal, Helvetica Neue, Helvetica; font-size: 18px; lin=
+e-height: 28px; float: right; font-weight: 800; color: #222222; text-decora=
+tion: underline !important;">Contact Airbnb</a></td></tr></tbody></table></=
+td></tr></tbody></table></td></tr></tbody></table><table cellpadding=3D"0" =
+class=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" r=
+ole=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !im=
+portant;"><td style=3D"padding-left: 48px; padding-right: 48px; padding-top=
+: 0px;" class=3D"outlook-row-container left_6_2 right_6_2"><table width=3D"=
+100%" class=3D"_1xb19es" style=3D"border-spacing: 0px !important;" role=3D"=
+presentation"><tbody><tr><td class=3D"_1rd2b9oa" style=3D"padding: 0px !imp=
+ortant; border-top: 1px solid #DDDDDD !important;" width=3D"100%" role=3D"s=
+eparator"></td></tr></tbody></table></td></tr></tbody></table><table cellpa=
+dding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;w=
+idth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"mar=
+gin: 0px !important;"><td class=3D""><table cellpadding=3D"0" class=3D"" st=
+yle=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presen=
+tation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td=
+ class=3D"outlook-row-container left_6_2 right_6_2" style=3D"padding-left: =
+48px; padding-right: 48px;"><table cellpadding=3D"0" class=3D"" style=3D"bo=
+rder-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><=
+tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D=
+"bottom_4_3 top_4_3" style=3D"padding-bottom: 32px; padding-top: 32px;"><ta=
+ble cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-s=
+pacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" st=
+yle=3D"margin: 0px !important;"><td align=3D"left" width=3D"100%" class=3D"=
+"><img data-eon-role=3D"image" data-eon-prop=3D"src" alt=3D"Airbnb" src=3D"=
+https://a0.muscache.com/pictures/d5e805e2-dfa8-4a7d-b06f-c5910be9a725.jpg" =
+style=3D"height: 32px; width: 32px; border: 0 !important;" width=3D"32" hei=
+ght=3D"32"></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" st=
+yle=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presen=
+tation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td=
+ style=3D"padding-top:24px" class=3D""><table cellpadding=3D"0" class=3D"" =
+style=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"pres=
+entation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><=
+td class=3D""><p class=3D"_jmqnks" style=3D"color: #222222 !important; font=
+-family: Cereal, Helvetica Neue, Helvetica, sans-serif !important; font-siz=
+e: 14px !important; font-weight: 400 !important; line-height: 18px !importa=
+nt; margin: 0px !important;">Airbnb Ireland UC</p></td></tr></tbody></table=
+><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;bord=
+er-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n=
+" style=3D"margin: 0px !important;"><td class=3D""><p class=3D"_jmqnks" sty=
+le=3D"color: #222222 !important; font-family: Cereal, Helvetica Neue, Helve=
+tica, sans-serif !important; font-size: 14px !important; font-weight: 400 !=
+important; line-height: 18px !important; margin: 0px !important;">8 Hanover=
+ Quay</p></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" styl=
+e=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presenta=
+tion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td c=
+lass=3D""><p class=3D"_jmqnks" style=3D"color: #222222 !important; font-fam=
+ily: Cereal, Helvetica Neue, Helvetica, sans-serif !important; font-size: 1=
+4px !important; font-weight: 400 !important; line-height: 18px !important; =
+margin: 0px !important;">Dublin 2, Ireland</p></td></tr></tbody></table></t=
+d></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border-=
+collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody=
+><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td style=3D"padd=
+ing-top:8px" class=3D""><p class=3D"_jmqnks" style=3D"color: #222222 !impor=
+tant; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif !important=
+; font-size: 14px !important; font-weight: 400 !important; line-height: 18p=
+x !important; margin: 0px !important;">Payment Terms between you and:</p></=
+td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=3D"border=
+-collapse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbod=
+y><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><=
+p class=3D"_jmqnks" style=3D"color: #222222 !important; font-family: Cereal=
+, Helvetica Neue, Helvetica, sans-serif !important; font-size: 14px !import=
+ant; font-weight: 400 !important; line-height: 18px !important; margin: 0px=
+ !important;">Airbnb Payments UK Ltd.</p></td></tr></tbody></table><table c=
+ellpadding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacin=
+g:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=
+=3D"margin: 0px !important;"><td class=3D""><p class=3D"_jmqnks" style=3D"c=
+olor: #222222 !important; font-family: Cereal, Helvetica Neue, Helvetica, s=
+ans-serif !important; font-size: 14px !important; font-weight: 400 !importa=
+nt; line-height: 18px !important; margin: 0px !important;">Suite 1, 3rd Flo=
+or</p></td></tr></tbody></table><table cellpadding=3D"0" class=3D"" style=
+=3D"border-collapse:collapse;border-spacing:0;width:100%" role=3D"presentat=
+ion"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !important;"><td cl=
+ass=3D""><p class=3D"_jmqnks" style=3D"color: #222222 !important; font-fami=
+ly: Cereal, Helvetica Neue, Helvetica, sans-serif !important; font-size: 14=
+px !important; font-weight: 400 !important; line-height: 18px !important; m=
+argin: 0px !important;">11-12 St. James=E2=80=99s Square</p></td></tr></tbo=
+dy></table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:col=
+lapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=
+=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><p class=3D"=
+_jmqnks" style=3D"color: #222222 !important; font-family: Cereal, Helvetica=
+ Neue, Helvetica, sans-serif !important; font-size: 14px !important; font-w=
+eight: 400 !important; line-height: 18px !important; margin: 0px !important=
+;">London, SW1Y 4LB</p></td></tr></tbody></table><table cellpadding=3D"0" c=
+lass=3D"" style=3D"border-collapse:collapse;border-spacing:0;width:100%" ro=
+le=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin: 0px !imp=
+ortant;"><td class=3D""><p class=3D"_jmqnks" style=3D"color: #222222 !impor=
+tant; font-family: Cereal, Helvetica Neue, Helvetica, sans-serif !important=
+; font-size: 14px !important; font-weight: 400 !important; line-height: 18p=
+x !important; margin: 0px !important;">United Kingdom</p></td></tr></tbody>=
+</table><table cellpadding=3D"0" class=3D"" style=3D"border-collapse:collap=
+se;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr class=3D"_=
+16pg94n" style=3D"margin: 0px !important;"><td class=3D"top_4_3" style=3D"p=
+adding-top: 32px;"><table cellpadding=3D"0" class=3D"" style=3D"border-coll=
+apse:collapse;border-spacing:0;width:100%" role=3D"presentation"><tbody><tr=
+ class=3D"_16pg94n" style=3D"margin: 0px !important;"><td class=3D""><p cla=
+ss=3D"_1mzs5sdg" style=3D"color: #222222 !important; font-family: Cereal, H=
+elvetica Neue, Helvetica, sans-serif !important; font-size: 14px !important=
+; line-height: 18px !important; margin: 0px !important; font-weight: 800 !i=
+mportant;">Get the Airbnb app</p></td></tr></tbody></table><table cellpaddi=
+ng=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;widt=
+h:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"margin=
+: 0px !important;"><td style=3D"padding-top:16px" class=3D""><table cellpad=
+ding=3D"0" class=3D"" style=3D"border-collapse:collapse;border-spacing:0;wi=
+dth:100%" role=3D"presentation"><tbody><tr class=3D"_16pg94n" style=3D"marg=
+in: 0px !important;"><td style=3D"padding-left:0px" class=3D""><a target=3D=
+"_blank" rel=3D"noreferrer" aria-label=3D"App Store" data-eon-role=3D"link"=
+ data-eon-prop=3D"href" href=3D"https://www.airbnb.co.uk/external_link?c=3D=
+.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=
+=3D&amp;euid=3D4151e2be-ca84-49cf-79ae-8cb6d241c025&amp;url=3Dhttps%3A%2F%2=
+Fairbnb.sng.link%2FA6f9up%2Fdvs6%3F_smtype%3D3%26pcid%3D.pi80.pkYm9va2luZy9=
+2Ml9taWdyYXRpb24vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24%3D" class=3D"regul=
+ar underline" style=3D"font-family: Cereal, Helvetica Neue, Helvetica; font=
+-size: 18px; line-height: 28px; font-weight: 800; color: #222222; text-deco=
+ration: underline !important;"><img alt=3D"App Store" height=3D"40" src=3D"=
+https://a0.muscache.com/pictures/b34eaece-11bc-425b-956a-ee0fb1ab1501.jpg" =
+width=3D"119.66" style=3D"border: 0 !important;"></a></td><td style=3D"padd=
+ing-left:12px" class=3D""><a target=3D"_blank" rel=3D"noreferrer" aria-labe=
+l=3D"Google Play" data-eon-role=3D"link" data-eon-prop=3D"href" href=3D"htt=
+ps://www.airbnb.co.uk/external_link?c=3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24=
+vcmVzZXJ2YXRpb25faG9zdF9jb25maXJtYXRpb24=3D&amp;euid=3D4151e2be-ca84-49cf-7=
+9ae-8cb6d241c025&amp;url=3Dhttps%3A%2F%2Fairbnb.sng.link%2FA6f9up%2Fqh0lc%3=
+Fid%3Dcom.airbnb.android%26pcid%3D.pi80.pkYm9va2luZy92Ml9taWdyYXRpb24vcmVzZ=
+XJ2YXRpb25faG9zdF9jb25maXJtYXRpb24%3D" class=3D"regular underline" style=3D=
+"font-family: Cereal, Helvetica Neue, Helvetica; font-size: 18px; line-heig=
+ht: 28px; font-weight: 800; color: #222222; text-decoration: underline !imp=
+ortant;"><img alt=3D"Google Play" height=3D"40" src=3D"https://a0.muscache.=
+com/pictures/8c1b684f-e6ed-421d-9308-aa782c378d6e.jpg" width=3D"130" style=
+=3D"border: 0 !important;"></a></td><td width=3D"50%" class=3D""></td></tr>=
+</tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></=
+tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></di=
+v></td></tr></tbody></table></div></div><div style=3D"color:white;display:n=
+one !important;font:15px courier;line-height:0;white-space:nowrap">&nbsp; &=
+nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;=
+ &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbs=
+p; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;</div></body></html>=
+
+--82cec271fd462f77f53ea430351523648d2ef2e12d61cb3880b7bf8a28eb--

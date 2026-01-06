@@ -1,0 +1,80 @@
+{# templates/reports_v2/_header.html.twig #}
+<!DOCTYPE html>
+<html lang="{{ meta.language|default('en') }}">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin:0; padding:0; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color:#1f2937; }
+    .hdr-wrap {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 4pt 12pt 3pt 12pt; /* divider rendered separately below */
+      background: transparent;
+      border: 0 !important;             /* ensure no surrounding box */
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+    }
+    table.hdr { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table.hdr, table.hdr td, table.hdr tr {
+      border: 0;
+      background: transparent;
+    }
+    /* Final kill switch: no borders/outlines/shadows on header elements */
+    .pdf-header, .hdr-wrap, table.hdr, table.hdr * {
+      border: 0 !important;
+      outline: 0 !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+    img { border: 0; }
+    .td { vertical-align: middle; padding:0; }
+    .left  { text-align: left; }
+    .right { text-align: right; font-size: 9pt; color:#6b7280; white-space: nowrap; }
+    .logo  { height: 34pt; display:inline-block; }
+  </style>
+</head>
+<body>
+  <div class="hdr-wrap">
+    <table class="hdr">
+      <tr>
+        <td class="td left">
+          {% set _logo = absolute_url(asset(o2_logo_path|default('img/company-logo.png'))) %}
+          <img class="logo" src="{{ _logo }}" alt="Logo">
+        </td>
+        <td class="td right">
+          {# Language for header translations (header render often only has meta.*) #}
+          {% set _lang = (meta.language|default(null)) ? meta.language : (_lang|default('en')) %}
+
+          {% block pdf_header_title %}
+            {# Prefer explicit vars, but also support passing via meta (wkhtmltopdf header is rendered separately). #}
+            {% set _headerTitle = header_title|default(meta.header_title|default(null)) %}
+            {% set _titleDomain = header_title_domain|default(meta.header_title_domain|default(null)) %}
+
+            <span>
+              {# Title: allow per-report override via header_title (optionally translatable via header_title_domain) #}
+              {% if _headerTitle %}
+                {% if _titleDomain %}
+                  {{ _headerTitle|trans({}, _titleDomain, _lang) }}
+                {% else %}
+                  {{ _headerTitle }}
+                {% endif %}
+              {% else %}
+                {{ 'Monthly Report'|trans({}, 'unit_report', _lang) }}
+              {% endif %}
+
+              {# Optional suffixes #}
+              {% set _unitName = unit.unitName|default(unit.unit_name|default(unit.name|default(report.unitName|default(meta.unitName|default(header.unitName|default('')))))) %}
+              {% set _period   = header.ym|default(report.period|default(meta.period|default(''))) %}
+              {% if _unitName %} | {{ _unitName }}{% endif %}
+              {% if _period %} | {{ _period }}{% endif %}
+            </span>
+          {% endblock %}
+        </td>
+      </tr>
+    </table>
+    <div style="height:0;border-bottom:1px solid rgba(30,118,104,0.35);margin:0pt 12pt 0 12pt;"></div>
+  </div>
+</body>
+</html>

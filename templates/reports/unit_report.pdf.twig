@@ -1,0 +1,209 @@
+{% extends 'pdf/_base.html.twig' %}
+
+{# -------- Title -------- #}
+{% block pdf_title %}
+  {{ 'Owner Report'|trans({}, 'reports', app.request.locale|default('en')) }}
+  · {{ unit.listingName|default(unit.unitName|default('Unit')) }}
+  · {{ period|default(ym|default('')) }}
+{% endblock %}
+
+{# -------- Header Right (editable) -------- #}
+{% block pdf_header_right %}
+  {% set _period = periodLabel|default(period|default(ym|default(''))) %}
+  {% set _status = report.status|default(meta.status|default('')) %}
+  <span>
+    {{ _period }}{% if _status %} · {{ _status }}{% endif %}
+  </span>
+{% endblock %}
+
+{# -------- Body -------- #}
+{% block pdf_content %}
+
+  {% set _lang = meta.language|default(app.request.locale|default('en')) %}
+  {% set _dec = (_lang starts with 'es') ? ',' : '.' %}
+  {% set _th  = (_lang starts with 'es') ? '.' : ',' %}
+
+  {# Summary #}
+  <div class="boxed-section">
+    <h2>{{ 'Summary'|trans({}, 'reports', _lang) }}</h2>
+
+    <div class="grid-2">
+      <div class="grid-2__col">
+        <table class="summary-table no-border">
+          <tbody>
+            <tr>
+              <td class="label">{{ 'Client'|trans({}, 'reports', _lang) }}</td>
+              <td class="value">{{ client.name|default('') }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Email'|trans({}, 'reports', _lang) }}</td>
+              <td class="value">{{ client.email|default('') }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Bank'|trans({}, 'reports', _lang) }}</td>
+              <td class="value">{{ client.bank|default('') }}</td>
+            </tr>
+            <tr>
+              <td class="label">CLABE</td>
+              <td class="value">{{ client.clabe|default('') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2__col">
+        <table class="summary-table no-border">
+          <tbody>
+            <tr>
+              <td class="label">{{ 'Bookings total'|trans({}, 'reports', _lang) }}</td>
+              <td class="value num">{{ (totals.payoutReservas|default(totals.bookings|default(0)))|number_format(2, _dec, _th) }}</td>
+            </tr>
+            <tr>
+              <td class="label">O2</td>
+              <td class="value num">{{ (totals.o2Commission|default(0))|number_format(2, _dec, _th) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Total Expenses'|trans({}, 'reports', _lang) }}</td>
+              <td class="value num">{{ (totals.gastosTotalClient|default(totals.expenses|default(0)))|number_format(2, _dec, _th) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Total Credits'|trans({}, 'reports', _lang) }}</td>
+              <td class="value num">{{ (totals.abonosTotalClient|default(totals.credits|default(0)))|number_format(2, _dec, _th) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Month Result'|trans({}, 'reports', _lang) }}</td>
+              <td class="value num">{{ (totals.monthlyEarnings|default(totals.result|default(0)))|number_format(2, _dec, _th) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Opening Balance'|trans({}, 'reports', _lang) }}</td>
+              <td class="value num">{{ (totals.unitBalanceStart|default(meta.openingBalance|default(0)))|number_format(2, _dec, _th) }}</td>
+            </tr>
+            <tr>
+              <td class="label">{{ 'Closing Balance'|trans({}, 'reports', _lang) }}</td>
+              <td class="value num">{{ (totals.closingBalance|default(meta.closingBalance|default(0)))|number_format(2, _dec, _th) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# Bookings #}
+  {% set bookings = reservas|default(bookings|default([])) %}
+  {% if bookings %}
+    <div class="section">
+      <h2>{{ 'Bookings'|trans({}, 'reports', app.request.locale|default('en')) }}</h2>
+      <table class="table bordered">
+        <thead>
+          <tr>
+            <th style="width:18%">{{ 'Check-in'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:18%">{{ 'Check-out'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:24%">{{ 'Source'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:22%">{{ 'Nights'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:18%" class="num">{{ 'Total'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in bookings %}
+            <tr>
+              <td>{{ r.check_in|default(r.checkIn)|date('Y-m-d') }}</td>
+              <td>{{ r.check_out|default(r.checkOut)|date('Y-m-d') }}</td>
+              <td>{{ r.source|default(r.platform|default('')) }}</td>
+              <td class="num">{{ r.nights|default('') }}</td>
+              <td class="num">{{ (r.total|default(r.amount|default(0)))|number_format(2, '.', ',') }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {# Expenses & Credits #}
+  <div class="grid-2 section">
+    <div class="grid-2__col">
+      <h2>{{ 'Expenses'|trans({}, 'reports', app.request.locale|default('en')) }}</h2>
+      <table class="table bordered">
+        <thead>
+          <tr>
+            <th style="width:65%">{{ 'Description'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:35%" class="num">{{ 'Amount'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set expenses = gastos|default(expenses|default([])) %}
+          {% if expenses %}
+            {% for g in expenses %}
+              <tr>
+                <td>{{ g.description|default(g.desc|default('')) }}</td>
+                <td class="num">{{ (g.amount|default(g.total|default(0)))|number_format(2, '.', ',') }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="2" class="muted">{{ 'No expenses'|trans({}, 'reports', app.request.locale|default('en')) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid-2__col">
+      <h2>{{ 'Credits'|trans({}, 'reports', app.request.locale|default('en')) }}</h2>
+      <table class="table bordered">
+        <thead>
+          <tr>
+            <th style="width:65%">{{ 'Description'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:35%" class="num">{{ 'Amount'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set credits = abonos|default(credits|default([])) %}
+          {% if credits %}
+            {% for a in credits %}
+              <tr>
+                <td>{{ a.description|default(a.desc|default('')) }}</td>
+                <td class="num">{{ (a.amount|default(a.total|default(0)))|number_format(2, '.', ',') }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="2" class="muted">{{ 'No credits'|trans({}, 'reports', app.request.locale|default('en')) }}</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# Optional Notes / Housekeeping #}
+  {% if notes is defined and notes %}
+    <div class="section">
+      <h2>{{ 'Notes'|trans({}, 'reports', app.request.locale|default('en')) }}</h2>
+      <p>{{ notes }}</p>
+    </div>
+  {% endif %}
+
+  {% if housekeeping is defined and housekeeping %}
+    <div class="section">
+      <h2>{{ 'Housekeeping'|trans({}, 'reports', app.request.locale|default('en')) }}</h2>
+      <table class="table bordered">
+        <thead>
+          <tr>
+            <th style="width:70%">{{ 'Description'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+            <th style="width:30%" class="num">{{ 'Amount'|trans({}, 'reports', app.request.locale|default('en')) }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for hk in housekeeping %}
+            <tr>
+              <td>{{ hk.description|default('') }}</td>
+              <td class="num">{{ (hk.amount|default(0))|number_format(2, '.', ',') }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+{% endblock %}
+
+{# -------- Footer -------- #}
+{% block pdf_footer %}
+  {{ companyContacts|default('Owners2 · owners2.com · hola@owners2.com · +52 1 984 xxx xxxx') }}
+{% endblock %}
