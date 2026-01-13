@@ -106,6 +106,22 @@ class ReportController extends AbstractController
             $data['report']['period'] = $yearMonth;
         }
 
+        // Ensure language is present in a canonical location used by the Twig
+        // (Preview + Generate must produce identical payload semantics)
+        if (!isset($data['meta']) || !is_array($data['meta'])) { $data['meta'] = []; }
+        if (empty($data['meta']['language'])) {
+            $payloadLang = null;
+            if (!empty($data['language']) && is_string($data['language'])) {
+                $payloadLang = $data['language'];
+            } elseif (!empty($data['client']['language']) && is_string($data['client']['language'])) {
+                $payloadLang = $data['client']['language'];
+            } elseif (!empty($data['unit']['language']) && is_string($data['unit']['language'])) {
+                $payloadLang = $data['unit']['language'];
+            }
+            $data['meta']['language'] = strtolower((string)($payloadLang ?: 'es'));
+        } else {
+            $data['meta']['language'] = strtolower((string)$data['meta']['language']);
+        }
         return $data;
     }
 
@@ -343,6 +359,18 @@ SQL;
 
         // Build canonical payload (identical for Preview and Generate)
         $data = $this->buildCanonicalReportPayload($unitId, $yearMonth, $builder, $unitMonthly);
+        // Align Symfony locale/translator with the payload language (Twig |trans depends on this)
+        $lang = (string)($data['meta']['language'] ?? 'es');
+        if ($lang === '') { $lang = 'es'; }
+        $request->setLocale($lang);
+        try {
+            if ($this->container->has('translator')) {
+                $tr = $this->container->get('translator');
+                if (is_object($tr) && method_exists($tr, 'setLocale')) {
+                    $tr->setLocale($lang);
+                }
+            }
+        } catch (\Throwable $e) { /* ignore */ }
 
         // Render native header partial to a temp file (explicit V2 header)
         $headerPath = null;
@@ -876,6 +904,18 @@ SQL;
         try {
             // Single source of truth: build the exact same payload used by Preview
             $data = $this->buildCanonicalReportPayload($unitId, $yearMonth, $builder, $unitMonthly);
+            // Align Symfony locale/translator with the payload language (Twig |trans depends on this)
+            $lang = (string)($data['meta']['language'] ?? 'es');
+            if ($lang === '') { $lang = 'es'; }
+            $request->setLocale($lang);
+            try {
+                if ($this->container->has('translator')) {
+                    $tr = $this->container->get('translator');
+                    if (is_object($tr) && method_exists($tr, 'setLocale')) {
+                        $tr->setLocale($lang);
+                    }
+                }
+            } catch (\Throwable $e) { /* ignore */ }
 
             // Render native header partial to a temp file (explicit V2 header)
             $headerPath = null;
