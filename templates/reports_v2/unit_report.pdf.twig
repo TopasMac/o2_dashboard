@@ -375,7 +375,7 @@
   {% endif %}
   {% set _clientPrivateTotal = 0 %}
   {% for r in _rows_private %}
-    {% set _netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+    {% set _netPay = r.commissionBaseInMonth|default(r.commissionBase|default(r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))))) %}
     {% set _o2Amt = r.o2CommissionInMonth|default(0) %}
     {% set _clientPrivateTotal = _clientPrivateTotal + (_netPay - _o2Amt) %}
   {% endfor %}
@@ -632,7 +632,7 @@
                 {% set guest = (r.guest.firstName|default('')) ~ ' ' ~ (r.guest.lastName|default('')) %}
               {% endif %}
 
-              {% set netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+              {% set netPay = r.commissionBaseInMonth|default(r.commissionBase|default(r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))))) %}
               {% set o2Pct  = r.o2Percent|default( (r.o2CommissionInMonth is defined and r.commissionBaseInMonth is defined and r.commissionBaseInMonth != 0)
                             ? (100 * r.o2CommissionInMonth / r.commissionBaseInMonth) : null ) %}
               {% set o2Amt = r.o2CommissionInMonth|default(0) %}
@@ -703,7 +703,7 @@
                 {% set guest = (r.guest.firstName|default('')) ~ ' ' ~ (r.guest.lastName|default('')) %}
               {% endif %}
 
-              {% set netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+              {% set netPay = r.commissionBaseInMonth|default(r.commissionBase|default(r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))))) %}
               {% set o2Pct  = r.o2Percent|default( (r.o2CommissionInMonth is defined and r.commissionBaseInMonth is defined and r.commissionBaseInMonth != 0)
                             ? (100 * r.o2CommissionInMonth / r.commissionBaseInMonth) : null ) %}
               {% set o2Amt = r.o2CommissionInMonth|default(0) %}
@@ -787,7 +787,7 @@
                 {% set guest = (r.guest.firstName|default('')) ~ ' ' ~ (r.guest.lastName|default('')) %}
               {% endif %}
 
-              {% set netPay = r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))) %}
+              {% set netPay = r.commissionBaseInMonth|default(r.commissionBase|default(r.payoutInMonth|default(r.netPayoutInMonth|default(r.netPayout|default(0))))) %}
               {% set o2Pct  = r.o2Percent|default( (r.o2CommissionInMonth is defined and r.commissionBaseInMonth is defined and r.commissionBaseInMonth != 0)
                             ? (100 * r.o2CommissionInMonth / r.commissionBaseInMonth) : null ) %}
               {% set o2Amt = r.o2CommissionInMonth|default(0) %}
