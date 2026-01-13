@@ -831,14 +831,23 @@
           {# Prefer grouped data from the builder; fallback to flat list #}
           {% set _expCandidate = expenses|default(gastos|default([])) %}
           {% set expenses = _expCandidate.rows|default(_expCandidate|default([])) %}
-          {% set groups   = gastosGrouped|default(null) %}
+
+          {# Merge housekeeping rows into Expenses rendering (summary totals already include them) #}
+          {% set _hkCandidate = housekeeping|default([]) %}
+          {% set hkRows = _hkCandidate.rows|default(_hkCandidate|default([])) %}
+          {% if hkRows %}
+            {% set expenses = expenses|merge(hkRows) %}
+          {% endif %}
+
+          {# If we have housekeeping rows, force the fallback grouping to ensure they render #}
+          {% set groups = (hkRows and hkRows|length > 0) ? null : (gastosGrouped|default(null)) %}
 
           {% if groups is iterable and groups|length > 0 %}
             {# Builder provided grouped + sorted structure #}
             {% for grp in groups %}
               <tr class="group">
                 <td></td>
-                <td class="group-label">{{ grp.label|default('') }}</td>
+                <td class="group-label">{{ (grp.label|default(''))|trans({}, 'unit_report', _lang) }}</td>
                 <td></td>
               </tr>
               {% for g in grp.items|default([]) %}
@@ -857,30 +866,42 @@
             {% endfor %}
 
           {% elseif expenses %}
-            {# Fallback: legacy flat list with on-the-fly grouping #}
-            {% set current = null %}
+            {# Fallback: bucket rows by category so expenses + housekeeping share one label even if not contiguous #}
+            {% set buckets = {} %}
             {% for g in expenses %}
-              {# Allocation/category label (housekeeping rows use categoryName) #}
-              {% set cat = g.categoryName|default(g.allocation|default(g.category|default(g.cat|default(null)))) %}
-              {% if cat != current and cat %}
-                <tr class="group">
-                  <td></td>
-                  <td class="group-label">{{ cat }}</td>
-                  <td></td>
-                </tr>
-                {% set current = cat %}
+              {% set cat = g.categoryName|default(g.allocation|default(g.category|default(g.cat|default('Other')))) %}
+              {% if (cat is not defined) or (cat is null) or ((cat|trim) == '') %}
+                {% set cat = 'Other' %}
               {% endif %}
-              {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
-              {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
-              {% set gAmt  = g.amount is defined ? g.amount
-                : (g.charged is defined ? g.charged
-                  : (g.paid is defined ? g.paid
-                    : (g.total is defined ? g.total : 0))) %}
-              <tr>
-                <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
-                <td>{{ gDesc }}</td>
-                <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
+              {% set _existing = buckets[cat]|default([]) %}
+              {% set buckets = buckets|merge({ (cat): _existing|merge([g]) }) %}
+            {% endfor %}
+
+            {# Render categories A–Z, with Other last #}
+            {% set cats = buckets|keys|sort %}
+            {% if 'Other' in cats %}
+              {% set cats = cats|filter(c => c != 'Other')|merge(['Other']) %}
+            {% endif %}
+
+            {% for cat in cats %}
+              <tr class="group">
+                <td></td>
+                <td class="group-label">{{ cat|trans({}, 'unit_report', _lang) }}</td>
+                <td></td>
               </tr>
+              {% for g in buckets[cat]|default([]) %}
+                {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
+                {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
+                {% set gAmt  = g.amount is defined ? g.amount
+                  : (g.charged is defined ? g.charged
+                    : (g.paid is defined ? g.paid
+                      : (g.total is defined ? g.total : 0))) %}
+                <tr>
+                  <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
+                  <td>{{ gDesc }}</td>
+                  <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
+                </tr>
+              {% endfor %}
             {% endfor %}
 
           {% else %}
@@ -916,7 +937,7 @@
               {% if cat != currentCreditCat and cat %}
                 <tr class="group">
                   <td></td>
-                  <td class="group-label">{{ cat }}</td>
+                  <td class="group-label">{{ cat|trans({}, 'unit_report', _lang) }}</td>
                   <td></td>
                 </tr>
                 {% set currentCreditCat = cat %}
