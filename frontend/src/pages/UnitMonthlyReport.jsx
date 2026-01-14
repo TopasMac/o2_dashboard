@@ -540,6 +540,7 @@ export default function UnitMonthlyReport() {
           paymentType,
           bankAccount: hasBank,
           bankAccountRaw: bankResolved,
+          closingBalance: closing,
           order: !issued ? ['report'] : undefined,
         });
 
@@ -565,19 +566,28 @@ export default function UnitMonthlyReport() {
         }
       }
 
-      // Decide the order of steps per row based on closing balance
+      // Decide the order of steps per row based on closing balance.
+      // Rule:
+      // - If closingBalance is negative (client owes Owners2): report -> email -> pay
+      // - Otherwise: report -> pay -> email
+      // - If no bank on file and payment not yet done: report -> email (no pay step)
       setWorkflowCalcBusy(true);
       for (const row of rows) {
         if (!row.report) { row.order = ['report']; continue; }
-        if (!Array.isArray(row.order)) {
-          // We don't have per-row closing here anymore; infer from bank/pay/email only.
-          if (!row.bankAccount && !row.pay) {
-            row.order = ['report', 'email']; // no bank on file: go report -> email
-          } else {
-            // default: positive or unknown => report -> pay -> email
-            row.order = ['report', 'pay', 'email'];
-          }
+
+        const closing = Number.isFinite(Number(row.closingBalance)) ? Number(row.closingBalance) : null;
+
+        // If payment cannot be made (no bank and not already paid), keep pay step out.
+        if (!row.bankAccount && !row.pay) {
+          row.order = ['report', 'email'];
+          continue;
         }
+
+        // Base order depends on closing sign
+        row.order = (closing !== null && closing < 0)
+          ? ['report', 'email', 'pay']
+          : ['report', 'pay', 'email'];
+
         // Ensure 'pay' present when bank exists or already paid
         if ((row.bankAccount || row.pay) && !row.order.includes('pay')) {
           const idx = row.order.indexOf('email');
