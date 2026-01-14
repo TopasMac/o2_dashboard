@@ -341,13 +341,15 @@ export default function BookingEditFormRHF({
 
   const effectiveShouldDisableStartDate = useMemo(() => {
     if (typeof shouldDisableStartDate === 'function') return shouldDisableStartDate;
+    if (typeof wideAvail.shouldDisableStartDate === 'function') return (day) => wideAvail.shouldDisableStartDate(day);
     return effectiveShouldDisableDate;
-  }, [shouldDisableStartDate, effectiveShouldDisableDate]);
+  }, [shouldDisableStartDate, wideAvail, effectiveShouldDisableDate]);
 
   const effectiveShouldDisableEndDate = useMemo(() => {
     if (typeof shouldDisableEndDate === 'function') return shouldDisableEndDate;
+    if (typeof wideAvail.shouldDisableEndDate === 'function') return (day) => wideAvail.shouldDisableEndDate(day);
     return effectiveShouldDisableDate;
-  }, [shouldDisableEndDate, effectiveShouldDisableDate]);
+  }, [shouldDisableEndDate, wideAvail, effectiveShouldDisableDate]);
 
   const isMobileLayout = layout === 'mobile';
 

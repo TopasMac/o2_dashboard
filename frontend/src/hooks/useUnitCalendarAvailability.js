@@ -164,6 +164,66 @@ export default function useUnitCalendarAvailability({
     [unitId, unitCalendarEvents],
   );
 
+  /**
+   * shouldDisableStartDate (check-in)
+   *
+   * For check-in selection we allow choosing a date that equals an existing event's END date.
+   * So we treat hard blocks as [start, end) for disabling purposes.
+   */
+  const shouldDisableStartDate = useCallback(
+    (day) => {
+      if (!day || !unitId || !Array.isArray(unitCalendarEvents) || unitCalendarEvents.length === 0) {
+        return false;
+      }
+      const y = day.year();
+      const m = String(day.month() + 1).padStart(2, '0');
+      const d = String(day.date()).padStart(2, '0');
+      const ymd = `${y}-${m}-${d}`;
+
+      return unitCalendarEvents.some((ev) => {
+        if (!ev || !ev.type || ev.type === 'Available') return false;
+        if (!ev.start || !ev.end) return false;
+
+        const hard = ev.hardBlock === false ? false : true; // default hard if missing
+        if (!hard) return false;
+
+        // Disable if ymd is within [start, end) (end is allowed)
+        return ymd >= ev.start && ymd < ev.end;
+      });
+    },
+    [unitId, unitCalendarEvents],
+  );
+
+  /**
+   * shouldDisableEndDate (check-out)
+   *
+   * For check-out selection we allow choosing a date that equals an existing event's START date.
+   * So we treat hard blocks as (start, end] for disabling purposes.
+   */
+  const shouldDisableEndDate = useCallback(
+    (day) => {
+      if (!day || !unitId || !Array.isArray(unitCalendarEvents) || unitCalendarEvents.length === 0) {
+        return false;
+      }
+      const y = day.year();
+      const m = String(day.month() + 1).padStart(2, '0');
+      const d = String(day.date()).padStart(2, '0');
+      const ymd = `${y}-${m}-${d}`;
+
+      return unitCalendarEvents.some((ev) => {
+        if (!ev || !ev.type || ev.type === 'Available') return false;
+        if (!ev.start || !ev.end) return false;
+
+        const hard = ev.hardBlock === false ? false : true; // default hard if missing
+        if (!hard) return false;
+
+        // Disable if ymd is within (start, end] (start is allowed)
+        return ymd > ev.start && ymd <= ev.end;
+      });
+    },
+    [unitId, unitCalendarEvents],
+  );
+
   const refreshCalendar = useCallback(() => {
     // allow re-fetch even with same params
     lastKeyRef.current = '';
@@ -180,6 +240,8 @@ export default function useUnitCalendarAvailability({
     warningBreakdown,
 
     shouldDisableCalendarDate,
+    shouldDisableStartDate,
+    shouldDisableEndDate,
     refreshCalendar,
   };
 }
