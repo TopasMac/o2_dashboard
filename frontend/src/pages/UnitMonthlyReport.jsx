@@ -1938,14 +1938,20 @@ export default function UnitMonthlyReport() {
         <NotchedCard label="Reservas" sx={{ width: 'fit-content', maxWidth: '100%', mb: 2 }}>
           {(() => {
             const rows = Array.isArray(previewData?.bookings?.rows) ? previewData.bookings.rows : [];
-            const rowsFiltered = rows.filter((r) => {
-              const status = String(r?.status ?? '').trim().toLowerCase();
-              // Exclude any reservation whose status is "cancelled" (UK) or "canceled" (US)
-              return status !== 'cancelled' && status !== 'canceled';
-            });
 
-            // Always sort by check-in date (earliest first)
-            const sortedRows = rowsFiltered.slice().sort((a, b) => {
+            // Always sort by: non-cancelled bookings first, then by check-in date
+            const isCancelled = (r) => {
+              const s = String(r?.status || '').toLowerCase();
+              return s === 'cancelled' || s === 'canceled';
+            };
+            const sortedRows = rows.slice().sort((a, b) => {
+              const ac = isCancelled(a);
+              const bc = isCancelled(b);
+
+              // Non-cancelled bookings first
+              if (ac !== bc) return ac ? 1 : -1;
+
+              // Same cancellation status → sort by check-in date
               const ai = a.checkIn || a.check_in || a.checkin || null;
               const bi = b.checkIn || b.check_in || b.checkin || null;
               const ta = ai ? new Date(ai).getTime() : Number.POSITIVE_INFINITY;

@@ -219,42 +219,182 @@ FROM (
         GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
       )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
     )), 2) AS `payout_in_month`,
-    ROUND((ab.`tax_amount` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `tax_in_month`,
-    ROUND((ab.`net_payout` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `net_payout_in_month`,
-    ROUND((ab.`commission_base` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `commission_base_in_month`,
+    ROUND((
+      ROUND((ab.`payout` * (
+        GREATEST(0, DATEDIFF(
+          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      )), 2)
+      * (COALESCE(ab.`tax_percent`, 0) / 100)
+    ), 2) AS `tax_in_month`,
+    ROUND(
+      ROUND((ab.`payout` * (
+        GREATEST(0, DATEDIFF(
+          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      )), 2)
+      -
+      ROUND((
+        ROUND((ab.`payout` * (
+          GREATEST(0, DATEDIFF(
+            LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+            GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+          )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+        )), 2)
+        * (COALESCE(ab.`tax_percent`, 0) / 100)
+      ), 2)
+    , 2) AS `net_payout_in_month`,
+    ROUND(
+      (
+        ROUND(
+          ROUND((ab.`payout` * (
+            GREATEST(0, DATEDIFF(
+              LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+              GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+            )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+          )), 2)
+          -
+          ROUND((
+            ROUND((ab.`payout` * (
+              GREATEST(0, DATEDIFF(
+                LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+              )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+            )), 2)
+            * (COALESCE(ab.`tax_percent`, 0) / 100)
+          ), 2)
+        , 2)
+      )
+      -
+      (CASE
+        WHEN DAY(ab.`check_out`) = 1 THEN
+          (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+        ELSE
+          (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+      END)
+    , 2) AS `commission_base_in_month`,
     (CASE
       WHEN DAY(ab.`check_out`) = 1 THEN
         (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
       ELSE
         (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
     END) AS `cleaning_fee_in_month`,
-    ROUND((COALESCE(ab.`commission_value`, 0) * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `o2_commission_in_month`,
-    ROUND((COALESCE(ab.`client_income`, 0) * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `owner_payout_in_month`
+    ROUND(
+      (
+        ROUND(
+          (
+            ROUND(
+              (
+                ROUND(
+                  ROUND((ab.`payout` * (
+                    GREATEST(0, DATEDIFF(
+                      LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                      GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+                    )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                  )), 2)
+                  -
+                  ROUND((
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    * (COALESCE(ab.`tax_percent`, 0) / 100)
+                  ), 2)
+                , 2)
+              )
+              -
+              (CASE
+                WHEN DAY(ab.`check_out`) = 1 THEN
+                  (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                ELSE
+                  (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+              END)
+            , 2)
+          )
+          * (COALESCE(ab.`commission_percent`, 0) / 100)
+        , 2)
+      )
+    , 2) AS `o2_commission_in_month`,
+    ROUND(
+      (
+        ROUND(
+          (
+            ROUND(
+              (
+                ROUND(
+                  ROUND((ab.`payout` * (
+                    GREATEST(0, DATEDIFF(
+                      LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                      GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+                    )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                  )), 2)
+                  -
+                  ROUND((
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    * (COALESCE(ab.`tax_percent`, 0) / 100)
+                  ), 2)
+                , 2)
+              )
+              -
+              (CASE
+                WHEN DAY(ab.`check_out`) = 1 THEN
+                  (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                ELSE
+                  (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+              END)
+            , 2)
+          )
+        , 2)
+      )
+      -
+      ROUND(
+        (
+          ROUND(
+            (
+              ROUND(
+                (
+                  ROUND(
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    -
+                    ROUND((
+                      ROUND((ab.`payout` * (
+                        GREATEST(0, DATEDIFF(
+                          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
+                        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                      )), 2)
+                      * (COALESCE(ab.`tax_percent`, 0) / 100)
+                    ), 2)
+                  , 2)
+                )
+                -
+                (CASE
+                  WHEN DAY(ab.`check_out`) = 1 THEN
+                    (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                  ELSE
+                    (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = m.`ym` THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                END)
+              , 2)
+            )
+            * (COALESCE(ab.`commission_percent`, 0) / 100)
+          , 2)
+        )
+      , 2)
+    , 2) AS `owner_payout_in_month`
   FROM `owners2_dashboard`.`all_bookings` AS ab
   JOIN {$monthsTableSql}
     ON ab.`check_in` < DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)
@@ -395,24 +535,62 @@ FROM (
         GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
       )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
     )), 2) AS `payout_in_month`,
-    ROUND((ab.`tax_amount` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `tax_in_month`,
-    ROUND((ab.`net_payout` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `net_payout_in_month`,
-    ROUND((ab.`commission_base` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `commission_base_in_month`,
+    ROUND((
+      ROUND((ab.`payout` * (
+        GREATEST(0, DATEDIFF(
+          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      )), 2)
+      * (COALESCE(ab.`tax_percent`, 0) / 100)
+    ), 2) AS `tax_in_month`,
+    ROUND(
+      ROUND((ab.`payout` * (
+        GREATEST(0, DATEDIFF(
+          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      )), 2)
+      -
+      ROUND((
+        ROUND((ab.`payout` * (
+          GREATEST(0, DATEDIFF(
+            LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+            GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+          )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+        )), 2)
+        * (COALESCE(ab.`tax_percent`, 0) / 100)
+      ), 2)
+    , 2) AS `net_payout_in_month`,
+    ROUND(
+      (
+        ROUND(
+          ROUND((ab.`payout` * (
+            GREATEST(0, DATEDIFF(
+              LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+              GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+            )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+          )), 2)
+          -
+          ROUND((
+            ROUND((ab.`payout` * (
+              GREATEST(0, DATEDIFF(
+                LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+              )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+            )), 2)
+            * (COALESCE(ab.`tax_percent`, 0) / 100)
+          ), 2)
+        , 2)
+      )
+      -
+      (CASE
+        WHEN DAY(ab.`check_out`) = 1 THEN
+          (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+        ELSE
+          (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+      END)
+    , 2) AS `commission_base_in_month`,
 
     (CASE
       WHEN DAY(ab.`check_out`) = 1 THEN
@@ -421,18 +599,120 @@ FROM (
         (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
     END) AS `cleaning_fee_in_month`,
 
-    ROUND((COALESCE(ab.`commission_value`, 0) * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `o2_commission_in_month`,
-    ROUND((COALESCE(ab.`client_income`, 0) * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `owner_payout_in_month`
+    ROUND(
+      (
+        ROUND(
+          (
+            ROUND(
+              (
+                ROUND(
+                  ROUND((ab.`payout` * (
+                    GREATEST(0, DATEDIFF(
+                      LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                      GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                    )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                  )), 2)
+                  -
+                  ROUND((
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    * (COALESCE(ab.`tax_percent`, 0) / 100)
+                  ), 2)
+                , 2)
+              )
+              -
+              (CASE
+                WHEN DAY(ab.`check_out`) = 1 THEN
+                  (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                ELSE
+                  (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+              END)
+            , 2)
+          )
+          * (COALESCE(ab.`commission_percent`, 0) / 100)
+        , 2)
+      )
+    , 2) AS `o2_commission_in_month`,
+    ROUND(
+      (
+        ROUND(
+          (
+            ROUND(
+              (
+                ROUND(
+                  ROUND((ab.`payout` * (
+                    GREATEST(0, DATEDIFF(
+                      LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                      GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                    )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                  )), 2)
+                  -
+                  ROUND((
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    * (COALESCE(ab.`tax_percent`, 0) / 100)
+                  ), 2)
+                , 2)
+              )
+              -
+              (CASE
+                WHEN DAY(ab.`check_out`) = 1 THEN
+                  (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                ELSE
+                  (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+              END)
+            , 2)
+          )
+        , 2)
+      )
+      -
+      ROUND(
+        (
+          ROUND(
+            (
+              ROUND(
+                (
+                  ROUND(
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    -
+                    ROUND((
+                      ROUND((ab.`payout` * (
+                        GREATEST(0, DATEDIFF(
+                          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                      )), 2)
+                      * (COALESCE(ab.`tax_percent`, 0) / 100)
+                    ), 2)
+                  , 2)
+                )
+                -
+                (CASE
+                  WHEN DAY(ab.`check_out`) = 1 THEN
+                    (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                  ELSE
+                    (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                END)
+              , 2)
+            )
+            * (COALESCE(ab.`commission_percent`, 0) / 100)
+          , 2)
+        )
+      , 2)
+    , 2) AS `owner_payout_in_month`
 
   FROM `owners2_dashboard`.`all_bookings` AS ab
   WHERE (LOWER(ab.`status`) NOT IN ('cancelled','canceled') OR ab.`status` IS NULL)
@@ -577,38 +857,62 @@ FROM (
         GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
       )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
     )), 2) AS `payout_in_month`,
-    ROUND((ab.`tax_amount` * (
-      GREATEST(0, DATEDIFF(
-        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-    )), 2) AS `tax_in_month`,
+    ROUND((
+      ROUND((ab.`payout` * (
+        GREATEST(0, DATEDIFF(
+          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      )), 2)
+      * (COALESCE(ab.`tax_percent`, 0) / 100)
+    ), 2) AS `tax_in_month`,
     ROUND(
-      GREATEST(
-        0,
+      ROUND((ab.`payout` * (
+        GREATEST(0, DATEDIFF(
+          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      )), 2)
+      -
+      ROUND((
         ROUND((ab.`payout` * (
           GREATEST(0, DATEDIFF(
             LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
             GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
           )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
         )), 2)
-        -
-        ROUND((ab.`tax_amount` * (
-          GREATEST(0, DATEDIFF(
-            LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-            GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-          )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
-        )), 2)
-      )
+        * (COALESCE(ab.`tax_percent`, 0) / 100)
+      ), 2)
     , 2) AS `net_payout_in_month`,
-    ROUND((
-      ab.`commission_base` * (
-        GREATEST(0, DATEDIFF(
-          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+    ROUND(
+      (
+        ROUND(
+          ROUND((ab.`payout` * (
+            GREATEST(0, DATEDIFF(
+              LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+              GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+            )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+          )), 2)
+          -
+          ROUND((
+            ROUND((ab.`payout` * (
+              GREATEST(0, DATEDIFF(
+                LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+              )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+            )), 2)
+            * (COALESCE(ab.`tax_percent`, 0) / 100)
+          ), 2)
+        , 2)
       )
-    ), 2) AS `commission_base_in_month`,
+      -
+      (CASE
+        WHEN DAY(ab.`check_out`) = 1 THEN
+          (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+        ELSE
+          (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+      END)
+    , 2) AS `commission_base_in_month`,
     (CASE
       WHEN DAY(ab.`check_out`) = 1 THEN
         (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
@@ -616,20 +920,118 @@ FROM (
         (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
     END) AS `cleaning_fee_in_month`,
     ROUND(
-      COALESCE(ab.`commission_value`, 0) * (
-        GREATEST(0, DATEDIFF(
-          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      (
+        ROUND(
+          (
+            ROUND(
+              (
+                ROUND(
+                  ROUND((ab.`payout` * (
+                    GREATEST(0, DATEDIFF(
+                      LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                      GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                    )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                  )), 2)
+                  -
+                  ROUND((
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    * (COALESCE(ab.`tax_percent`, 0) / 100)
+                  ), 2)
+                , 2)
+              )
+              -
+              (CASE
+                WHEN DAY(ab.`check_out`) = 1 THEN
+                  (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                ELSE
+                  (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+              END)
+            , 2)
+          )
+          * (COALESCE(ab.`commission_percent`, 0) / 100)
+        , 2)
       )
     , 2) AS `o2_commission_in_month`,
     ROUND(
-      COALESCE(ab.`client_income`, 0) * (
-        GREATEST(0, DATEDIFF(
-          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
-          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
-        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+      (
+        ROUND(
+          (
+            ROUND(
+              (
+                ROUND(
+                  ROUND((ab.`payout` * (
+                    GREATEST(0, DATEDIFF(
+                      LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                      GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                    )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                  )), 2)
+                  -
+                  ROUND((
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    * (COALESCE(ab.`tax_percent`, 0) / 100)
+                  ), 2)
+                , 2)
+              )
+              -
+              (CASE
+                WHEN DAY(ab.`check_out`) = 1 THEN
+                  (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                ELSE
+                  (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+              END)
+            , 2)
+          )
+        , 2)
       )
+      -
+      ROUND(
+        (
+          ROUND(
+            (
+              ROUND(
+                (
+                  ROUND(
+                    ROUND((ab.`payout` * (
+                      GREATEST(0, DATEDIFF(
+                        LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                        GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                      )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                    )), 2)
+                    -
+                    ROUND((
+                      ROUND((ab.`payout` * (
+                        GREATEST(0, DATEDIFF(
+                          LEAST(ab.`check_out`, DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)),
+                          GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d'))
+                        )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
+                      )), 2)
+                      * (COALESCE(ab.`tax_percent`, 0) / 100)
+                    ), 2)
+                  , 2)
+                )
+                -
+                (CASE
+                  WHEN DAY(ab.`check_out`) = 1 THEN
+                    (CASE WHEN DATE_FORMAT(DATE_SUB(ab.`check_out`, INTERVAL 1 DAY), '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                  ELSE
+                    (CASE WHEN DATE_FORMAT(ab.`check_out`, '%Y-%m') = :ym THEN COALESCE(ab.`cleaning_fee`, 0) ELSE 0 END)
+                END)
+              , 2)
+            )
+            * (COALESCE(ab.`commission_percent`, 0) / 100)
+          , 2)
+        )
+      , 2)
     , 2) AS `owner_payout_in_month`
   FROM `owners2_dashboard`.`all_bookings` AS ab
   WHERE (LOWER(ab.`status`) NOT IN ('cancelled','canceled') OR ab.`status` IS NULL)
