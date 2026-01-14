@@ -261,6 +261,52 @@ SQL;
             }
         }
 
+        // --- Sort bookings rows for display ---
+        // Desired ordering:
+        // 1) Non-cancelled (past/ongoing/confirmed/etc.) sorted by check-in ASC
+        // 2) Cancelled rows at the bottom, also sorted by check-in ASC
+        $normalRows = [];
+        $cancelledRows = [];
+
+        foreach ($bookingsRows as $br) {
+            $st = strtoupper(trim((string)($br['status'] ?? '')));
+            if ($this->isCancelledStatus($st)) {
+                $cancelledRows[] = $br;
+            } else {
+                $normalRows[] = $br;
+            }
+        }
+
+        $sortByCheckInAsc = static function (array $a, array $b): int {
+            $ai = (string)($a['checkIn'] ?? '');
+            $bi = (string)($b['checkIn'] ?? '');
+
+            // Put empty dates last within each group
+            if ($ai === '' && $bi === '') {
+                return 0;
+            }
+            if ($ai === '') {
+                return 1;
+            }
+            if ($bi === '') {
+                return -1;
+            }
+
+            // Dates are YYYY-MM-DD so string compare works
+            if ($ai === $bi) {
+                // Stable-ish tie-breaker
+                $as = (int)($a['sliceId'] ?? 0);
+                $bs = (int)($b['sliceId'] ?? 0);
+                return $as <=> $bs;
+            }
+            return strcmp($ai, $bi);
+        };
+
+        usort($normalRows, $sortByCheckInAsc);
+        usort($cancelledRows, $sortByCheckInAsc);
+
+        $bookingsRows = array_merge($normalRows, $cancelledRows);
+
         $bookings = [
             'rows' => $bookingsRows,
             'totals' => $bookingsTotals,

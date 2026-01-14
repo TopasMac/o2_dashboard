@@ -869,12 +869,22 @@
             {# Fallback: bucket rows by category so expenses + housekeeping share one label even if not contiguous #}
             {% set buckets = {} %}
             {% for g in expenses %}
-              {% set cat = g.categoryName|default(g.allocation|default(g.category|default(g.cat|default('Other')))) %}
-              {% if (cat is not defined) or (cat is null) or ((cat|trim) == '') %}
-                {% set cat = 'Other' %}
+              {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
+              {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
+              {% set gAmt  = g.amount is defined ? g.amount
+                : (g.charged is defined ? g.charged
+                  : (g.paid is defined ? g.paid
+                    : (g.total is defined ? g.total : 0))) %}
+
+              {# Skip empty/dummy rows (same approach as Credits) #}
+              {% if not ((gDate is null) and ((gDesc|trim) == '') and (gAmt == 0)) %}
+                {% set cat = g.categoryName|default(g.allocation|default(g.category|default(g.cat|default('Other')))) %}
+                {% if (cat is not defined) or (cat is null) or ((cat|trim) == '') %}
+                  {% set cat = 'Other' %}
+                {% endif %}
+                {% set _existing = buckets[cat]|default([]) %}
+                {% set buckets = buckets|merge({ (cat): _existing|merge([g]) }) %}
               {% endif %}
-              {% set _existing = buckets[cat]|default([]) %}
-              {% set buckets = buckets|merge({ (cat): _existing|merge([g]) }) %}
             {% endfor %}
 
             {# Render categories A–Z, with Other last #}
@@ -883,26 +893,30 @@
               {% set cats = cats|filter(c => c != 'Other')|merge(['Other']) %}
             {% endif %}
 
-            {% for cat in cats %}
-              <tr class="group">
-                <td></td>
-                <td class="group-label">{{ cat|trans({}, 'unit_report', _lang) }}</td>
-                <td></td>
-              </tr>
-              {% for g in buckets[cat]|default([]) %}
-                {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
-                {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
-                {% set gAmt  = g.amount is defined ? g.amount
-                  : (g.charged is defined ? g.charged
-                    : (g.paid is defined ? g.paid
-                      : (g.total is defined ? g.total : 0))) %}
-                <tr>
-                  <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
-                  <td>{{ gDesc }}</td>
-                  <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
+            {% if cats|length == 0 %}
+              <tr><td colspan="3" class="muted">{{ 'No expenses to report'|trans({}, 'unit_report', _lang) }}</td></tr>
+            {% else %}
+              {% for cat in cats %}
+                <tr class="group">
+                  <td></td>
+                  <td class="group-label">{{ cat|trans({}, 'unit_report', _lang) }}</td>
+                  <td></td>
                 </tr>
+                {% for g in buckets[cat]|default([]) %}
+                  {% set gDate = (g.date is defined) ? g.date : ((g.when is defined) ? g.when : null) %}
+                  {% set gDesc = g.description is defined ? g.description : (g.desc is defined ? g.desc : (g.concept is defined ? g.concept : (g.name is defined ? g.name : ''))) %}
+                  {% set gAmt  = g.amount is defined ? g.amount
+                    : (g.charged is defined ? g.charged
+                      : (g.paid is defined ? g.paid
+                        : (g.total is defined ? g.total : 0))) %}
+                  <tr>
+                    <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
+                    <td>{{ gDesc }}</td>
+                    <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
+                  </tr>
+                {% endfor %}
               {% endfor %}
-            {% endfor %}
+            {% endif %}
 
           {% else %}
             <tr><td colspan="3" class="muted">{{ 'No expenses to report'|trans({}, 'unit_report', _lang) }}</td></tr>
