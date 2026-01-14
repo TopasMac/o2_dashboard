@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import O2ConfirmDialog from '../common/O2ConfirmDialog';
 import useUnitCalendarAvailability from '../../hooks/useUnitCalendarAvailability';
 import { Box, Stack, TextField, Autocomplete, Typography, Checkbox, FormControlLabel, InputAdornment, Button } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
@@ -57,10 +58,26 @@ const dmyToYMD = (v) => {
   const [dd, mm, yyyy] = parts;
   if (!dd || !mm || !yyyy) return '';
 
-  const D = String(dd).padStart(2, '0');
-  const M = String(mm).padStart(2, '0');
+  let D = String(dd).padStart(2, '0');
+  let M = String(mm).padStart(2, '0');
   const Y = String(yyyy);
   if (Y.length !== 4) return '';
+
+  // Robustness: if user input came in as MM/DD/YYYY (common on some keyboards/locales)
+  // then `mm` may be > 12. In that case swap day/month.
+  const di = Number(D);
+  const mi = Number(M);
+  if (Number.isFinite(di) && Number.isFinite(mi)) {
+    if (mi > 12 && di >= 1 && di <= 12) {
+      const tmp = D;
+      D = M;
+      M = tmp;
+    }
+    // Basic sanity check
+    const di2 = Number(D);
+    const mi2 = Number(M);
+    if (mi2 < 1 || mi2 > 12 || di2 < 1 || di2 > 31) return '';
+  }
 
   return `${Y}-${M}-${D}`;
 };
@@ -171,6 +188,10 @@ export default function BookingEditFormRHF({
 }) {
   const formSchema = useMemo(() => (schema ? schema.merge(BaseSchema) : BaseSchema), [schema]);
 
+  const originalRef = useRef({ checkIn: '', checkOut: '', payout: null });
+  const [payoutConfirmOpen, setPayoutConfirmOpen] = useState(false);
+  const [pendingSubmitValues, setPendingSubmitValues] = useState(null);
+
   const {
     control,
     handleSubmit,
@@ -237,11 +258,22 @@ export default function BookingEditFormRHF({
       source: iv.source ?? '',
     };
     reset(next);
+    originalRef.current = {
+      checkIn: dmyToYMD(next.checkIn),
+      checkOut: dmyToYMD(next.checkOut),
+      payout: parseCommaNumber(next.payout),
+    };
   }, [initialValues, reset]);
 
   // Resolve current unit object from unitId
   const unitId = watch('unitId');
-  const excludeBookingId = initialValues?.id ? Number(initialValues.id) : 0;
+  const formBookingId = watch('id');
+  const excludeBookingId = useMemo(() => {
+    const raw =
+      (initialValues?.id ?? initialValues?.bookingId ?? initialValues?.booking_id ?? formBookingId ?? 0);
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }, [initialValues?.id, initialValues?.bookingId, initialValues?.booking_id, formBookingId]);
   const source = watch('source');
   const currentUnitOption = useMemo(() => {
     const idNum = Number(unitId);
@@ -343,7 +375,7 @@ export default function BookingEditFormRHF({
     return lines;
   }, [warningBreakdown]);
 
-  const handleFormSubmit = async (values) => {
+  const doSubmit = async (values) => {
     try {
       // Strip UI-only artifacts if any; ensure numbers are numbers
       const payload = {
@@ -370,6 +402,31 @@ export default function BookingEditFormRHF({
       const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'Failed to update booking';
       toast.error(msg, { autoClose: 1000 });
     }
+  };
+
+  const handleFormSubmit = async (values) => {
+    // If dates changed but payout did not, require explicit confirmation.
+    const curCheckIn = dmyToYMD(values?.checkIn);
+    const curCheckOut = dmyToYMD(values?.checkOut);
+    const curPayout = parseCommaNumber(values?.payout);
+
+    const orig = originalRef.current || { checkIn: '', checkOut: '', payout: null };
+    const datesChanged = (curCheckIn && orig.checkIn && curCheckIn !== orig.checkIn)
+      || (curCheckOut && orig.checkOut && curCheckOut !== orig.checkOut);
+
+    // Only warn when original payout exists (numeric) and current payout is numerically equal.
+    const origPayout = (orig.payout == null ? null : Number(orig.payout));
+    const payoutUnchanged = (origPayout != null && Number.isFinite(origPayout) && curPayout != null && Number.isFinite(curPayout))
+      ? Math.abs(Number(curPayout) - origPayout) < 0.01
+      : false;
+
+    if (datesChanged && payoutUnchanged && !payoutConfirmOpen) {
+      setPendingSubmitValues(values);
+      setPayoutConfirmOpen(true);
+      return;
+    }
+
+    await doSubmit(values);
   };
 
   const fieldHidden = (name) => hiddenFields.includes(name);
@@ -676,6 +733,25 @@ export default function BookingEditFormRHF({
           />
         )}
       </Stack>
+      <O2ConfirmDialog
+        open={payoutConfirmOpen}
+        title="Dates changed — payout not updated"
+        description="You changed the stay dates but payout stayed the same. Do you want to save anyway?"
+        confirmLabel="Save anyway"
+        cancelLabel="Go back"
+        onClose={() => {
+          setPayoutConfirmOpen(false);
+          setPendingSubmitValues(null);
+        }}
+        onConfirm={async () => {
+          const v = pendingSubmitValues;
+          setPayoutConfirmOpen(false);
+          setPendingSubmitValues(null);
+          if (v) {
+            await doSubmit(v);
+          }
+        }}
+      />
     </Box>
   );
 }
