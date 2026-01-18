@@ -45,6 +45,11 @@ security:
             pattern: ^/api/reports/services-payments/export\.pdf$
             security: false
 
+        api_health:
+            pattern: ^/api/health$
+            stateless: true
+            security: false
+
         api_public:
             pattern: ^/api/public
             stateless: true
@@ -66,6 +71,7 @@ security:
     # Easy way to control access for large sections of your site
     # Note: Only the *first* access control that matches will be used
     access_control:
+        - { path: ^/api/health$, roles: PUBLIC_ACCESS, methods: [GET, OPTIONS] }
         - { path: ^/api/public, roles: PUBLIC_ACCESS, methods: [GET, OPTIONS] }
         - { path: ^/api/contracts/preview/html, roles: PUBLIC_ACCESS }
         - { path: ^/api/contracts/preview$, roles: PUBLIC_ACCESS }

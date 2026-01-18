@@ -599,8 +599,8 @@ const CheckInOutView = () => {
   };
 
   return (
-    <AppShell title="Check-ins & Check-outs">
-      <Page title="Check-ins & Check-outs">
+    <AppShell title="Check-in & Check-out">
+      <Page title="Check-in & Check-out">
         <div
           ref={exportRef}
           style={
