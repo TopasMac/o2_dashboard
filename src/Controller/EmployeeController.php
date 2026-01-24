@@ -358,6 +358,7 @@ class EmployeeController extends AbstractController
             'email' => $e->getEmail(),
             'bank' => $e->getBankName(),
             'accountNumber' => $e->getBankAccount(),
+            'bankHolder' => method_exists($e, 'getBankHolder') ? $e->getBankHolder() : null,
             'division' => $e->getDivision(),
             'area' => $e->getArea(),
             'city' => $e->getCity(),
@@ -395,6 +396,11 @@ class EmployeeController extends AbstractController
         $set('bank_name', fn($v) => $e->setBankName($v !== null && $v !== '' ? (string) $v : null));
         $set('accountNumber', fn($v) => $e->setBankAccount($v !== null && $v !== '' ? (string) $v : null));
         $set('bank_account', fn($v) => $e->setBankAccount($v !== null && $v !== '' ? (string) $v : null));
+        // Bank holder (optional)
+        if (method_exists($e, 'setBankHolder')) {
+            $set('bankHolder', fn($v) => $e->setBankHolder($v !== null && $v !== '' ? (string) $v : null));
+            $set('bank_holder', fn($v) => $e->setBankHolder($v !== null && $v !== '' ? (string) $v : null));
+        }
         $set('division', fn($v) => $e->setDivision((string) $v));
         $set('area', fn($v) => $e->setArea((string) $v));
         $set('city', fn($v) => $e->setCity((string) $v));

@@ -82,7 +82,7 @@ const HREditFormRHF = ({ employee, onSubmit, onChange, disabled }) => {
       platformEnabled: employee.platformEnabled ?? false,
       accessPassword: '',
       accessPasswordConfirm: '',
-      bankHolder: employee.bankHolder ?? employee.bank_holder ?? employee.name ?? '',
+      bankHolder: employee.bankHolder ?? employee.bank_holder ?? '',
       // Bank section (controller accepts 'bank' and alias 'bank_name')
       bank: employee.bank ?? employee.bankName ?? '',
       // Account number (controller accepts 'accountNumber' and alias 'bank_account')
@@ -102,8 +102,11 @@ const HREditFormRHF = ({ employee, onSubmit, onChange, disabled }) => {
   
   // keep form in sync when the selected employee changes
   useEffect(() => {
+    // Only reset when switching to a different employee record.
+    // Avoids overwriting user edits on rerenders while editing the same employee.
     methods.reset(initialValues);
-  }, [initialValues, methods]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employee?.id]);
 
   return (
     <RHFForm

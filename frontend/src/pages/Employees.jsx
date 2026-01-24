@@ -157,18 +157,11 @@ export default function Employees() {
       render: (_value, row) => {
         const bankName = row?.bank || row?.bankName || '-';
         const accountRaw = row?.accountNumber || row?.bankAccount || '';
-        const masked = (() => {
-          if (!accountRaw) return null;
-          const digits = String(accountRaw).replace(/\s+/g, '');
-          if (!digits) return null;
-          const tail = digits.slice(-3);
-          return `*...${tail}`;
-        })();
         return (
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
             <span style={{ fontWeight: 600 }}>{bankName}</span>
-            {masked && (
-              <span style={{ fontSize: 12, color: '#6b7280' }}>{masked}</span>
+            {accountRaw && (
+              <span style={{ fontSize: 12, color: '#6b7280' }}>{accountRaw}</span>
             )}
           </div>
         );
