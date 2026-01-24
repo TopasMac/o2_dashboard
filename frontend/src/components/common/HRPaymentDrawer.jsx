@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Drawer, Box, Stack, Typography, Button, Divider, FormControl, InputLabel, Select, MenuItem, FormHelperText, Alert, CircularProgress, Checkbox, TextField } from '@mui/material';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Drawer, Box, Stack, Typography, Button, Divider, FormControl, InputLabel, Select, MenuItem, FormHelperText, Alert, CircularProgress, Checkbox, TextField, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import SaveAltIcon from '@mui/icons-material/SaveAlt';
 import api from '../../api';
 
@@ -8,35 +8,226 @@ import api from '../../api';
  * Props:
  *  - open: boolean (controls drawer visibility)
  *  - onClose: function () => void
- *  - onExport: function ({ division, employees, selectedAmounts }) => void
  *
  * Internal state (initialized only):
  *  - division: string
  *  - employees: array
  *  - selectedAmounts: { [employeeId: string]: number }
  */
-const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
-  const [division, setDivision] = useState('');
+const HRPaymentDrawer = ({ open = false, onClose }) => {
+  // For now, this drawer is used for Housekeepers payment requests (no selector).
+  // If you later need Owners2 as well, we can pass division as a prop.
+  const division = 'Housekeepers';
   const [employees, setEmployees] = useState([]);
   const [selectedAmounts, setSelectedAmounts] = useState({});
+  // Track which employee amounts were auto-filled (so we can re-calc on period changes without overwriting manual edits)
+  const autoAmountIdsRef = useRef(new Set());
 
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [employeesError, setEmployeesError] = useState(null);
   const [exporting, setExporting] = useState(false);
 
-  const loadEmployees = async (div) => {
-    if (!div) return;
+  // Pay period selector (semi-monthly) + optional custom date override
+  const [periodHalf, setPeriodHalf] = useState('H1'); // H1 = 1–15, H2 = 16–EOM
+  const [customDates, setCustomDates] = useState(false);
+  const [periodMonth, setPeriodMonth] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  });
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const ymd = (date) => {
+    const y = date.getFullYear();
+    const m = pad2(date.getMonth() + 1);
+    const d = pad2(date.getDate());
+    return `${y}-${m}-${d}`;
+  };
+  const endOfMonthYmd = (date) => {
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    // Day 0 of next month = last day of current month
+    const dt = new Date(y, m + 1, 0);
+    return ymd(dt);
+  };
+  const deriveHalfDates = (half, baseMonth = null) => {
+    const base = baseMonth && /^\d{4}-\d{2}$/.test(baseMonth)
+      ? new Date(parseInt(baseMonth.slice(0, 4), 10), parseInt(baseMonth.slice(5, 7), 10) - 1, 1)
+      : new Date();
+
+    const y = base.getFullYear();
+    const m = pad2(base.getMonth() + 1);
+
+    if (half === 'H1') {
+      return { start: `${y}-${m}-01`, end: `${y}-${m}-15` };
+    }
+    return { start: `${y}-${m}-16`, end: endOfMonthYmd(base) };
+  };
+
+  // --- Salary/period helpers and validation ---
+  const daysInMonthForKey = (monthKey) => {
+    if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return 30;
+    const y = parseInt(monthKey.slice(0, 4), 10);
+    const m = parseInt(monthKey.slice(5, 7), 10) - 1;
+    return new Date(y, m + 1, 0).getDate();
+  };
+
+  const parseYmd = (s) => {
+    if (!s || typeof s !== 'string') return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return null;
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    const d = parseInt(m[3], 10);
+    return { y, mo, d };
+  };
+
+  const compareYmd = (a, b) => {
+    // returns -1/0/1
+    if (!a || !b) return 0;
+    if (a.y !== b.y) return a.y < b.y ? -1 : 1;
+    if (a.mo !== b.mo) return a.mo < b.mo ? -1 : 1;
+    if (a.d !== b.d) return a.d < b.d ? -1 : 1;
+    return 0;
+  };
+
+  const inSelectedMonth = (ymdObj, monthKey) => {
+    if (!ymdObj || !monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return false;
+    const y = parseInt(monthKey.slice(0, 4), 10);
+    const m = parseInt(monthKey.slice(5, 7), 10);
+    return ymdObj.y === y && ymdObj.mo === m;
+  };
+
+  const halfDayRange = (half, monthKey) => {
+    const dim = daysInMonthForKey(monthKey);
+    if (half === 'H1') return { min: 1, max: 15, denom: 15 };
+    return { min: 16, max: dim, denom: Math.max(1, dim - 15) };
+  };
+
+  const round2 = (n) => {
+    const x = Number(n);
+    if (Number.isNaN(x)) return '';
+    return (Math.round(x * 100) / 100).toFixed(2);
+  };
+
+  const computeSuggestedAmount = (emp, startStr, endStr, half, monthKey) => {
+    const salary = Number(emp?.currentSalary);
+    if (!salary || Number.isNaN(salary) || salary <= 0) return '';
+
+    const halfSalary = salary / 2;
+
+    const s = parseYmd(startStr);
+    const e = parseYmd(endStr);
+    if (!s || !e) return round2(halfSalary);
+
+    const range = halfDayRange(half, monthKey);
+    const fullStart = range.min;
+    const fullEnd = range.max;
+
+    // If full half selected, always exact 50%
+    if (s.d === fullStart && e.d === fullEnd) {
+      return round2(halfSalary);
+    }
+
+    // Partial within half => prorate within that half
+    const workedDays = Math.max(0, (e.d - s.d) + 1);
+    const denom = range.denom;
+    if (workedDays <= 0 || denom <= 0) return '';
+
+    return round2(halfSalary * (workedDays / denom));
+  };
+
+  const periodError = useMemo(() => {
+    if (!customDates) return null;
+    const s = parseYmd(periodStart);
+    const e = parseYmd(periodEnd);
+    if (!s || !e) return 'Select valid Start and End dates.';
+    if (!inSelectedMonth(s, periodMonth) || !inSelectedMonth(e, periodMonth)) {
+      return 'Custom dates must be within the selected month.';
+    }
+    if (compareYmd(s, e) > 0) {
+      return 'Start date must be before (or equal to) End date.';
+    }
+    const range = halfDayRange(periodHalf, periodMonth);
+    if (s.d < range.min || s.d > range.max || e.d < range.min || e.d > range.max) {
+      return periodHalf === 'H1'
+        ? 'Custom dates must be within 1–15.'
+        : 'Custom dates must be within 16–end of month.';
+    }
+    return null;
+  }, [customDates, periodStart, periodEnd, periodHalf, periodMonth]);
+
+  // ------------------------------
+  const getMonthKey = (dt) => {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  };
+  const monthLabel = (key) => {
+    const yy = key.slice(0, 4);
+    const mm = key.slice(5, 7);
+    return `${mm}-${yy}`;
+  };
+  const monthOptions = (() => {
+    const now = new Date();
+    const curKey = getMonthKey(now);
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevKey = getMonthKey(prev);
+    const base = [
+      { key: curKey, label: `${monthLabel(curKey)} (current)` },
+      { key: prevKey, label: `${monthLabel(prevKey)} (previous)` },
+    ];
+    // If periodMonth is something else (edge case), include it so Select can render a value.
+    if (periodMonth && !base.find((o) => o.key === periodMonth)) {
+      base.push({ key: periodMonth, label: monthLabel(periodMonth) });
+    }
+    return base;
+  })();
+
+  useEffect(() => {
+    if (customDates) return;
+    const { start, end } = deriveHalfDates(periodHalf, periodMonth);
+    setPeriodStart(start);
+    setPeriodEnd(end);
+  }, [periodHalf, periodMonth, customDates]);
+
+  useEffect(() => {
+    // Re-calc auto-filled amounts when the pay period changes
+    const ids = Array.from(autoAmountIdsRef.current || []);
+    if (!ids.length) return;
+
+    setSelectedAmounts((prev) => {
+      const next = { ...prev };
+      ids.forEach((id) => {
+        const key = String(id);
+        if (!Object.prototype.hasOwnProperty.call(next, key)) return;
+        const emp = (employees || []).find((e) => String(e.id) === key);
+        if (!emp) return;
+        const suggested = computeSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+        if (suggested !== '') next[key] = suggested;
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodStart, periodEnd, periodHalf, periodMonth, customDates, employees]);
+
+  const loadEmployees = async () => {
     setLoadingEmployees(true);
     setEmployeesError(null);
     try {
       const res = await api.get('/api/employees/options', {
-        params: { division: div, include: 'bank', status: 'Active' },
+        params: { include: 'bank', status: 'Active' },
       });
       const list = Array.isArray(res.data) ? res.data : (res.data?.rows || []);
       const mapped = list.map((it) => ({
         id: it.value ?? it.id,
         shortName: it.label ?? it.shortName ?? it.name ?? '',
         code: it.code ?? '',
+        division: it.division ?? '',
+        // Monthly salary used to suggest pay-period amounts
+        currentSalary: it.current_salary ?? it.currentSalary ?? it.salary ?? null,
         bankName: it.bankName ?? it.bank?.name ?? '',
         bankAccount: it.bankAccount ?? it.bank?.account ?? '',
         bankHolder: it.name ?? it.bankHolder ?? it.holder ?? it.fullName ?? '',
@@ -51,12 +242,11 @@ const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
   };
 
   useEffect(() => {
-    if (division) {
-      loadEmployees(division);
-    } else {
-      setEmployees([]);
+    if (open) {
+      loadEmployees();
     }
-  }, [division]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const isSelected = (id) => Object.prototype.hasOwnProperty.call(selectedAmounts, String(id)) || Object.prototype.hasOwnProperty.call(selectedAmounts, id);
 
@@ -65,16 +255,32 @@ const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
       const next = { ...prev };
       const key = String(id);
       if (checked) {
-        if (!Object.prototype.hasOwnProperty.call(next, key)) next[key] = '';
+        const emp = (employees || []).find((e) => String(e.id) === key);
+        const suggested = computeSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+        next[key] = suggested !== '' ? suggested : '';
+        autoAmountIdsRef.current.add(key);
       } else {
         delete next[key];
+        autoAmountIdsRef.current.delete(key);
       }
       return next;
     });
   };
 
   const handleAmountChange = (id, value) => {
-    setSelectedAmounts((prev) => ({ ...prev, [String(id)]: value }));
+    const key = String(id);
+    // User is manually editing => stop auto updates for this employee
+    autoAmountIdsRef.current.delete(key);
+    setSelectedAmounts((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCustomDatesToggle = (checked) => {
+    setCustomDates(checked);
+    if (!checked) {
+      const { start, end } = deriveHalfDates(periodHalf, periodMonth);
+      setPeriodStart(start);
+      setPeriodEnd(end);
+    }
   };
 
   const validSelectionsCount = Object.values(selectedAmounts || {}).filter(
@@ -83,10 +289,20 @@ const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
 
   // Helper to reset state and close
   const resetState = () => {
-    setDivision('');
+    autoAmountIdsRef.current = new Set();
     setEmployees([]);
     setSelectedAmounts({});
     setEmployeesError(null);
+    setPeriodHalf('H1');
+    setCustomDates(false);
+    {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      setPeriodMonth(`${y}-${m}`);
+    }
+    setPeriodStart('');
+    setPeriodEnd('');
   };
 
   const handleClose = () => {
@@ -94,16 +310,12 @@ const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
     if (typeof onClose === 'function') onClose();
   };
 
+  // Export is handled internally (backend generates PDF) and downloaded as a blob.
   const handleExport = async () => {
     try {
       const entries = Object.entries(selectedAmounts || {}).filter(
         ([, v]) => v !== null && v !== undefined && String(v).trim() !== '' && !isNaN(Number(v)) && Number(v) > 0
       );
-
-      if (!division) {
-        alert('Please select a division first.');
-        return;
-      }
       if (entries.length === 0) {
         alert('Select at least one employee and enter an amount.');
         return;
@@ -177,7 +389,7 @@ const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
               variant="contained"
               startIcon={<SaveAltIcon />}
               onClick={handleExport}
-              disabled={exporting || !division || validSelectionsCount === 0}
+              disabled={exporting || validSelectionsCount === 0 || !!periodError}
             >
               {exporting ? 'Exporting…' : 'Export PDF'}
             </Button>
@@ -188,75 +400,173 @@ const HRPaymentDrawer = ({ open = false, onClose, onExport }) => {
         {/* Body */}
         <Box sx={{ p: 2, flex: 1, overflow: 'auto' }}>
           <Stack spacing={2}>
-            <FormControl fullWidth>
-              <InputLabel id="hr-div-label">Division</InputLabel>
-              <Select
-                labelId="hr-div-label"
-                label="Division"
-                value={division}
-                onChange={(e) => setDivision(e.target.value)}
-              >
-                <MenuItem value="Owners2">Owners2</MenuItem>
-                <MenuItem value="Housekeepers">Housekeepers</MenuItem>
-              </Select>
-              <FormHelperText>Select a division to load active employees with bank data</FormHelperText>
-            </FormControl>
 
-            {division && (
-              <Box>
-                {loadingEmployees && (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <CircularProgress size={18} />
-                    <Typography variant="body2">Loading employees…</Typography>
-                  </Stack>
-                )}
-                {!loadingEmployees && employeesError && (
-                  <Alert severity="error">{employeesError}</Alert>
-                )}
-                {!loadingEmployees && !employeesError && employees.length > 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    Loaded {employees.length} employee{employees.length === 1 ? '' : 's'} for {division}.
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Pay period
+              </Typography>
+
+              <Stack
+                direction="row"
+                spacing={1.5}
+                alignItems="center"
+                sx={{ flexWrap: 'nowrap', overflowX: 'auto', pb: 0.5 }}
+              >
+                <FormControl size="small" sx={{ minWidth: 110, maxWidth: 125 }}>
+                  <InputLabel id="hr-pay-month-label">Month</InputLabel>
+                  <Select
+                    labelId="hr-pay-month-label"
+                    label="Month"
+                    value={periodMonth}
+                    renderValue={(val) => (monthLabel(val) || '')}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setPeriodMonth(next);
+                      // If custom dates are enabled, snap back to defaults for the selected month.
+                      if (customDates) {
+                        setCustomDates(false);
+                        const { start, end } = deriveHalfDates(periodHalf, next);
+                        setPeriodStart(start);
+                        setPeriodEnd(end);
+                      }
+                    }}
+                  >
+                    {monthOptions.map((opt) => (
+                      <MenuItem key={opt.key} value={opt.key}>{opt.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <ToggleButtonGroup
+                  value={periodHalf}
+                  exclusive
+                  onChange={(e, v) => {
+                    if (v) setPeriodHalf(v);
+                  }}
+                  size="small"
+                >
+                  <ToggleButton value="H1">1–15</ToggleButton>
+                  <ToggleButton value="H2">16–EOM</ToggleButton>
+                </ToggleButtonGroup>
+                <Stack direction="row" spacing={0.75} alignItems="center" sx={{ ml: 0.5, whiteSpace: 'nowrap' }}>
+                  <Checkbox
+                    size="small"
+                    checked={customDates}
+                    onChange={(e) => handleCustomDatesToggle(e.target.checked)}
+                    inputProps={{ 'aria-label': 'custom dates' }}
+                  />
+                  <Typography variant="body2">Custom dates</Typography>
+                </Stack>
+              </Stack>
+
+              <Box sx={{ mt: 1 }}>
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  alignItems="center"
+                  sx={{ flexWrap: 'nowrap' }}
+                >
+                  <FormControl sx={{ minWidth: 140 }} size="small">
+                    <InputLabel shrink>Start</InputLabel>
+                    <TextField
+                      size="small"
+                      type="date"
+                      value={periodStart}
+                      onChange={(e) => setPeriodStart(e.target.value)}
+                      disabled={!customDates}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </FormControl>
+
+                  <FormControl sx={{ minWidth: 140 }} size="small">
+                    <InputLabel shrink>End</InputLabel>
+                    <TextField
+                      size="small"
+                      type="date"
+                      value={periodEnd}
+                      onChange={(e) => setPeriodEnd(e.target.value)}
+                      disabled={!customDates}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </FormControl>
+                </Stack>
+
+                {periodError && (
+                  <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.5 }}>
+                    {periodError}
                   </Typography>
                 )}
-                {!loadingEmployees && !employeesError && employees.length > 0 && (
-                  <Stack spacing={1.5} sx={{ mt: 1 }}>
-                    {employees.map((emp) => {
-                      const checked = isSelected(emp.id);
-                      return (
-                        <Box key={emp.id} sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
-                          <Stack direction="row" alignItems="center" spacing={1.5}>
-                            <Checkbox
-                              checked={checked}
-                              onChange={(e) => handleToggle(emp.id, e.target.checked)}
-                              inputProps={{ 'aria-label': `select ${emp.shortName}` }}
-                            />
-                            <Box sx={{ flex: 1 }}>
+
+                {!periodError && !customDates && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                    Dates are fixed to the selected half. Enable “Custom dates” to adjust within the same half.
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mt: 1 }}>
+              Employees
+            </Typography>
+            <Box>
+              {loadingEmployees && (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <CircularProgress size={18} />
+                  <Typography variant="body2">Loading employees…</Typography>
+                </Stack>
+              )}
+              {!loadingEmployees && employeesError && (
+                <Alert severity="error">{employeesError}</Alert>
+              )}
+              {!loadingEmployees && !employeesError && employees.length > 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  Loaded {employees.length} employee{employees.length === 1 ? '' : 's'}.
+                </Typography>
+              )}
+              {!loadingEmployees && !employeesError && employees.length > 0 && (
+                <Stack spacing={1.5} sx={{ mt: 1 }}>
+                  {employees.map((emp) => {
+                    const checked = isSelected(emp.id);
+                    const suggestedAmount = computeSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+                    return (
+                      <Box key={emp.id} sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
+                        <Stack direction="row" alignItems="center" spacing={1.5}>
+                          <Checkbox
+                            checked={checked}
+                            onChange={(e) => handleToggle(emp.id, e.target.checked)}
+                            inputProps={{ 'aria-label': `select ${emp.shortName}` }}
+                          />
+                          <Box sx={{ flex: 1 }}>
+                            <Stack direction="row" alignItems="baseline" justifyContent="space-between" spacing={1}>
                               <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                                 {emp.shortName || emp.code || emp.id}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                Code: {emp.code || '—'} · Bank: {emp.bankName || '—'} · Account: {emp.bankAccount || '—'}
+                              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                                {emp.division || division}
                               </Typography>
-                            </Box>
-                            {checked && (
-                              <TextField
-                                size="small"
-                                type="number"
-                                inputProps={{ min: 0, step: '0.01' }}
-                                placeholder="Amount"
-                                value={selectedAmounts[String(emp.id)] ?? ''}
-                                onChange={(e) => handleAmountChange(emp.id, e.target.value)}
-                                sx={{ width: 140 }}
-                              />
-                            )}
-                          </Stack>
-                        </Box>
-                      );
-                    })}
-                  </Stack>
-                )}
-              </Box>
-            )}
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              {emp.bankHolder || '—'} · {emp.bankName || '—'} · {emp.bankAccount || '—'}
+                            </Typography>
+                          </Box>
+                          <TextField
+                            size="small"
+                            type="number"
+                            inputProps={{ min: 0, step: '0.01' }}
+                            placeholder="Amount"
+                            value={checked ? (selectedAmounts[String(emp.id)] ?? '') : (suggestedAmount || '')}
+                            onChange={(e) => handleAmountChange(emp.id, e.target.value)}
+                            disabled={!checked}
+                            sx={{ width: 100 }}
+                          />
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Box>
           </Stack>
         </Box>
 

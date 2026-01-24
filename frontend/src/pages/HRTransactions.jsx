@@ -78,9 +78,24 @@ const HRTransactions = () => {
     },
     { header: "Division", accessor: "division", filterable: true, filterType: "select" },
     { header: "Cost Centre", accessor: "costCentre", filterable: true, filterType: "select" },
-    { header: "Type", accessor: "type", filterable: true, filterType: "select", cell: (row) => row?.type ? row.type.charAt(0).toUpperCase() + row.type.slice(1).toLowerCase() : "" },
+    {
+      header: "Type",
+      accessor: "type",
+      filterable: true,
+      filterType: "select",
+      cell: (row) =>
+        row?.type
+          ? row.type.charAt(0).toUpperCase() + row.type.slice(1).toLowerCase()
+          : "",
+    },
     { header: "Amount", accessor: "amount", cell: (row) => formatAmount(row?.amount) },
-    { header: "From", accessor: "periodStart", filterable: true, filterType: "monthYear", cell: (row) => formatDate(row?.periodStart) },
+    {
+      header: "From",
+      accessor: "periodStart",
+      filterable: true,
+      filterType: "monthYear",
+      cell: (row) => formatDate(row?.periodStart),
+    },
     { header: "To", accessor: "periodEnd", cell: (row) => formatDate(row?.periodEnd) },
     { header: "Notes", accessor: "notes" },
   ];
@@ -98,7 +113,7 @@ const HRTransactions = () => {
       .get("/api/employee-ledger")
       .then((res) => {
         const payload = res.data || {};
-        const list = Array.isArray(payload) ? payload : (payload.rows || []);
+        const list = Array.isArray(payload) ? payload : payload.rows || [];
         const mapped = list.map((item, idx) => ({
           id: item.id ?? idx,
           code: item.code,
@@ -132,9 +147,7 @@ const HRTransactions = () => {
   const handleDelete = async () => {
     if (!selectedRow?.id) return;
     // eslint-disable-next-line no-alert
-    const confirmed = window.confirm(
-      `Are you sure you want to delete transaction "${selectedRow.code}"?`
-    );
+    const confirmed = window.confirm(`Are you sure you want to delete transaction "${selectedRow.code}"?`);
     if (!confirmed) return;
     try {
       await api.delete(`/api/employee-ledger/${selectedRow.id}`);
@@ -171,7 +184,9 @@ const HRTransactions = () => {
           color: "#E57373",
           "&:hover": { backgroundColor: "rgba(229,115,115,0.08)", borderColor: "#E57373" },
         }}
-        onClick={() => { fetchData(); }}
+        onClick={() => {
+          fetchData();
+        }}
       >
         Reset filters
       </Button>
@@ -198,20 +213,19 @@ const HRTransactions = () => {
       layout="table"
       stickyHeader={stickyHeader}
     >
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
           <CircularProgress />
         </Box>
       ) : (
-        <TableLite
-          rows={rows}
-          columns={columns}
-          enableFilters
-          autoFilter
-          optionsSourceRows={rows}
-        />
+        <TableLite rows={rows} columns={columns} enableFilters autoFilter optionsSourceRows={rows} />
       )}
+
       <AppDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -224,23 +238,24 @@ const HRTransactions = () => {
           onSubmit={async (payload) => {
             try {
               setSaving(true);
-              await api.post('/api/employee-ledger', payload);
+              await api.post("/api/employee-ledger", payload);
               setDrawerOpen(false);
               fetchData();
             } catch (e) {
               // eslint-disable-next-line no-alert
-              alert(e?.response?.data?.message || 'Failed to create HR transaction');
+              alert(e?.response?.data?.message || "Failed to create HR transaction");
             } finally {
               setSaving(false);
             }
           }}
         />
         {saving && (
-          <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
+          <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
             Saving…
           </Typography>
         )}
       </AppDrawer>
+
       <AppDrawer
         open={editDrawerOpen}
         onClose={() => setEditDrawerOpen(false)}
@@ -267,54 +282,10 @@ const HRTransactions = () => {
           />
         )}
       </AppDrawer>
+
       <HRPaymentDrawer
         open={paymentDrawerOpen}
         onClose={() => setPaymentDrawerOpen(false)}
-        onExport={({ division, employees, selectedAmounts }) => {
-          try {
-            // Build CSV content (semicolon-separated)
-            const headers = [
-              'employee_code',
-              'bank_holder',
-              'bank_name',
-              'bank_account',
-              'amount',
-            ];
-
-            // Map selected ids to rows
-            const rows = Object.entries(selectedAmounts || {})
-              .filter(([, amt]) => amt !== null && amt !== undefined && String(amt).trim() !== '' && !isNaN(Number(amt)))
-              .map(([empId, amt]) => {
-                const emp = (employees || []).find((e) => String(e.id) === String(empId)) || {};
-                const employeeCode = emp.code || '';
-                const bankHolder = emp.bankHolder || emp.name || emp.fullName || '';
-                const bankName = emp.bankName || '';
-                const bankAccount = emp.bankAccount || '';
-                const amount = Number(amt).toFixed(2);
-                // Escape semicolons or line breaks if ever present
-                const safe = (v) => String(v).replace(/[\n\r]/g, ' ').replace(/;/g, ',');
-                return [employeeCode, bankHolder, bankName, bankAccount, amount].map(safe).join(';');
-              });
-
-            const csv = [headers.join(';'), ...rows].join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            const now = new Date();
-            const y = now.getFullYear();
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            const d = String(now.getDate()).padStart(2, '0');
-            a.href = url;
-            a.download = `hr_payment_request_${division || 'all'}_${y}${m}${d}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-          } catch (err) {
-            // eslint-disable-next-line no-alert
-            alert('Failed to export CSV');
-          }
-        }}
       />
     </PageScaffold>
   );

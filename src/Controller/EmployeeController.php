@@ -79,7 +79,7 @@ class EmployeeController extends AbstractController
         $status = $request->query->get('status', 'Active');
 
         $qb = $repo->createQueryBuilder('e')
-            ->select('e.id, e.employeeCode, e.shortName, e.division, e.city' . ($includeBank ? ', e.name, e.bankName, e.bankAccount, e.bankHolder AS bank_holder' : ''))
+            ->select('e.id, e.employeeCode, e.shortName, e.division, e.city, e.currentSalary AS current_salary' . ($includeBank ? ', e.name, e.bankName, e.bankAccount, e.bankHolder AS bank_holder' : ''))
             ->orderBy('e.shortName', 'ASC')
             ->setMaxResults($limit);
 
@@ -106,6 +106,7 @@ class EmployeeController extends AbstractController
                 'code'  => $r['employeeCode'],
                 'division' => $r['division'] ?? null,
                 'city' => $r['city'] ?? null,
+                'current_salary' => $r['current_salary'] ?? null,
             ];
             if ($includeBank) {
                 $item['bankHolder'] = $r['bank_holder'] ?? $r['name'] ?? null;
