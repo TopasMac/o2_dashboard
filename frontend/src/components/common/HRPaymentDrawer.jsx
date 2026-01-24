@@ -15,13 +15,17 @@ import api from '../../api';
  *  - selectedAmounts: { [employeeId: string]: number }
  */
 const HRPaymentDrawer = ({ open = false, onClose }) => {
-  // For now, this drawer is used for Housekeepers payment requests (no selector).
-  // If you later need Owners2 as well, we can pass division as a prop.
-  const division = 'Housekeepers';
+  // Division used for export filename/template. Deductions are loaded across all divisions.
+  // If selected employees span multiple divisions, we label it as 'Mixed'.
+  const [division, setDivision] = useState('Housekeepers');
   const [employees, setEmployees] = useState([]);
   const [selectedAmounts, setSelectedAmounts] = useState({});
   // Track which employee amounts were auto-filled (so we can re-calc on period changes without overwriting manual edits)
   const autoAmountIdsRef = useRef(new Set());
+  // --- Deductions state ---
+  const [deductionsByEmployeeId, setDeductionsByEmployeeId] = useState({});
+  const [loadingDeductions, setLoadingDeductions] = useState(false);
+  const [deductionsError, setDeductionsError] = useState(null);
 
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [employeesError, setEmployeesError] = useState(null);
@@ -111,6 +115,18 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
     if (Number.isNaN(x)) return '';
     return (Math.round(x * 100) / 100).toFixed(2);
   };
+  // --- Helper: robustly parse number ---
+  const toNum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  // --- Helper: compute net suggested amount (gross - deductions) ---
+  const computeNetSuggestedAmount = (emp, startStr, endStr, half, monthKey) => {
+    const gross = computeSuggestedAmount(emp, startStr, endStr, half, monthKey);
+    const grossNum = toNum(gross);
+    const ded = toNum(deductionsByEmployeeId[String(emp?.id)]);
+    const net = Math.max(0, grossNum - Math.abs(ded));
+    // If gross was '', preserve '' so UI stays consistent
+    if (gross === '') return '';
+    return round2(net);
+  };
 
   const computeSuggestedAmount = (emp, startStr, endStr, half, monthKey) => {
     const salary = Number(emp?.currentSalary);
@@ -175,9 +191,12 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
     const curKey = getMonthKey(now);
     const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevKey = getMonthKey(prev);
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const nextKey = getMonthKey(next);
     const base = [
       { key: curKey, label: `${monthLabel(curKey)} (current)` },
       { key: prevKey, label: `${monthLabel(prevKey)} (previous)` },
+      { key: nextKey, label: `${monthLabel(nextKey)} (next)` },
     ];
     // If periodMonth is something else (edge case), include it so Select can render a value.
     if (periodMonth && !base.find((o) => o.key === periodMonth)) {
@@ -194,10 +213,9 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
   }, [periodHalf, periodMonth, customDates]);
 
   useEffect(() => {
-    // Re-calc auto-filled amounts when the pay period changes
+    // Re-calc auto-filled amounts when the pay period or deductions change
     const ids = Array.from(autoAmountIdsRef.current || []);
     if (!ids.length) return;
-
     setSelectedAmounts((prev) => {
       const next = { ...prev };
       ids.forEach((id) => {
@@ -205,13 +223,13 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
         if (!Object.prototype.hasOwnProperty.call(next, key)) return;
         const emp = (employees || []).find((e) => String(e.id) === key);
         if (!emp) return;
-        const suggested = computeSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+        const suggested = computeNetSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
         if (suggested !== '') next[key] = suggested;
       });
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodStart, periodEnd, periodHalf, periodMonth, customDates, employees]);
+  }, [periodStart, periodEnd, periodHalf, periodMonth, customDates, employees, deductionsByEmployeeId]);
 
   const loadEmployees = async () => {
     setLoadingEmployees(true);
@@ -250,19 +268,32 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
 
   const isSelected = (id) => Object.prototype.hasOwnProperty.call(selectedAmounts, String(id)) || Object.prototype.hasOwnProperty.call(selectedAmounts, id);
 
+  // Returns true if any employee is selected
+  const hasAnySelections = Object.keys(selectedAmounts || {}).length > 0;
+
   const handleToggle = (id, checked) => {
     setSelectedAmounts((prev) => {
       const next = { ...prev };
       const key = String(id);
       if (checked) {
         const emp = (employees || []).find((e) => String(e.id) === key);
-        const suggested = computeSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+        const suggested = computeNetSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
         next[key] = suggested !== '' ? suggested : '';
         autoAmountIdsRef.current.add(key);
       } else {
         delete next[key];
         autoAmountIdsRef.current.delete(key);
       }
+      // Compute selected divisions from next
+      const selectedDivs = new Set(
+        Object.keys(next).map((k) => {
+          const e = (employees || []).find((x) => String(x.id) === String(k));
+          return e?.division || '';
+        }).filter(Boolean)
+      );
+      if (selectedDivs.size === 1) setDivision(Array.from(selectedDivs)[0]);
+      else if (selectedDivs.size > 1) setDivision('Mixed');
+      else setDivision('Housekeepers');
       return next;
     });
   };
@@ -303,7 +334,77 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
     }
     setPeriodStart('');
     setPeriodEnd('');
+    // Reset deductions state
+    setDeductionsByEmployeeId({});
+    setDeductionsError(null);
+    setLoadingDeductions(false);
+    setDivision('Housekeepers');
   };
+  // --- Async loader for deductions for this period, for a given division ---
+  const loadDeductionsForPeriod = async (divisionArg) => {
+    if (!divisionArg || !periodStart || !periodEnd) return;
+    try {
+      const res = await api.get('/api/employee-ledger', {
+        params: {
+          division: divisionArg,
+          type: 'deduction',
+          periodStart,
+          periodEnd,
+        },
+      });
+      let rows = [];
+      if (Array.isArray(res.data)) rows = res.data;
+      else if (Array.isArray(res.data?.rows)) rows = res.data.rows;
+      else if (Array.isArray(res.data?.data)) rows = res.data.data;
+      else if (res.data && typeof res.data === 'object') rows = Object.values(res.data);
+      else rows = [];
+      // Sum deductions by employee id
+      const map = {};
+      for (const row of rows) {
+        const eid = row?.employee?.id || row?.employeeId || row?.employee_id;
+        if (!eid) continue;
+        const amt = Number(row.amount);
+        if (!Number.isFinite(amt)) continue;
+        map[String(eid)] = (map[String(eid)] || 0) + amt;
+      }
+      return map;
+    } catch (e) {
+      setDeductionsError('Failed to load deductions');
+      return {};
+    }
+  };
+
+  // --- Loader to fetch deductions for ALL divisions present in employees list, and merge ---
+  const loadAllDeductionsForPeriod = async () => {
+    if (!periodStart || !periodEnd) return;
+    const divs = Array.from(new Set((employees || []).map((e) => e.division).filter(Boolean)));
+    if (divs.length === 0) return;
+    setLoadingDeductions(true);
+    setDeductionsError(null);
+    try {
+      const maps = await Promise.all(divs.map((d) => loadDeductionsForPeriod(d)));
+      const merged = {};
+      for (const m of maps) {
+        for (const [k, v] of Object.entries(m || {})) {
+          merged[k] = (merged[k] || 0) + Number(v || 0);
+        }
+      }
+      setDeductionsByEmployeeId(merged);
+    } catch (e) {
+      setDeductionsError('Failed to load deductions');
+    } finally {
+      setLoadingDeductions(false);
+    }
+  };
+
+  // --- Effect: load deductions when open, employees loaded, or period changes ---
+  useEffect(() => {
+    if (!open) return;
+    if (!employees || employees.length === 0) return;
+    if (!periodStart || !periodEnd) return;
+    loadAllDeductionsForPeriod();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, employees, periodStart, periodEnd]);
 
   const handleClose = () => {
     resetState();
@@ -509,6 +610,17 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
             <Typography variant="subtitle2" sx={{ mt: 1 }}>
               Employees
             </Typography>
+            {/* Deductions loader/error UI */}
+            {loadingDeductions && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                Loading deductions…
+              </Typography>
+            )}
+            {!loadingDeductions && deductionsError && (
+              <Typography variant="caption" color="error" sx={{ display: 'block', mb: 0.5 }}>
+                {deductionsError}
+              </Typography>
+            )}
             <Box>
               {loadingEmployees && (
                 <Stack direction="row" spacing={1} alignItems="center">
@@ -520,17 +632,30 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
                 <Alert severity="error">{employeesError}</Alert>
               )}
               {!loadingEmployees && !employeesError && employees.length > 0 && (
-                <Typography variant="body2" color="text.secondary">
-                  Loaded {employees.length} employee{employees.length === 1 ? '' : 's'}.
-                </Typography>
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Loaded {employees.length} employee{employees.length === 1 ? '' : 's'}.
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                    Division: {division}
+                  </Typography>
+                </>
               )}
               {!loadingEmployees && !employeesError && employees.length > 0 && (
                 <Stack spacing={1.5} sx={{ mt: 1 }}>
                   {employees.map((emp) => {
                     const checked = isSelected(emp.id);
-                    const suggestedAmount = computeSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+                    const suggestedAmount = computeNetSuggestedAmount(emp, periodStart, periodEnd, periodHalf, periodMonth);
+                    const ded = toNum(deductionsByEmployeeId[String(emp.id)]);
                     return (
-                      <Box key={emp.id} sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1.5 }}>
+                      <Box
+                        key={emp.id}
+                        sx={{
+                          border: '1px solid #e0e0e0',
+                          borderRadius: 1,
+                          p: 1.5,
+                        }}
+                      >
                         <Stack direction="row" alignItems="center" spacing={1.5}>
                           <Checkbox
                             checked={checked}
@@ -549,6 +674,11 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
                             <Typography variant="caption" color="text.secondary">
                               {emp.bankHolder || '—'} · {emp.bankName || '—'} · {emp.bankAccount || '—'}
                             </Typography>
+                            {ded !== 0 && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                                Deductions this period: {round2(Math.abs(ded))}
+                              </Typography>
+                            )}
                           </Box>
                           <TextField
                             size="small"

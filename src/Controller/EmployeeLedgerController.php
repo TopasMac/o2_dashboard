@@ -41,6 +41,8 @@ class EmployeeLedgerController extends AbstractController
                 'city'       => $request->query->get('city'),
                 'type'       => $request->query->get('type'),
                 'period'     => $request->query->get('period'),
+                'periodStart' => $request->query->get('periodStart'),
+                'periodEnd'   => $request->query->get('periodEnd'),
                 'date_from'  => $request->query->get('date_from'),
                 'date_to'    => $request->query->get('date_to'),
                 'page'       => $request->query->get('page', 1),

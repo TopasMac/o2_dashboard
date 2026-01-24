@@ -16,6 +16,7 @@ use Doctrine\ORM\EntityManagerInterface;
 class EmployeeLedgerService
 {
     private EntityManagerInterface $em;
+    private ?int $nextEflSuffix = null;
 
     // Canonical type values for the ledger "type" column
     public const TYPE_PAYMENT        = 'Payment';
@@ -101,24 +102,42 @@ class EmployeeLedgerService
             $qb->andWhere('l.type = :type')->setParameter('type', (string) $q['type']);
         }
 
-        // Date filters: period (YYYY-MM) OR date_from/date_to
+        // Date filters: explicit periodStart/periodEnd (YYYY-MM-DD) OR period (YYYY-MM) OR date_from/date_to
         $utc = new \DateTimeZone('UTC');
-        if (!empty($q['period']) && preg_match('/^\d{4}-\d{2}$/', (string) $q['period'])) {
+
+        $hasPeriodStart = !empty($q['periodStart']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $q['periodStart']);
+        $hasPeriodEnd   = !empty($q['periodEnd']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $q['periodEnd']);
+
+        if ($hasPeriodStart && $hasPeriodEnd) {
+            $pFrom = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $q['periodStart'], $utc);
+            $pTo   = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $q['periodEnd'], $utc);
+            if ($pFrom === false || $pTo === false) {
+                throw new \InvalidArgumentException('Invalid periodStart/periodEnd (YYYY-MM-DD)');
+            }
+
+            // Overlap filter: include rows whose [periodStart, periodEnd] overlaps [pFrom, pTo]
+            $qb->andWhere('(l.periodStart IS NULL OR l.periodStart <= :pTo)')
+                ->andWhere('(l.periodEnd IS NULL OR l.periodEnd >= :pFrom)')
+                ->setParameter('pFrom', $pFrom)
+                ->setParameter('pTo', $pTo);
+
+        } elseif (!empty($q['period']) && preg_match('/^\d{4}-\d{2}$/', (string) $q['period'])) {
             [$yy, $mm] = explode('-', (string) $q['period']);
             $from = \DateTimeImmutable::createFromFormat('!Y-m-d', sprintf('%04d-%02d-01', (int) $yy, (int) $mm), $utc);
             $to = $from->modify('last day of this month');
-            $qb->andWhere('l.periodStart IS NULL OR l.periodStart <= :to')
-                ->andWhere('l.periodEnd IS NULL OR l.periodEnd >= :from')
+            $qb->andWhere('(l.periodStart IS NULL OR l.periodStart <= :to)')
+                ->andWhere('(l.periodEnd IS NULL OR l.periodEnd >= :from)')
                 ->setParameter('from', $from)
                 ->setParameter('to', $to);
+
         } else {
             if (!empty($q['date_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $q['date_from'])) {
                 $from = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $q['date_from'], $utc);
-                $qb->andWhere('l.periodEnd IS NULL OR l.periodEnd >= :from')->setParameter('from', $from);
+                $qb->andWhere('(l.periodEnd IS NULL OR l.periodEnd >= :from)')->setParameter('from', $from);
             }
             if (!empty($q['date_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $q['date_to'])) {
                 $to = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $q['date_to'], $utc);
-                $qb->andWhere('l.periodStart IS NULL OR l.periodStart <= :to')->setParameter('to', $to);
+                $qb->andWhere('(l.periodStart IS NULL OR l.periodStart <= :to)')->setParameter('to', $to);
             }
         }
 
@@ -244,6 +263,24 @@ class EmployeeLedgerService
 
         $this->em->persist($row);
         $this->em->flush();
+
+        // Auto-generate deduction schedule for legacy loan flow (type=advance)
+        if ($type === 'advance') {
+            $installmentsCount = (int) ($payload['installmentsCount'] ?? 0);
+            $installmentsStart = (string) ($payload['installmentsStart'] ?? '');
+
+            if ($installmentsCount > 0 && $installmentsStart !== '') {
+                // Compute schedule from installmentsStart (15th/EOM) and installmentsCount.
+                // Amount split is computed from the advance amount to avoid rounding drift.
+                $totalCents = $this->moneyToCents($amount);
+                if ($totalCents < 0) {
+                    $totalCents = abs($totalCents);
+                }
+
+                $this->createLoanDeductions($row, $installmentsCount, $installmentsStart, $totalCents);
+                $this->em->flush();
+            }
+        }
 
         return $row;
     }
@@ -395,14 +432,203 @@ class EmployeeLedgerService
      */
     private function generateCode(): string
     {
-        $conn = $this->em->getConnection();
-        $sql  = "SELECT code FROM employee_financial_ledger WHERE code LIKE 'EFL%' ORDER BY code DESC LIMIT 1";
-        $last = $conn->fetchOne($sql);
-        $next = 1;
-        if ($last && preg_match('/^EFL(\d{5,})$/', (string) $last, $m)) {
-            $next = (int) $m[1] + 1;
+        // Cache/increment locally to avoid duplicates when creating multiple rows
+        // in a single request before a flush occurs.
+        if ($this->nextEflSuffix === null) {
+            $conn = $this->em->getConnection();
+            $sql  = "SELECT code FROM employee_financial_ledger WHERE code LIKE 'EFL%' ORDER BY code DESC LIMIT 1";
+            $last = $conn->fetchOne($sql);
+            $next = 1;
+            if ($last && preg_match('/^EFL(\d{5,})$/', (string) $last, $m)) {
+                $next = (int) $m[1] + 1;
+            }
+            $this->nextEflSuffix = $next;
         }
-        return 'EFL' . str_pad((string) $next, 6, '0', STR_PAD_LEFT);
+
+        $val = $this->nextEflSuffix;
+        $this->nextEflSuffix += 1;
+
+        return 'EFL' . str_pad((string) $val, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Money helpers (avoid float drift): convert decimal string to cents int and back.
+     */
+    private function moneyToCents(string $amount): int
+    {
+        $s = trim($amount);
+        if ($s === '') {
+            return 0;
+        }
+        // Normalize comma decimals if any
+        $s = str_replace(',', '', $s);
+        $neg = false;
+        if (str_starts_with($s, '-')) {
+            $neg = true;
+            $s = substr($s, 1);
+        }
+        // Keep only digits and dot
+        $n = (float) $s;
+        $cents = (int) round($n * 100);
+        return $neg ? -$cents : $cents;
+    }
+
+    private function centsToMoney(int $cents): string
+    {
+        $neg = $cents < 0;
+        $c = abs($cents);
+        $val = number_format($c / 100, 2, '.', '');
+        return $neg ? '-' . $val : $val;
+    }
+
+    private function ymdToDate(string $ymd): \DateTimeImmutable
+    {
+        $utc = new \DateTimeZone('UTC');
+        $dt = \DateTimeImmutable::createFromFormat('!Y-m-d', $ymd, $utc);
+        if ($dt === false) {
+            throw new \InvalidArgumentException('Invalid date (YYYY-MM-DD): ' . $ymd);
+        }
+        return $dt;
+    }
+
+    private function endOfMonthYmd(string $ymd): string
+    {
+        $dt = $this->ymdToDate($ymd);
+        return $dt->modify('last day of this month')->format('Y-m-d');
+    }
+
+    /**
+     * Payroll day rules:
+     *  - Pay dates are the 15th and the last day of the month (EOM)
+     *  - 15th corresponds to period 1-15
+     *  - EOM corresponds to period 16-EOM
+     */
+    private function payrollPeriodBoundsFromPayDate(string $payYmd): ?array
+    {
+        $dt = $this->ymdToDate($payYmd);
+        $day = (int) $dt->format('j');
+        $eom = $dt->modify('last day of this month')->format('Y-m-d');
+
+        $y = (int) $dt->format('Y');
+        $m = (int) $dt->format('m');
+
+        if ($day === 15) {
+            return [
+                'start' => sprintf('%04d-%02d-01', $y, $m),
+                'end'   => sprintf('%04d-%02d-15', $y, $m),
+            ];
+        }
+
+        if ($payYmd === $eom) {
+            return [
+                'start' => sprintf('%04d-%02d-16', $y, $m),
+                'end'   => $eom,
+            ];
+        }
+
+        return null;
+    }
+
+    private function nextPayrollPayDate(string $payYmd): ?string
+    {
+        $dt = $this->ymdToDate($payYmd);
+        $day = (int) $dt->format('j');
+        $eom = $dt->modify('last day of this month')->format('Y-m-d');
+
+        if ($day === 15) {
+            // Next pay date in same month is EOM
+            return $eom;
+        }
+
+        if ($payYmd === $eom) {
+            // Next pay date is the 15th of next month
+            $nextMonth = $dt->modify('first day of next month');
+            return $nextMonth->setDate((int) $nextMonth->format('Y'), (int) $nextMonth->format('m'), 15)->format('Y-m-d');
+        }
+
+        return null;
+    }
+
+    /**
+     * Create N deduction rows for a given advance (loan).
+     * Idempotent guard: if any deduction exists for this employee with notes containing the advance code, skip.
+     */
+    private function createLoanDeductions(EmployeeFinancialLedger $advance, int $installmentsCount, string $firstPayYmd, int $totalCents): void
+    {
+        if ($installmentsCount <= 0) {
+            return;
+        }
+
+        $advCode = (string) $advance->getCode();
+        if ($advCode === '') {
+            return;
+        }
+
+        // Idempotency: if deductions were already created for this advance code, do nothing.
+        $repo = $this->em->getRepository(EmployeeFinancialLedger::class);
+        $existing = $repo->createQueryBuilder('l')
+            ->select('COUNT(l.id)')
+            ->andWhere('l.employee = :emp')
+            ->andWhere('l.type = :type')
+            ->andWhere('l.notes LIKE :n')
+            ->setParameter('emp', $advance->getEmployee())
+            ->setParameter('type', 'deduction')
+            ->setParameter('n', '%' . $advCode . '%')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        if ((int) $existing > 0) {
+            return;
+        }
+
+        $bounds0 = $this->payrollPeriodBoundsFromPayDate($firstPayYmd);
+        if ($bounds0 === null) {
+            throw new \InvalidArgumentException('installmentsStart must be 15th or end of month (EOM)');
+        }
+
+        // Split total cents across installments without drift.
+        $base = intdiv($totalCents, $installmentsCount);
+        $rem  = $totalCents - ($base * $installmentsCount);
+
+        $payYmd = $firstPayYmd;
+
+        for ($i = 1; $i <= $installmentsCount; $i += 1) {
+            $bounds = $this->payrollPeriodBoundsFromPayDate($payYmd);
+            if ($bounds === null) {
+                throw new \InvalidArgumentException('Invalid payroll pay date computed: ' . $payYmd);
+            }
+
+            $instCents = $base;
+            if ($rem > 0) {
+                $instCents += 1;
+                $rem -= 1;
+            }
+
+            $ded = new EmployeeFinancialLedger();
+            $ded->setEmployee($advance->getEmployee());
+            $ded->setEmployeeShortName($advance->getEmployeeShortName());
+            $ded->setType('deduction');
+            // Deduction is negative
+            $ded->setAmount($this->centsToMoney(-$instCents));
+            $ded->setDivision($advance->getDivision());
+            $ded->setCity($advance->getCity());
+            $ded->setCostCentre($advance->getCostCentre());
+            $ded->setArea($advance->getArea());
+            $ded->setPeriodStart($this->ymdToDate($bounds['start']));
+            $ded->setPeriodEnd($this->ymdToDate($bounds['end']));
+            $ded->setNotes(sprintf('Loan repayment %d/%d for %s', $i, $installmentsCount, $advCode));
+            $ded->setCode($this->generateCode());
+
+            $this->em->persist($ded);
+
+            if ($i < $installmentsCount) {
+                $next = $this->nextPayrollPayDate($payYmd);
+                if ($next === null) {
+                    throw new \InvalidArgumentException('Could not compute next payroll date after: ' . $payYmd);
+                }
+                $payYmd = $next;
+            }
+        }
     }
 
     /**

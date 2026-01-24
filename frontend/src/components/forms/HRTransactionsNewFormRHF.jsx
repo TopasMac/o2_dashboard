@@ -63,6 +63,51 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
     return parts?.[2] ?? null;
   };
 
+  // --- Helpers for advance period bounds ---
+  // 1) addMonthsKeepDay(ymd, months, day)
+  const addMonthsKeepDay = (ymd, months, day) => {
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
+    const [y, m] = ymd.split('-').map((v) => parseInt(v, 10));
+    // months can be negative or positive
+    const dt = new Date(Date.UTC(y, m - 1 + months, 1));
+    // Set the day, but clamp to last day of month if needed
+    const lastDay = new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0)).getUTCDate();
+    const useDay = Math.min(day, lastDay);
+    dt.setUTCDate(useDay);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  };
+
+  // 2) payrollPeriodBoundsFromPayDate
+  const payrollPeriodBoundsFromPayDate = (payYmd) => {
+    if (!payYmd || !/^\d{4}-\d{2}-\d{2}$/.test(payYmd)) return null;
+    const day = ymdDay(payYmd);
+    const eom = endOfMonthYmd(payYmd);
+    if (day === 15) {
+      return { start: `${payYmd.slice(0, 8)}01`, end: `${payYmd.slice(0, 8)}15` };
+    }
+    if (payYmd === eom) {
+      return { start: `${payYmd.slice(0, 8)}16`, end: eom };
+    }
+    return null;
+  };
+
+  // 3) nextPayrollPayDate
+  const nextPayrollPayDate = (payYmd) => {
+    if (!payYmd || !/^\d{4}-\d{2}-\d{2}$/.test(payYmd)) return '';
+    const day = ymdDay(payYmd);
+    const eom = endOfMonthYmd(payYmd);
+    if (day === 15) {
+      return endOfMonthYmd(payYmd);
+    }
+    if (payYmd === eom) {
+      return addMonthsKeepDay(payYmd, 1, 15);
+    }
+    return '';
+  };
+
   const ymdYearMonth = (ymd) => {
     if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return '';
     return ymd.slice(0, 7);
@@ -114,6 +159,13 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
     return 'O2_General';
   };
 
+  // New helpers
+  const safeNum = (v) => {
+    const n = parseFloat(String(v || '').replace(/,/g, ''));
+    return Number.isFinite(n) ? n : NaN;
+  };
+  const toMoney2 = (n) => (Number.isFinite(n) ? n.toFixed(2) : '');
+
   // RHF wiring
   const initialValues = useMemo(() => ({
     employeeId: '',
@@ -128,6 +180,9 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
     currentSalary: '', // monthly total salary from employee record
     amount: '',
     notes: '',
+    installmentsCount: '',
+    installmentsStart: '',
+    installmentAmount: '',
   }), []);
 
   const methods = useForm({ defaultValues: initialValues });
@@ -261,6 +316,80 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
     }
   }, [typeVal, startVal, endVal, currentSalaryVal, amountVal, setValue]);
 
+  // Watches for new fields
+  const installmentsCountVal = watch('installmentsCount');
+  const installmentsStartVal = watch('installmentsStart');
+  const installmentAmountVal = watch('installmentAmount');
+  const lastAutoInstallmentAmountRef = useRef('');
+  // For auto-setting hidden periodStart/periodEnd for advances
+  const lastAutoAdvanceFromRef = useRef('');
+  const lastAutoAdvanceToRef = useRef('');
+
+  useEffect(() => {
+    if (typeVal !== 'advance') {
+      clearErrors('installmentsCount');
+      clearErrors('installmentsStart');
+      clearErrors('installmentAmount');
+      return;
+    }
+    // Live validation for installmentsStart: must be 15th or end-of-month (EOM) if set
+    const ymd = toYmd(installmentsStartVal);
+    let day, isEom;
+    if (ymd) {
+      day = ymdDay(ymd);
+      isEom = ymd === endOfMonthYmd(ymd);
+      if (day !== 15 && !isEom) {
+        setError('installmentsStart', {
+          type: 'validate',
+          message: 'Start deducting on must be the 15th or end of month (EOM).',
+        });
+        return;
+      } else {
+        clearErrors('installmentsStart');
+      }
+    }
+    const amountNum = safeNum(amountVal);
+    const countNum = parseInt(installmentsCountVal, 10);
+    if (!amountNum || amountNum <= 0) return;
+    if (!countNum || countNum <= 0) return;
+
+    const calcAmount = toMoney2(amountNum / countNum);
+
+    const canAutoSet = !installmentAmountVal || installmentAmountVal === '' || installmentAmountVal === lastAutoInstallmentAmountRef.current;
+    if (canAutoSet) {
+      lastAutoInstallmentAmountRef.current = calcAmount;
+      setValue('installmentAmount', calcAmount, { shouldDirty: true });
+    }
+
+    // --- Auto-calculate and set hidden periodStart/periodEnd for advances ---
+    // Only if ymd is valid (15th/EOM) and countNum >= 1
+    if (ymd && (day === 15 || isEom) && countNum >= 1) {
+      // Compute first period
+      const first = payrollPeriodBoundsFromPayDate(ymd);
+      // Compute last pay date by iterating countNum - 1 times
+      let lastPay = ymd;
+      for (let i = 1; i < countNum; i += 1) {
+        const next = nextPayrollPayDate(lastPay);
+        if (!next) break;
+        lastPay = next;
+      }
+      const last = payrollPeriodBoundsFromPayDate(lastPay);
+      if (first && last) {
+        // Only set if differs or matches last auto-set value
+        const curFrom = toYmd(watch('periodStart'));
+        const curTo = toYmd(watch('periodEnd'));
+        if (curFrom !== first.start || curFrom === lastAutoAdvanceFromRef.current) {
+          lastAutoAdvanceFromRef.current = first.start;
+          setValue('periodStart', first.start, { shouldDirty: true });
+        }
+        if (curTo !== last.end || curTo === lastAutoAdvanceToRef.current) {
+          lastAutoAdvanceToRef.current = last.end;
+          setValue('periodEnd', last.end, { shouldDirty: true });
+        }
+      }
+    }
+  }, [typeVal, amountVal, installmentsCountVal, installmentAmountVal, installmentsStartVal, setValue, setError, clearErrors, watch]);
+
   // Local submit to normalize payload
   const submitHandler = handleSubmit(async (values) => {
     if ((values.type || 'salary') === 'salary' && values.periodStart && values.periodEnd && !isWithinHalf(values.periodStart, values.periodEnd)) {
@@ -269,6 +398,21 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
         message: 'Salary period must stay within 1–15 or 16–end of month (no crossing).',
       });
       return;
+    }
+    // Submit-time validation for advance installmentsStart: must be 15th or end-of-month (EOM)
+    if (values.type === 'advance') {
+      const ymd = toYmd(values.installmentsStart);
+      if (ymd) {
+        const day = ymdDay(ymd);
+        const isEom = ymd === endOfMonthYmd(ymd);
+        if (day !== 15 && !isEom) {
+          setError('installmentsStart', {
+            type: 'validate',
+            message: 'Start deducting on must be the 15th or end of month (EOM).',
+          });
+          return;
+        }
+      }
     }
 
     const payload = {
@@ -282,6 +426,33 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
       city: values.city || null,
       costCentre: values.costCentre || null,
     };
+    if (values.type === 'advance') {
+      payload.installmentsCount = values.installmentsCount ? parseInt(values.installmentsCount, 10) : null;
+      payload.installmentsStart = toYmd(values.installmentsStart) || null;
+      payload.installmentAmount = values.installmentAmount !== '' ? String(values.installmentAmount) : null;
+      // Defensive: recompute periodStart/periodEnd for advances
+      const ymd = toYmd(values.installmentsStart);
+      const countNum = parseInt(values.installmentsCount, 10);
+      let day, isEom;
+      if (ymd) {
+        day = ymdDay(ymd);
+        isEom = ymd === endOfMonthYmd(ymd);
+      }
+      if (ymd && (day === 15 || isEom) && countNum >= 1) {
+        const first = payrollPeriodBoundsFromPayDate(ymd);
+        let lastPay = ymd;
+        for (let i = 1; i < countNum; i += 1) {
+          const next = nextPayrollPayDate(lastPay);
+          if (!next) break;
+          lastPay = next;
+        }
+        const last = payrollPeriodBoundsFromPayDate(lastPay);
+        if (first && last) {
+          payload.periodStart = first.start;
+          payload.periodEnd = last.end;
+        }
+      }
+    }
     if (onSubmit) await onSubmit(payload);
   });
 
@@ -328,44 +499,106 @@ const HRTransactionsNewFormRHF = ({ onSubmit, onChange, disabled }) => {
         <RHFTextField name="city" label="City" width="half" sx={{ width: widthMap.half }} disabled />
       </Stack>
 
-      <RHFSelect
-        name="type"
-        label="Type"
-        options={[
-          { label: 'Salary', value: 'salary' },
-          { label: 'Advance', value: 'advance' },
-          { label: 'Bonus', value: 'bonus' },
-          { label: 'Deduction', value: 'deduction' },
-        ]}
-        width="half"
-        sx={{ width: widthMap.half }}
-        required
-      />
-
-      <Stack direction="row" spacing={2} sx={{ width: '100%', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <RHFDatePicker
-          name="periodStart"
-          label="Start"
+      {typeVal === 'advance' ? (
+        <Stack direction="row" spacing={2} sx={{ width: '100%', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <RHFSelect
+            name="type"
+            label="Type"
+            options={[
+              { label: 'Salary', value: 'salary' },
+              { label: 'Advance', value: 'advance' },
+              { label: 'Bonus', value: 'bonus' },
+              { label: 'Deduction', value: 'deduction' },
+            ]}
+            sx={{ width: widthMap.half }}
+            width="half"
+            required
+          />
+          <RHFTextField
+            name="amount"
+            label="Amount"
+            type="number"
+            step="0.01"
+            width="half"
+            sx={{ width: widthMap.half }}
+            required
+          />
+        </Stack>
+      ) : (
+        <RHFSelect
+          name="type"
+          label="Type"
+          options={[
+            { label: 'Salary', value: 'salary' },
+            { label: 'Advance', value: 'advance' },
+            { label: 'Bonus', value: 'bonus' },
+            { label: 'Deduction', value: 'deduction' },
+          ]}
           width="half"
-          sx={{
-            width: widthMap.half,
-            '& .MuiInputBase-root': { mt: 0 },
-            '& .MuiFormHelperText-root': { mt: 0 },
-          }}
+          sx={{ width: widthMap.half }}
+          required
         />
-        <RHFDatePicker
-          name="periodEnd"
-          label="End"
-          width="half"
-          sx={{
-            width: widthMap.half,
-            '& .MuiInputBase-root': { mt: 0 },
-            '& .MuiFormHelperText-root': { mt: 0 },
-          }}
-        />
-      </Stack>
+      )}
 
-      <RHFTextField name="amount" label="Amount" type="number" step="0.01" width="full" sx={{ width: widthMap.full }} required />
+      {typeVal === 'advance' && (
+        <>
+          <Stack direction="row" spacing={2} sx={{ width: '100%', flexWrap: 'wrap' }}>
+            <RHFTextField
+              name="installmentsCount"
+              label="# Installments"
+              type="number"
+              width="half"
+              sx={{ width: widthMap.half }}
+              required
+              inputProps={{ min: 1, step: 1 }}
+            />
+          <RHFDatePicker
+            name="installmentsStart"
+            label="Start deducting on (15th or EOM)"
+            width="half"
+            sx={{ width: widthMap.half }}
+          />
+          </Stack>
+          <RHFTextField
+            name="installmentAmount"
+            label="Installment amount"
+            type="number"
+            step="0.01"
+            width="full"
+            sx={{ width: widthMap.full }}
+            helperText="Auto-calculated as Amount / # Installments (you can override)."
+          />
+        </>
+      )}
+
+      {typeVal !== 'advance' && (
+        <Stack direction="row" spacing={2} sx={{ width: '100%', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <RHFDatePicker
+            name="periodStart"
+            label="Start"
+            width="half"
+            sx={{
+              width: widthMap.half,
+              '& .MuiInputBase-root': { mt: 0 },
+              '& .MuiFormHelperText-root': { mt: 0 },
+            }}
+          />
+          <RHFDatePicker
+            name="periodEnd"
+            label="End"
+            width="half"
+            sx={{
+              width: widthMap.half,
+              '& .MuiInputBase-root': { mt: 0 },
+              '& .MuiFormHelperText-root': { mt: 0 },
+            }}
+          />
+        </Stack>
+      )}
+
+      {typeVal !== 'advance' && (
+        <RHFTextField name="amount" label="Amount" type="number" step="0.01" width="full" sx={{ width: widthMap.full }} required />
+      )}
       <RHFTextField name="notes" label="Notes" multiline minRows={3} width="full" sx={{ width: widthMap.full }} />
     </RHFForm>
   );

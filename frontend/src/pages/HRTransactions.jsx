@@ -90,6 +90,11 @@ const HRTransactions = () => {
     },
     { header: "Amount", accessor: "amount", cell: (row) => formatAmount(row?.amount) },
     {
+      header: "Granted",
+      accessor: "createdAt",
+      cell: (row) => (row?.type === 'advance' ? formatDate(row?.createdAt) : ''),
+    },
+    {
       header: "From",
       accessor: "periodStart",
       filterable: true,
