@@ -425,6 +425,7 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
       const rows = entries.map(([empId, amt]) => {
         const emp = (employees || []).find((e) => String(e.id) === String(empId)) || {};
         return {
+          employee_id: emp.id,
           employee_code: emp.code || '',
           bank_holder: emp.bankHolder || emp.name || emp.fullName || '',
           bank_name: emp.bankName || '',
@@ -434,7 +435,11 @@ const HRPaymentDrawer = ({ open = false, onClose }) => {
       });
 
       setExporting(true);
-      const res = await api.post('/api/reports/hr/payment-request/export.pdf', { division, rows }, { responseType: 'blob' });
+      const res = await api.post(
+        '/api/reports/hr/payment-request/export.pdf',
+        { division, periodStart, periodEnd, rows },
+        { responseType: 'blob' }
+      );
       const blob = new Blob([res.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

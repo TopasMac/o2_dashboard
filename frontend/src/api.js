@@ -12,7 +12,7 @@ const AUTH_BYPASS = ['/api/login_check', '/api/login', '/api/token/refresh'];
 // Create axios instance using domain base; callers will use paths like "/api/..."
 const api = axios.create({
   // Use same-origin; let calls like '/api/...' hit the current host (desktop or mobile)
-  baseURL: '',
+  baseURL: ENV_BASE || '',
   withCredentials: true,
 });
 

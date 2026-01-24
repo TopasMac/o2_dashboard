@@ -1689,7 +1689,7 @@ SQL;
             ],
         ]);
     }
-    #[Route('/api/reports/hr/payment-request/preview', name: 'hr_payment_request_preview', methods: ['GET','POST'])]
+    #[Route('/api/reports/hr/payment-request/preview', name: 'hr_payment_request_preview', methods: ['GET','POST','OPTIONS'])]
     public function hrPaymentRequestPreview(
         Request $request,
         Pdf $pdf
@@ -1748,11 +1748,12 @@ SQL;
         return $resp;
     }
 
-    #[Route('/api/reports/hr/payment-request/export.pdf', name: 'hr_payment_request_export_pdf', methods: ['GET','POST'])]
+    #[Route('/api/reports/hr/payment-request/export.pdf', name: 'hr_payment_request_export_pdf', methods: ['GET','POST','OPTIONS'])]
     public function hrPaymentRequestExportPdf(
         Request $request,
         Pdf $pdf
     ): Response {
+
         // Accept JSON POST or GET query params
         $payload = [];
         $ct = (string) $request->headers->get('Content-Type');
