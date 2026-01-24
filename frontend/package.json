@@ -47,7 +47,7 @@
     "start": "react-scripts start",
     "start-clean": "kill -9 $(lsof -t -i:3000) || true && react-scripts start",
     "prestart": "rm -rf node_modules/.cache .eslintcache || true",
-    "start:mobile": "REACT_APP_BACKEND_BASE=http://127.0.0.1:8001 O2_API_TARGET=http://127.0.0.1:8001 HOST=0.0.0.0 PORT=3000 WDS_ALLOWED_HOSTS=all DANGEROUSLY_DISABLE_HOST_CHECK=true WDS_SOCKET_HOST=127.0.0.1 WDS_SOCKET_PORT=3000 CHOKIDAR_USEPOLLING=true CHOKIDAR_INTERVAL=500 WATCHPACK_POLLING=true BROWSER=google-chrome react-scripts start",
+    "start:mobile": "HOST=0.0.0.0 PORT=3000 WDS_ALLOWED_HOSTS=all DANGEROUSLY_DISABLE_HOST_CHECK=true WDS_SOCKET_HOST=127.0.0.1 WDS_SOCKET_PORT=3000 CHOKIDAR_USEPOLLING=true CHOKIDAR_INTERVAL=500 WATCHPACK_POLLING=true BROWSER=google-chrome react-scripts start",
     "api:dev": "cd ../ && php -S 0.0.0.0:8001 -t public public/router.php",
     "api:prod": "bash -lc 'cd /home/ubuntu/owners2_main && (lsof -t -i:8001 | xargs -r kill -9) || true; APP_ENV=prod APP_DEBUG=0 php -S 0.0.0.0:8001 -t public'",
     "ngrok": "ngrok http 3000 --log=stdout | tee /tmp/ngrok.log & sleep 2 && NGROK_URL=$(grep -o 'https://[^ ]*ngrok-free.dev' /tmp/ngrok.log | tail -n1) && echo \"$NGROK_URL\" > /tmp/o2_ngrok_url.txt && echo '' && echo '📱 MOBILE:' \"$NGROK_URL/m/dashboard\" && wait",
