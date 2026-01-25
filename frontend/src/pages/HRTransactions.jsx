@@ -12,7 +12,9 @@ import {
   FormControl,
   InputLabel,
   Tooltip,
+  useMediaQuery,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
 import EditCalendarIcon from "@mui/icons-material/EditCalendar";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -108,6 +110,9 @@ const HRTransactions = () => {
   const [selectedRow, setSelectedRow] = useState(null);
   const [discountModalOpen, setDiscountModalOpen] = useState(false);
   const [discountRow, setDiscountRow] = useState(null);
+
+  const theme = useTheme();
+  const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
   // Payments helper (simple paid/unpaid tracking via salary rows)
   const monthOptions = useMemo(() => buildMonthOptions(6), []);
@@ -239,6 +244,71 @@ const HRTransactions = () => {
       };
     });
   }, [employeesOpt]);
+
+  const paymentsColumns = useMemo(() => {
+    const renderPaidCell = (halfKey) => (r) => {
+      if (!halfPeriods) return null;
+      const half = halfKey === "h2" ? halfPeriods.h2 : halfPeriods.h1;
+      const k = `${r.employeeId}|${half.periodStart}|${half.periodEnd}`;
+      const paidRow = salaryIndex.get(k);
+      const isPaid = !!paidRow;
+      const Icon = isPaid ? CheckCircleIcon : RadioButtonUncheckedIcon;
+      const color = isPaid ? "#1E6F68" : "#9aa7a6";
+      const title = isPaid ? `Paid (${paidRow.code || paidRow.id})` : "Not paid — click to register";
+      return (
+        <Tooltip title={title}>
+          <span>
+            <Icon
+              sx={{ color, cursor: isPaid ? "default" : "pointer" }}
+              onClick={() => {
+                if (!isPaid) openPayModal(r, halfKey);
+              }}
+            />
+          </span>
+        </Tooltip>
+      );
+    };
+
+    // Always use the compact layout (drawer width is limited even on desktop)
+    return [
+      {
+        header: "Name",
+        accessor: "shortName",
+        filter: { type: "autocomplete" },
+        cell: (row) => (
+          <span>
+            {row.shortName}
+            {row.division ? (
+              <Typography
+                variant="caption"
+                sx={{ display: "block", color: "#9aa7a6", fontSize: "0.75rem", mt: 0.2 }}
+              >
+                {row.division}
+              </Typography>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        header: (
+          <Tooltip title="First half (01–15)">
+            <span>H1</span>
+          </Tooltip>
+        ),
+        accessor: "_h1",
+        cell: renderPaidCell("h1"),
+      },
+      {
+        header: (
+          <Tooltip title="Second half (16–EOM)">
+            <span>H2</span>
+          </Tooltip>
+        ),
+        accessor: "_h2",
+        cell: renderPaidCell("h2"),
+      },
+    ];
+  }, [halfPeriods, salaryIndex, paymentsTableRows]);
 
   const loadPaymentsData = async () => {
     if (!halfPeriods || !selectedMonthMeta) return;
@@ -569,63 +639,10 @@ const HRTransactions = () => {
               <CircularProgress />
             </Box>
           ) : (
-            <Box sx={{ width: "100%" }}>
+            <Box sx={{ width: "100%", overflowX: "hidden" }}>
               <TableLite
                 rows={paymentsTableRows}
-                columns={[
-                  { header: "Name", accessor: "shortName", filter: { type: "autocomplete" } },
-                  { header: "Division", accessor: "division", filterable: true, filterType: "select" },
-                  {
-                    header: "H1 (01–15)",
-                    accessor: "_h1",
-                    cell: (r) => {
-                      if (!halfPeriods) return null;
-                      const k = `${r.employeeId}|${halfPeriods.h1.periodStart}|${halfPeriods.h1.periodEnd}`;
-                      const paidRow = salaryIndex.get(k);
-                      const isPaid = !!paidRow;
-                      const Icon = isPaid ? CheckCircleIcon : RadioButtonUncheckedIcon;
-                      const color = isPaid ? "#1E6F68" : "#9aa7a6";
-                      const title = isPaid ? `Paid (${paidRow.code || paidRow.id})` : "Not paid — click to register";
-                      return (
-                        <Tooltip title={title}>
-                          <span>
-                            <Icon
-                              sx={{ color, cursor: isPaid ? "default" : "pointer" }}
-                              onClick={() => {
-                                if (!isPaid) openPayModal(r, "h1");
-                              }}
-                            />
-                          </span>
-                        </Tooltip>
-                      );
-                    },
-                  },
-                  {
-                    header: "H2 (16–EOM)",
-                    accessor: "_h2",
-                    cell: (r) => {
-                      if (!halfPeriods) return null;
-                      const k = `${r.employeeId}|${halfPeriods.h2.periodStart}|${halfPeriods.h2.periodEnd}`;
-                      const paidRow = salaryIndex.get(k);
-                      const isPaid = !!paidRow;
-                      const Icon = isPaid ? CheckCircleIcon : RadioButtonUncheckedIcon;
-                      const color = isPaid ? "#1E6F68" : "#9aa7a6";
-                      const title = isPaid ? `Paid (${paidRow.code || paidRow.id})` : "Not paid — click to register";
-                      return (
-                        <Tooltip title={title}>
-                          <span>
-                            <Icon
-                              sx={{ color, cursor: isPaid ? "default" : "pointer" }}
-                              onClick={() => {
-                                if (!isPaid) openPayModal(r, "h2");
-                              }}
-                            />
-                          </span>
-                        </Tooltip>
-                      );
-                    },
-                  },
-                ]}
+                columns={paymentsColumns}
                 enableFilters
                 autoFilter
                 optionsSourceRows={paymentsTableRows}
