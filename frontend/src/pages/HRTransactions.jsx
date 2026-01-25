@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { Box, Button, Typography, CircularProgress, Alert, Stack } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditCalendarIcon from "@mui/icons-material/EditCalendar";
 import TableLite from "../components/layout/TableLite";
 import api from "../api";
 import AppDrawer from "../components/common/AppDrawer";
 import HRTransactionsNewFormRHF from "../components/forms/HRTransactionsNewFormRHF";
 import HRTransactionsEditFormRHF from "../components/forms/HRTransactionsEditFormRHF";
 import HRPaymentDrawer from "../components/common/HRPaymentDrawer";
+import HRDiscountModal from "../components/modals/HRDiscountModal";
 import PageScaffold from "../components/layout/PageScaffold";
 
 function formatDate(dateStr) {
@@ -47,6 +49,8 @@ const HRTransactions = () => {
   const [paymentDrawerOpen, setPaymentDrawerOpen] = useState(false);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const [discountModalOpen, setDiscountModalOpen] = useState(false);
+  const [discountRow, setDiscountRow] = useState(null);
 
   const columns = [
     {
@@ -103,6 +107,26 @@ const HRTransactions = () => {
     },
     { header: "To", accessor: "periodEnd", cell: (row) => formatDate(row?.periodEnd) },
     { header: "Notes", accessor: "notes" },
+    {
+      header: "",
+      accessor: "_actions",
+      cell: (row) =>
+        row?.type === "deduction" ? (
+          <EditCalendarIcon
+            sx={{
+              color: "#1E6F68",
+              cursor: "pointer",
+              "&:hover": { color: "#D9822B" },
+            }}
+            titleAccess="Edit deduction period"
+            onClick={() => {
+              console.debug('[HRTransactions] open HRDiscountModal row:', row);
+              setDiscountRow(row);
+              setDiscountModalOpen(true);
+            }}
+          />
+        ) : null,
+    },
   ];
 
   const exportLedger = () => {
@@ -122,6 +146,9 @@ const HRTransactions = () => {
         const mapped = list.map((item, idx) => ({
           id: item.id ?? idx,
           code: item.code,
+          // keep a few employee identifiers so modals/forms can resolve employeeId reliably
+          employeeId: item.employeeId ?? item.employee_id ?? item.employee?.id ?? null,
+          employee: item.employee ?? null,
           shortName: item.shortName ?? item.employee?.shortName ?? item.employeeShortName ?? "",
           division: item.division,
           costCentre: item.costCentre,
@@ -292,6 +319,26 @@ const HRTransactions = () => {
         open={paymentDrawerOpen}
         onClose={() => setPaymentDrawerOpen(false)}
       />
+      {discountRow && (
+        <HRDiscountModal
+          open={discountModalOpen}
+          row={discountRow}
+          onClose={() => {
+            setDiscountModalOpen(false);
+            setDiscountRow(null);
+          }}
+          onSave={async (row, payload) => {
+            try {
+              await api.patchJson(`/api/employee-ledger/${row.id}`, payload);
+              setDiscountModalOpen(false);
+              setDiscountRow(null);
+              fetchData();
+            } catch (e) {
+              alert(e?.response?.data?.message || "Failed to update deduction");
+            }
+          }}
+        />
+      )}
     </PageScaffold>
   );
 };

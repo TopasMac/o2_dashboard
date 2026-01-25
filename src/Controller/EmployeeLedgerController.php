@@ -121,6 +121,38 @@ class EmployeeLedgerController extends AbstractController
             return $this->json(['error' => 'invalid_json', 'message' => 'Invalid JSON body'], 400);
         }
 
+        // Guard: only allow period edits for deductions
+        if (array_key_exists('periodStart', $data) || array_key_exists('periodEnd', $data)) {
+            if (method_exists($row, 'getType') && $row->getType() !== 'deduction') {
+                return $this->json([
+                    'success' => false,
+                    'error' => 'invalid_operation',
+                    'message' => 'Period dates can only be edited for deduction entries.',
+                ], 400);
+            }
+
+            if (!empty($data['periodStart']) && !empty($data['periodEnd'])) {
+                try {
+                    $ps = new \DateTimeImmutable($data['periodStart']);
+                    $pe = new \DateTimeImmutable($data['periodEnd']);
+                } catch (\Throwable $e) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'invalid_dates',
+                        'message' => 'Invalid periodStart or periodEnd format.',
+                    ], 400);
+                }
+
+                if ($ps > $pe) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'invalid_range',
+                        'message' => 'periodStart must be before or equal to periodEnd.',
+                    ], 400);
+                }
+            }
+        }
+
         try {
             $row = $this->service->update($row, $data);
             return $this->json([

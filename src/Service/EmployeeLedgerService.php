@@ -316,6 +316,32 @@ class EmployeeLedgerService
      */
     public function update(EmployeeFinancialLedger $row, array $payload): EmployeeFinancialLedger
     {
+        // Whitelist edits for deductions (installment rows)
+        $currentType = method_exists($row, 'getType') ? (string) $row->getType() : '';
+
+        // Extra guard: never allow editing period dates for non-deductions (controller also guards this)
+        if ($currentType !== 'deduction' && (array_key_exists('periodStart', $payload) || array_key_exists('periodEnd', $payload))) {
+            throw new \InvalidArgumentException('Period dates can only be edited for deduction entries.');
+        }
+
+        if ($currentType === 'deduction') {
+            // For deductions, allow ONLY: periodStart, periodEnd, notes
+            $allowedKeys = ['periodStart', 'periodEnd', 'notes'];
+
+            foreach ($payload as $k => $_v) {
+                if (!in_array((string) $k, $allowedKeys, true)) {
+                    throw new \InvalidArgumentException('Only periodStart, periodEnd and notes can be edited for deduction entries.');
+                }
+            }
+
+            // Prevent amount edits explicitly (even if caller tries)
+            if (array_key_exists('amount', $payload)) {
+                throw new \InvalidArgumentException('Amount cannot be edited for deduction entries.');
+            }
+
+            // Reduce payload to whitelist to avoid accidental edits if more logic is added later
+            $payload = array_intersect_key($payload, array_flip($allowedKeys));
+        }
         if (isset($payload['employeeId']) && $payload['employeeId'] !== '') {
             $emp = $this->em->getRepository(Employee::class)->find((int) $payload['employeeId']);
             if (!$emp) {
