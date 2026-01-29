@@ -290,7 +290,16 @@ const HKCleaningsView = () => {
         unitName: r.unit_name ?? r.unitName ?? r.name ?? '',
         city: r.city ?? '',
         cleaningFee: r.cleaning_fee ?? r.unit_cleaning_fee ?? null,
-        unitRateAmount: r.unit_rate_amount ?? null,
+        // Cleaning cost (what we pay). Source of truth: hk_unit_cleaning_rate.amount, exposed by API as `cleaning_cost`.
+        unitRateAmount: (
+          r.cleaning_cost ??
+          r.unit_rate_amount ??
+          r.unit_rate_cost ??
+          r.unit_cleaning_cost ??
+          r.cleaningCost ??
+          r.cost ??
+          null
+        ),
       })).filter(r => r.id != null);
       setUnitsRows(normalized);
     } catch (e) {
@@ -847,15 +856,15 @@ const HKCleaningsView = () => {
                       },
                       '& th:last-child, & td:last-child': { borderRight: 'none' },
                       '& thead th:nth-of-type(1), & tbody td:nth-of-type(1)': { width: 90, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' },
-                      '& thead th:nth-of-type(2), & tbody td:nth-of-type(2)': { width: 40, maxWidth: 40 },
-                      '& thead th:nth-of-type(3), & tbody td:nth-of-type(3)': { width: 40, maxWidth: 40 }
+                      '& thead th:nth-of-type(2), & tbody td:nth-of-type(2)': { width: 80, maxWidth: 80 },
+                      '& thead th:nth-of-type(3), & tbody td:nth-of-type(3)': { width: 80, maxWidth: 80 }
                     }}
                   >
                     <TableHead>
                       <TableRow>
                         <TableCell>Unit</TableCell>
-                        <TableCell align="right" width={40}>Fee</TableCell>
-                        <TableCell align="right" width={40}>Cost</TableCell>
+                        <TableCell align="right" width={80}>Fee</TableCell>
+                        <TableCell align="right" width={80}>Cost</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>

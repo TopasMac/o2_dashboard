@@ -6,6 +6,7 @@ use App\Entity\AllBookings;
 use App\Entity\IcalEvent;
 use App\Repository\IcalEventRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\DBAL\Connection;
 
 /**
  * Non-destructive reconciler between Owners2 bookings and iCal events.
@@ -19,10 +20,17 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class BookingIcalReconcileService
 {
+    private Connection $db;
+
     public function __construct(
         private EntityManagerInterface $em,
         private IcalEventRepository $icalRepo,
-    ) {}
+        ?Connection $db = null,
+    ) {
+        // Backwards-compatible: older container wiring passes only ($em, $icalRepo)
+        // so we derive the DBAL connection from the EntityManager.
+        $this->db = $db ?? $em->getConnection();
+    }
 
     /**
      * Reconcile bookings with iCal events.
@@ -66,6 +74,22 @@ class BookingIcalReconcileService
 
         // Load candidate bookings: we keep this simple and filter in-PHP to avoid coupling to repo specifics.
         $bookings = $this->findCandidateBookings($unitId, $from, $to);
+
+        // 0) Create placeholder bookings for iCal reservations that exist in ical_events but are missing in all_bookings.
+        // This handles cases where the Airbnb email import is missing, but the reservation actually exists in iCal.
+        // Placeholders are created with payout=0 and guest_name='Missing email' so they are easy to filter and complete.
+        $createdPlaceholders = 0;
+        try {
+            $createdPlaceholders = $this->createMissingBookingsFromIcal($unitId, $from, $to);
+        } catch (\Throwable $t) {
+            // Fail-safe: reconcile should still run even if placeholder creation fails.
+            // Intentionally ignore.
+        }
+
+        // Reload candidate bookings so newly created placeholders are included in this reconcile run.
+        if ($createdPlaceholders > 0) {
+            $bookings = $this->findCandidateBookings($unitId, $from, $to);
+        }
 
         $items = [];
         $matched = 0;
@@ -550,6 +574,7 @@ class BookingIcalReconcileService
             'conflicts' => $conflicts,
             'suspected_cancelled' => $suspectedCancelled,
             'linked' => $linked,
+            'created_placeholders' => $createdPlaceholders ?? 0,
             'items' => $items,
         ];
     }
@@ -883,5 +908,300 @@ class BookingIcalReconcileService
         } catch (\Throwable $e) {
             return null;
         }
+    }
+    /**
+     * Create placeholder rows in all_bookings for iCal reservation events that do not exist in all_bookings.
+     *
+     * Rules (per Antonio):
+     * - source = 'Airbnb' (so downstream logic works)
+     * - confirmation_code and reservation_code come from ical_events.reservationCode (HM...)
+     * - booking_date = check_in
+     * - guest_name = 'Missing email'
+     * - payout and calculated monetary fields = 0
+     * - tax_percent and commission_percent loaded from booking_config (latest effective_date <= today)
+     * - notes includes a hint that this row was created from iCal
+     */
+    private function createMissingBookingsFromIcal(?int $unitId, ?\DateTimeInterface $from, ?\DateTimeInterface $to): int
+    {
+        // Determine fallback default percentages from booking_config (latest effective_date <= today)
+        [$fallbackTax, $fallbackCommission] = $this->getDefaultPercentsFromBookingConfig();
+
+        $qb = $this->icalRepo->createQueryBuilder('e')
+            ->andWhere('LOWER(e.eventType) = :et')->setParameter('et', 'reservation')
+            ->andWhere('e.reservationCode IS NOT NULL')
+            ->andWhere('e.reservationCode <> \'\'');
+
+        if ($unitId !== null) {
+            $qb->andWhere('IDENTITY(e.unit) = :u')->setParameter('u', $unitId);
+        }
+
+        // Window filter: include events that intersect the [from,to] range.
+        // Same overlap logic as elsewhere: dtstart <= to AND dtend >= from
+        if ($from !== null) {
+            $qb->andWhere('e.dtend >= :from')->setParameter('from', $from);
+        }
+        if ($to !== null) {
+            $qb->andWhere('e.dtstart <= :to')->setParameter('to', $to);
+        }
+
+        $events = $qb->getQuery()->getResult();
+        if (!is_array($events) || count($events) === 0) {
+            return 0;
+        }
+
+        $created = 0;
+        foreach ($events as $ev) {
+            if (!($ev instanceof IcalEvent)) {
+                continue;
+            }
+
+            $rc = $ev->getReservationCode();
+            if (!$this->looksLikeHm($rc)) {
+                // Only create placeholders for Airbnb HM reservations.
+                continue;
+            }
+
+            // Check if booking already exists by confirmation_code or reservation_code
+            if ($this->bookingExistsByCode($rc)) {
+                continue;
+            }
+
+            $unit = method_exists($ev, 'getUnit') ? $ev->getUnit() : null;
+            $unitName = null;
+            $city = null;
+            $unitIdVal = null;
+            $unitPaymentType = null;
+            try {
+                if ($unit) {
+                    if (method_exists($unit, 'getId')) {
+                        $unitIdVal = (int) $unit->getId();
+                    }
+                    if (method_exists($unit, 'getName')) {
+                        $unitName = (string) $unit->getName();
+                    } elseif (method_exists($unit, '__toString')) {
+                        $unitName = (string) $unit;
+                    }
+                    if (method_exists($unit, 'getCity')) {
+                        $city = (string) $unit->getCity();
+                    }
+                    if (method_exists($unit, 'getPaymentType')) {
+                        $unitPaymentType = $unit->getPaymentType();
+                    } elseif (method_exists($unit, 'getPayment_type')) {
+                        $unitPaymentType = $unit->getPayment_type();
+                    }
+                }
+            } catch (\Throwable $t) {
+                // ignore
+            }
+
+            // Read unit cleaning fee if available
+            $unitCleaningFee = null;
+            if ($unit) {
+                if (method_exists($unit, 'getCleaningFee')) {
+                    $unitCleaningFee = $unit->getCleaningFee();
+                } elseif (method_exists($unit, 'getCleaningFeeAmount')) {
+                    $unitCleaningFee = $unit->getCleaningFeeAmount();
+                }
+            }
+
+            // Choose tax/commission defaults based on unit payment_type (e.g., CLIENT uses client_* config)
+            // Fallbacks to the global defaults if no matching config is found.
+            [$taxPercent, $commissionPercent] = $this->getPercentsForUnitPaymentType(
+                is_string($unitPaymentType) ? $unitPaymentType : null,
+                $fallbackTax,
+                $fallbackCommission
+            );
+
+            $ci = $ev->getDtstart();
+            $co = $ev->getDtend();
+            if (!$ci || !$co) {
+                continue;
+            }
+
+            // For Airbnb VALUE=DATE reservations, dtend typically equals checkout date.
+            $checkIn = (new \DateTimeImmutable($ci->format('Y-m-d')))->setTime(0, 0, 0);
+            $checkOut = (new \DateTimeImmutable($co->format('Y-m-d')))->setTime(0, 0, 0);
+
+            // days = number of nights (checkout - checkin)
+            $days = (int) $checkOut->diff($checkIn)->days;
+            if ($days < 0) {
+                $days = 0;
+            }
+
+            $notes = sprintf(
+                'Created from iCal (missing Airbnb email import). Event #%s. Please complete guest/payout fields.',
+                (string) $ev->getId()
+            );
+
+            // Insert minimal placeholder row that satisfies NOT NULL columns.
+            // We intentionally set money/derived fields to 0; the booking edit endpoint will recalculate totals.
+            $this->db->executeStatement(
+                'INSERT INTO all_bookings (
+                    unit_name, confirmation_code, booking_date, source, guest_name, city, guests,
+                    check_in, check_out, days,
+                    payout, tax_percent, tax_amount, net_payout,
+                    cleaning_fee, notes, check_in_notes, check_out_notes,
+                    room_fee, client_income, o2_total,
+                    status, commission_percent, commission_value,
+                    payment_method, guest_type, payment_type,
+                    unit_id, overlap_warning, commission_base, is_paid,
+                    ical_event_id, reservation_code, date_sync_status, last_ical_sync_at,
+                    last_updated_at, last_updated_via
+                ) VALUES (
+                    :unit_name, :confirmation_code, :booking_date, :source, :guest_name, :city, :guests,
+                    :check_in, :check_out, :days,
+                    :payout, :tax_percent, :tax_amount, :net_payout,
+                    :cleaning_fee, :notes, :check_in_notes, :check_out_notes,
+                    :room_fee, :client_income, :o2_total,
+                    :status, :commission_percent, :commission_value,
+                    :payment_method, :guest_type, :payment_type,
+                    :unit_id, :overlap_warning, :commission_base, :is_paid,
+                    :ical_event_id, :reservation_code, :date_sync_status, :last_ical_sync_at,
+                    :last_updated_at, :last_updated_via
+                )',
+                [
+                    'unit_name' => $unitName ?: 'Unknown unit',
+                    'confirmation_code' => $rc,
+                    'booking_date' => $checkIn->format('Y-m-d'),
+                    'source' => 'Airbnb',
+                    'guest_name' => 'Missing email',
+                    'city' => $city ?: 'Unknown',
+                    'guests' => 1,
+                    'check_in' => $checkIn->format('Y-m-d'),
+                    'check_out' => $checkOut->format('Y-m-d'),
+                    'days' => $days,
+
+                    'payout' => 0,
+                    'tax_percent' => $taxPercent,
+                    'tax_amount' => 0,
+                    'net_payout' => 0,
+                    'cleaning_fee' => $unitCleaningFee,
+                    'notes' => $notes,
+                    'check_in_notes' => null,
+                    'check_out_notes' => null,
+                    'room_fee' => null,
+                    'client_income' => 0,
+                    'o2_total' => 0,
+
+                    'status' => 'needs_details',
+                    'commission_percent' => $commissionPercent,
+                    'commission_value' => 0,
+
+                    'payment_method' => null,
+                    'guest_type' => null,
+                    'payment_type' => (is_string($unitPaymentType) && $unitPaymentType !== '') ? $unitPaymentType : null,
+
+                    'unit_id' => $unitIdVal,
+                    'overlap_warning' => 0,
+                    'commission_base' => null,
+                    'is_paid' => 0,
+
+                    'ical_event_id' => $ev->getId(),
+                    'reservation_code' => $rc,
+                    'date_sync_status' => 'missing_booking',
+                    'last_ical_sync_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                    'last_updated_at' => (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                    'last_updated_via' => 'ical-create',
+                ]
+            );
+
+            $created++;
+        }
+
+        return $created;
+    }
+
+    /** Check whether an all_bookings row exists by confirmation_code OR reservation_code. */
+    private function bookingExistsByCode(string $code): bool
+    {
+        $cnt = (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM all_bookings WHERE confirmation_code = :c OR reservation_code = :c',
+            ['c' => $code]
+        );
+        return $cnt > 0;
+    }
+
+    /**
+     * Get default percentages from booking_config.
+     * Uses the latest effective_date <= today; falls back to 0/0.
+     */
+    private function getDefaultPercentsFromBookingConfig(): array
+    {
+        try {
+            $row = $this->db->fetchAssociative(
+                'SELECT default_tax_percentage, default_commission_percentage
+                 FROM booking_config
+                 WHERE effective_date <= :today
+                 ORDER BY effective_date DESC, id DESC
+                 LIMIT 1',
+                ['today' => (new \DateTimeImmutable('today'))->format('Y-m-d')]
+            );
+            if (is_array($row) && isset($row['default_tax_percentage'], $row['default_commission_percentage'])) {
+                return [
+                    (float) $row['default_tax_percentage'],
+                    (float) $row['default_commission_percentage'],
+                ];
+            }
+        } catch (\Throwable $t) {
+            // ignore
+        }
+        return [0.0, 0.0];
+    }
+
+    /**
+     * Get default percentages from booking_config by config_code prefix.
+     * Example prefixes: 'client_', 'o2_', 'privcash_', 'privcard_'
+     */
+    private function getPercentsFromBookingConfigByPrefix(string $prefix): ?array
+    {
+        try {
+            $row = $this->db->fetchAssociative(
+                'SELECT default_tax_percentage, default_commission_percentage
+                 FROM booking_config
+                 WHERE config_code LIKE :prefix
+                   AND effective_date <= :today
+                 ORDER BY effective_date DESC, id DESC
+                 LIMIT 1',
+                [
+                    'prefix' => $prefix . '%',
+                    'today' => (new \DateTimeImmutable('today'))->format('Y-m-d'),
+                ]
+            );
+            if (is_array($row) && isset($row['default_tax_percentage'], $row['default_commission_percentage'])) {
+                return [
+                    (float) $row['default_tax_percentage'],
+                    (float) $row['default_commission_percentage'],
+                ];
+            }
+        } catch (\Throwable $t) {
+            // ignore
+        }
+        return null;
+    }
+
+    /**
+     * Choose tax/commission percentages based on unit payment type.
+     * Currently:
+     *  - CLIENT => client_* config (e.g., client_0825)
+     *  - otherwise => o2_* config (e.g., o2_0825)
+     * Falls back to provided values if nothing matches.
+     */
+    private function getPercentsForUnitPaymentType(?string $unitPaymentType, float $fallbackTax, float $fallbackCommission): array
+    {
+        $pt = $unitPaymentType ? strtoupper(trim($unitPaymentType)) : '';
+
+        // Map unit.payment_type -> booking_config prefix
+        $prefix = 'o2_';
+        if ($pt === 'CLIENT') {
+            $prefix = 'client_';
+        }
+
+        $picked = $this->getPercentsFromBookingConfigByPrefix($prefix);
+        if (is_array($picked) && count($picked) === 2) {
+            return [(float) $picked[0], (float) $picked[1]];
+        }
+
+        // Fallback to global defaults
+        return [$fallbackTax, $fallbackCommission];
     }
 }

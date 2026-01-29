@@ -276,8 +276,8 @@ export default function AirbnbCalTable() {
       matchMethod: r.matchMethod || 'none',
       warnings: Array.isArray(r.warnings) ? r.warnings : [],
       summaryCombined: [...(Array.isArray(r.summary) ? r.summary : []), ...(Array.isArray(r.warnings) ? r.warnings : [])],
-      reservationUrl: r.reservationUrl || '',
-      bookingReservationUrl: r.bookingReservationUrl || '',
+      reservationUrl: r.reservationUrl || r.reservation_url || '',
+      bookingReservationUrl: r.bookingReservationUrl || r.booking_reservation_url || '',
       icalEventId: r.icalEventId || r.linkedEventId || null,
       guestName: r.guestName || '',
       checkIn: r.checkIn,
@@ -292,14 +292,26 @@ export default function AirbnbCalTable() {
       nights: diffDays(r.checkIn, r.checkOut),
       payout: r.payout ?? null,
       source: r.source || '',
-      status: r.dateSyncStatus || r.status || 'none',
+      dateSyncStatus: r.dateSyncStatus || null,
+      bookingStatus: r.status || null,
+      // Status used by the badge/table filtering:
+      // - prioritize bookings that require manual completion (created from iCal with missing details)
+      // - otherwise fall back to the reconcile status
+      status:
+        (String(r.status || '').toLowerCase() === 'needs_details' || String(r.guestName || '') === 'Missing email')
+          ? 'needs_details'
+          : (r.dateSyncStatus || r.status || 'none'),
       isBlock: !!r.isBlock,
       lastUpdated: r.lastUpdated || r.lastIcalSyncAt || r.bookingUpdatedAt || '',
       lastUpdatedVia: r.lastUpdatedVia || '',
       fingerprint: r.fingerprint || r.fp || null,
     }));
     const base = onlyConflicts
-      ? mapped.filter((x) => x.status === 'conflict' || x.status === 'suspected_cancelled')
+      ? mapped.filter((x) =>
+          x.status === 'conflict' ||
+          x.status === 'suspected_cancelled' ||
+          x.status === 'needs_details'
+        )
       : mapped;
 
     // Sorting by view mode
@@ -309,10 +321,9 @@ export default function AirbnbCalTable() {
         const bd = parseIsoDate(b.lastUpdated);
         return compareDesc(ad || 0, bd || 0);
       }
-      // Requested order for timeline view:
-      // 1) Conflicts and suspected_cancelled first
-      const aRank = (a.status === 'conflict' || a.status === 'suspected_cancelled') ? 0 : 1;
-      const bRank = (b.status === 'conflict' || b.status === 'suspected_cancelled') ? 0 : 1;
+      // 1) Issues first (conflict, suspected_cancelled, needs_details)
+      const aRank = (a.status === 'conflict' || a.status === 'suspected_cancelled' || a.status === 'needs_details') ? 0 : 1;
+      const bRank = (b.status === 'conflict' || b.status === 'suspected_cancelled' || b.status === 'needs_details') ? 0 : 1;
       if (aRank !== bRank) return aRank - bRank;
 
       // 2) Selected-month check-ins next
@@ -726,8 +737,8 @@ export default function AirbnbCalTable() {
             const code = drawerRow?.reservationCode || drawerRow?.confirmationCode || '';
             const isAirbnb = /^HM[0-9A-Z]{7,}$/.test(code);
             const openUrl =
-              (bannerForCta && bannerForCta.ctaUrl) ||
               drawerRow?.reservationUrl ||
+              (bannerForCta && bannerForCta.ctaUrl) ||
               drawerRow?.bookingReservationUrl ||
               (isAirbnb ? `https://www.airbnb.com/hosting/reservations/details/${code}` : null);
 
@@ -924,6 +935,10 @@ function StatusBadge({ status, method, isBlock, onClick }) {
   if (status === 'suspected_cancelled') {
     label = 'Missing';
     bg = '#f87171';   // light red
+    color = '#ffffff';
+  } else if (status === 'needs_details') {
+    label = 'Details';
+    bg = '#fbbf24';   // amber
     color = '#ffffff';
   } else if (status === 'conflict' && method === 'overlap') {
     label = 'Overlap';
