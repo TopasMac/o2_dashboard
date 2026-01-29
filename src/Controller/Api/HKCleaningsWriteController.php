@@ -391,7 +391,7 @@ public function markDoneBy(Request $request): JsonResponse
      * PUT /api/hk-cleanings/{id}
      * Body JSON: { checkoutDate?: 'YYYY-MM-DD', status?: 'pending'|'done'|'cancelled', cleaningCost?: number|null, o2CollectedFee?: number|null, notes?: string|null }
      */
-    #[Route('/api/hk-cleanings/{id}', name: 'api_hk_cleanings_update', methods: ['PUT'])]
+    #[Route('/api/hk-cleanings/{id<\d+>}', name: 'api_hk_cleanings_update', methods: ['PUT'])]
     public function updateCleaning(int $id, Request $request): JsonResponse
     {
         $hk = $this->em->getRepository(HKCleanings::class)->find($id);

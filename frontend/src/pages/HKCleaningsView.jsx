@@ -270,37 +270,28 @@ const HKCleaningsView = () => {
     setUnitsLoading(true);
     setUnitsError(null);
     try {
-      const res = await api.get('/api/hk-cleanings', {
-        params: {
-          start: '',
-          end: '',
-          city: '',
-          status: 'any',
-          search: '',
-          page: 1,
-          pageSize: 25,
-          sort: 'checkout_date',
-          dir: 'asc',
-        },
+      const y = Number(filters.year) || currentYearCancun;
+      const m = Number(filters.month) || currentMonthCancun;
+      const ym = `${y}-${String(m).padStart(2, '0')}`;
+
+      const res = await api.get('/api/hk-cleanings/active-units', {
+        params: { month: ym },
       });
-      const list = Array.isArray(res.data?.units) ? res.data.units : [];
+
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
       const normalized = list.map(r => ({
         raw: r,
         id: r.id ?? r.unit_id ?? r.unitId ?? null,
         unitName: r.unit_name ?? r.unitName ?? r.name ?? '',
         city: r.city ?? '',
-        cleaningFee: r.cleaning_fee ?? r.unit_cleaning_fee ?? null,
-        // Cleaning cost (what we pay). Source of truth: hk_unit_cleaning_rate.amount, exposed by API as `cleaning_cost`.
-        unitRateAmount: (
-          r.cleaning_cost ??
-          r.unit_rate_amount ??
-          r.unit_rate_cost ??
-          r.unit_cleaning_cost ??
-          r.cleaningCost ??
-          r.cost ??
-          null
-        ),
+        // Fee charged to guest / client
+        cleaningFee: r.unit_cleaning_fee ?? r.cleaning_fee ?? r.cleaningFee ?? null,
+        // Cost we pay to HK (rate)
+        unitRateAmount: r.cleaning_cost ?? r.unit_rate_amount ?? r.unitRateAmount ?? null,
+        effectiveFrom: r.effective_from ?? null,
+        effectiveTo: r.effective_to ?? null,
       })).filter(r => r.id != null);
+
       setUnitsRows(normalized);
     } catch (e) {
       console.error(e);
@@ -803,7 +794,7 @@ const HKCleaningsView = () => {
         </AppDrawer>
 
         <AppDrawer open={unitsDrawerOpen} onClose={() => setUnitsDrawerOpen(false)} title="Active Units &amp; Fees">
-          <Box sx={{ width: 'fit-content', maxWidth: '100%', overflow: 'visible', display: 'inline-block' }}>
+          <Box sx={{ width: '100%', maxWidth: 320, overflow: 'visible', mx: 'auto' }}>
             {unitsLoading ? (
               <Stack direction="row" alignItems="center" spacing={1} sx={{ p: 2 }}>
                 <CircularProgress size={20} />
@@ -819,11 +810,11 @@ const HKCleaningsView = () => {
             ) : (
               <>
                 {/* Tulum Box */}
-                <Box sx={{ position: 'relative', overflow: 'visible', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5, pt: 3.25, mb: 2 }}>
+                <Box sx={{ position: 'relative', overflow: 'visible', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5, pt: 2.5, mb: 2 }}>
                   <Box component="span"
                        sx={{
                          position: 'absolute',
-                         top: -10,
+                         top: -3,
                          left: 12,
                          px: 0.75,
                          bgcolor: 'background.paper',
@@ -837,8 +828,8 @@ const HKCleaningsView = () => {
                   <Table
                     size="small"
                     sx={{
-                      minWidth: 170,
-                      width: 'fit-content',
+                      minWidth: 320,
+                      width: '100%',
                       tableLayout: 'fixed',
                       borderCollapse: 'collapse',
                       '& th, & td': {
@@ -851,11 +842,11 @@ const HKCleaningsView = () => {
                       '& td': { whiteSpace: 'nowrap' },
                       '& thead th': {
                         borderBottom: '1px solid rgba(224, 224, 224, 1)',
-                        paddingTop: 0.75,
-                        paddingBottom: 0.75
+                        paddingTop: 0.5,
+                        paddingBottom: 0.5
                       },
                       '& th:last-child, & td:last-child': { borderRight: 'none' },
-                      '& thead th:nth-of-type(1), & tbody td:nth-of-type(1)': { width: 90, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' },
+                      '& thead th:nth-of-type(1), & tbody td:nth-of-type(1)': { width: 140, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' },
                       '& thead th:nth-of-type(2), & tbody td:nth-of-type(2)': { width: 80, maxWidth: 80 },
                       '& thead th:nth-of-type(3), & tbody td:nth-of-type(3)': { width: 80, maxWidth: 80 }
                     }}
@@ -863,8 +854,8 @@ const HKCleaningsView = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Unit</TableCell>
-                        <TableCell align="right" width={80}>Fee</TableCell>
-                        <TableCell align="right" width={80}>Cost</TableCell>
+                        <TableCell align="center" width={80}>Fee</TableCell>
+                        <TableCell align="center" width={80}>Cost</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -886,10 +877,10 @@ const HKCleaningsView = () => {
                                 {row.unitName}
                               </MuiLink>
                             </TableCell>
-                            <TableCell align="right" sx={{ textAlign: 'right' }}>
+                            <TableCell align="center" sx={{ textAlign: 'center' }}>
                               {formatCurrency(row.cleaningFee)}
                             </TableCell>
-                            <TableCell align="right">
+                            <TableCell align="center" sx={{ textAlign: 'center' }}>
                               {isEditing ? (
                                 <TextField
                                   size="small"
@@ -908,7 +899,7 @@ const HKCleaningsView = () => {
                                     }
                                   }}
                                   onBlur={() => saveUnitRateAmount(row.id)}
-                                  sx={{ width: 60 }}
+                                  sx={{ width: 70, mx: 'auto' }}
                                 />
                               ) : (
                                 formatCurrency(row.unitRateAmount)
@@ -928,11 +919,11 @@ const HKCleaningsView = () => {
                   </Table>
                 </Box>
                 {/* Playa del Carmen Box */}
-                <Box sx={{ position: 'relative', overflow: 'visible', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5, pt: 3.25, mb: 2 }}>
+                <Box sx={{ position: 'relative', overflow: 'visible', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.5, pt: 2.5, mb: 2 }}>
                   <Box component="span"
                        sx={{
                          position: 'absolute',
-                         top: -10,
+                         top: -3,
                          left: 12,
                          px: 0.75,
                          bgcolor: 'background.paper',
@@ -946,8 +937,8 @@ const HKCleaningsView = () => {
                   <Table
                     size="small"
                     sx={{
-                      minWidth: 170,
-                      width: 'fit-content',
+                      minWidth: 320,
+                      width: '100%',
                       tableLayout: 'fixed',
                       borderCollapse: 'collapse',
                       '& th, & td': {
@@ -960,18 +951,20 @@ const HKCleaningsView = () => {
                       '& td': { whiteSpace: 'nowrap' },
                       '& thead th': {
                         borderBottom: '1px solid rgba(224, 224, 224, 1)',
-                        paddingTop: 0.75,
-                        paddingBottom: 0.75
+                        paddingTop: 0.5,
+                        paddingBottom: 0.5
                       },
                       '& th:last-child, & td:last-child': { borderRight: 'none' },
-                      '& thead th:nth-of-type(1), & tbody td:nth-of-type(1)': { width: 90, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis' },
+                      '& thead th:nth-of-type(1), & tbody td:nth-of-type(1)': { width: 140, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' },
                       '& thead th:nth-of-type(2), & tbody td:nth-of-type(2)': { width: 80, maxWidth: 80 },
+                      '& thead th:nth-of-type(3), & tbody td:nth-of-type(3)': { width: 80, maxWidth: 80 }
                     }}
                   >
                     <TableHead>
                       <TableRow>
                         <TableCell>Unit</TableCell>
-                        <TableCell align="right" width={80}>Fee</TableCell>
+                        <TableCell align="center" width={80}>Fee</TableCell>
+                        <TableCell align="center" width={80}>Cost</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -991,14 +984,18 @@ const HKCleaningsView = () => {
                               {row.unitName}
                             </MuiLink>
                           </TableCell>
-                          <TableCell align="right" sx={{ textAlign: 'right' }}>
+                          <TableCell align="center" sx={{ textAlign: 'center' }}>
                             {formatCurrency(row.cleaningFee)}
+                          </TableCell>
+                          <TableCell align="center" sx={{ textAlign: 'center' }}>
+                            {/* Keep blank for now; column exists to align with Tulum */}
+                            {' '}
                           </TableCell>
                         </TableRow>
                       ))}
                       {unitsRows.filter(r => String(r.city || '').toLowerCase().includes('playa del carmen')).length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={2} align="center" sx={{ py: 2, color: 'text.secondary' }}>
+                          <TableCell colSpan={3} align="center" sx={{ py: 2, color: 'text.secondary' }}>
                             No Playa del Carmen units.
                           </TableCell>
                         </TableRow>

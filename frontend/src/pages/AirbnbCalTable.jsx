@@ -36,7 +36,7 @@ function Pill({ label, value, tone = 'default' }) {
   );
 }
 
-function SummaryBar({ data, lastSync }) {
+function SummaryBar({ data, lastSync, onLastSyncClick }) {
   const { processed = 0, matched = 0, conflicts = 0, suspected_cancelled = 0 } = data || {};
   return (
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '12px 0 16px' }}>
@@ -46,6 +46,11 @@ function SummaryBar({ data, lastSync }) {
       <Pill label="Suspected cancelled" value={suspected_cancelled} tone="warn" />
       {lastSync ? (
         <span
+          role="button"
+          tabIndex={0}
+          onClick={onLastSyncClick}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLastSyncClick && onLastSyncClick(); } }}
+          title="Show errors from the last iCal sync"
           style={{
             padding: '6px 10px',
             background: '#eef2ff',
@@ -55,7 +60,10 @@ function SummaryBar({ data, lastSync }) {
             alignItems: 'center',
             fontWeight: 600,
             fontSize: 13,
-            lineHeight: 1
+            lineHeight: 1,
+            cursor: 'pointer',
+            userSelect: 'none',
+            boxShadow: '0 0 0 1px rgba(30,64,175,0.25) inset',
           }}
         >
           {lastSync}
@@ -84,6 +92,7 @@ export default function AirbnbCalTable() {
   // Year-month filter in the form 'YYYY-MM'; empty string means no month selected
   const [yearMonth, setYearMonth] = useState('');
   const [dry, setDry] = useState(false);
+  const [hideAck, setHideAck] = useState(true);
   const [onlyConflicts, setOnlyConflicts] = useState(true);
   const [viewMode, setViewMode] = useState('timeline'); // 'timeline' | 'recent'
 
@@ -124,7 +133,7 @@ export default function AirbnbCalTable() {
       const json = await fetchIcalReconcile({
         unit: unit || undefined,
         dry,
-        hideAck: 1, // exclude previously acknowledged items
+        hideAck: hideAck ? 1 : 0,
       });
       setResp(json?.data || null);
       setMeta(json?.meta || null);
@@ -133,7 +142,7 @@ export default function AirbnbCalTable() {
     } finally {
       setLoading(false);
     }
-  }, [unit, dry]);
+  }, [unit, dry, hideAck]);
 
   // --- Robust drawer transition and scroll/refresh fixes ---
   const prevDrawerOpenRef = React.useRef(false);
@@ -213,6 +222,24 @@ export default function AirbnbCalTable() {
     setDrawerRow(row);
     setDrawerOpen(true);
   }, []);
+
+  const handleLastSyncClick = useCallback(() => {
+    // Show the problematic rows for quick review
+    setOnlyConflicts(true);
+    setViewMode('recent');
+    // Clear month filter so we don't accidentally hide the error row
+    setYearMonth('');
+    setHideAck(false);
+    toast.info('Showing errors from the last iCal sync');
+    // Scroll the table into view if needed
+    try {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      // ignore
+    }
+    // Re-fetch including acknowledged rows so the last-sync error can be seen
+    setTimeout(() => load(), 0);
+  }, [load]);
 
   const acknowledgeAndRefresh = useCallback(async (row) => {
     try {
@@ -644,6 +671,16 @@ export default function AirbnbCalTable() {
           control={(
             <Switch
               size="small"
+              checked={hideAck}
+              onChange={(e) => setHideAck(e.target.checked)}
+            />
+          )}
+          label="Hide checked"
+        />
+        <FormControlLabel
+          control={(
+            <Switch
+              size="small"
               checked={dry}
               onChange={(e) => setDry(e.target.checked)}
             />
@@ -689,6 +726,7 @@ export default function AirbnbCalTable() {
           <SummaryBar
             data={resp}
             lastSync={lastSyncLabel}
+            onLastSyncClick={handleLastSyncClick}
           />
         )}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>

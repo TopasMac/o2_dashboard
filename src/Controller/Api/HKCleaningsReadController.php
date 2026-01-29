@@ -93,6 +93,80 @@ class HKCleaningsReadController extends AbstractController
             ], 500);
         }
     }
+    #[Route('/api/hk-cleanings/active-units', name: 'api_hk_cleanings_active_units', methods: ['GET'])]
+    public function activeUnits(Request $req, ManagerRegistry $doctrine): JsonResponse
+    {
+        try {
+            // Optional filters
+            $city  = $req->query->get('city');
+            $month = $req->query->get('month'); // YYYY-MM
+
+            // If month is provided, we pick the rate row effective on the first day of that month.
+            // Otherwise, we pick the most recent row effective today.
+            $asOf = null;
+            if ($month !== null && $month !== '') {
+                // Basic validation: YYYY-MM
+                if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+                    return new JsonResponse([
+                        'ok' => false,
+                        'error' => 'Invalid month. Expected YYYY-MM',
+                    ], 400);
+                }
+                $asOf = $month . '-01';
+            } else {
+                $asOf = (new \DateTimeImmutable('today'))->format('Y-m-d');
+            }
+
+            $where = ["LOWER(u.status) = 'active'"];
+            $params = ['asOf' => $asOf];
+
+            if ($city !== null && $city !== '') {
+                $where[] = 'u.city = :city';
+                $params['city'] = $city;
+            }
+
+            // Pick the single best (most recent) rate row for each unit as-of $asOf
+            $sql = "
+                SELECT
+                    u.id,
+                    u.unit_name,
+                    u.city,
+                    u.status,
+                    u.cleaning_fee AS unit_cleaning_fee,
+                    r.amount AS cleaning_cost,
+                    r.effective_from,
+                    r.effective_to
+                FROM unit u
+                LEFT JOIN hk_unit_cleaning_rate r
+                  ON r.id = (
+                    SELECT r2.id
+                    FROM hk_unit_cleaning_rate r2
+                    WHERE r2.unit_id = u.id
+                      AND r2.effective_from <= :asOf
+                      AND (r2.effective_to IS NULL OR r2.effective_to >= :asOf)
+                    ORDER BY r2.effective_from DESC, r2.id DESC
+                    LIMIT 1
+                  )
+                WHERE " . implode(' AND ', $where) . "
+                ORDER BY u.city ASC, u.unit_name ASC
+            ";
+
+            $conn = $doctrine->getConnection();
+            $rows = $conn->fetchAllAssociative($sql, $params);
+
+            return new JsonResponse([
+                'ok' => true,
+                'asOf' => $asOf,
+                'data' => $rows,
+            ]);
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'ok' => false,
+                'error' => 'Server error',
+                'detail' => $e->getMessage(),
+            ], 500);
+        }
+    }
     #[Route('/api/hk-cleanings/months', name: 'api_hk_cleanings_months', methods: ['GET'])]
     public function months(Request $req, ManagerRegistry $doctrine): JsonResponse
     {
