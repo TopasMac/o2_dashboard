@@ -66,6 +66,7 @@ import NewReportCommentForm from './components/forms/NewReportCommentForm';
 import UnitContract from './pages/UnitContract';
 import CheckInOutView from './pages/CheckInOutView';
 import HKCleaningsView from './pages/HKCleaningsView';
+import HKCleaningsRecon from './pages/HKCleaningsRecon';
 import BookingsTimeline from './pages/BookingsTimeline';
 import AirbnbCalTable from './pages/AirbnbCalTable';
 import HKResults from './components/reports/HKResults';
@@ -248,6 +249,14 @@ function App() {
           <Route path="/hk-transactions/edit/:id" element={<EditHKTransactionForm />} />
           <Route path="/hk-results" element={<HKResults />} />
         <Route path="/hk-cleanings" element={<HKCleaningsView />} />
+        <Route
+          path="/hk-cleanings-reconcile"
+          element={
+            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
+              <HKCleaningsRecon />
+            </RoleRoute>
+          }
+        />
         <Route path="/check-in-out" element={<CheckInOutView />} />
         <Route path="/bookings-timeline" element={<BookingsTimeline />} />
         <Route
