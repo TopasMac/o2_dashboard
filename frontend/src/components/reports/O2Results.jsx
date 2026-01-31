@@ -1,10 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, Grid, Paper, Tabs, Tab } from '@mui/material';
+import O2Tooltip from '../common/O2Tooltip';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider, IconButton } from '@mui/material';
 import PageScaffold from '../layout/PageScaffold';
 import { BACKEND_BASE } from '../../api';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+
+import AddIcon from '@mui/icons-material/Add';
+import AppDrawer from '../common/AppDrawer';
+import NewO2TransactionForm from '../forms/NewO2TransactionForm';
 
 import YearMonthPicker from '../layout/components/YearMonthPicker';
 import useYearMonth from '../layout/helpers/useYearMonth';
@@ -48,9 +53,12 @@ export default function O2Results() {
   const [expandedCities, setExpandedCities] = useState(() => new Set());
   const [expandedCentres, setExpandedCentres] = useState(() => new Set());
   const [expandedExpenseCentres, setExpandedExpenseCentres] = useState(() => new Set());
+  const [expandedHrGroups, setExpandedHrGroups] = useState(() => new Set());
   const [employeeLedger, setEmployeeLedger] = useState([]);
 
   const [tab, setTab] = useState(0);
+  const [o2TxDrawerOpen, setO2TxDrawerOpen] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Helper to normalize city labels for expenses
   const normalizeCity = (raw) => {
@@ -70,6 +78,13 @@ export default function O2Results() {
     setExpandedExpenseCentres(prev => {
       const next = new Set(prev);
       if (next.has(centre)) next.delete(centre); else next.add(centre);
+      return next;
+    });
+  };
+  const toggleHrGroup = (groupKey) => {
+    setExpandedHrGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
       return next;
     });
   };
@@ -97,6 +112,7 @@ export default function O2Results() {
 
         const category = t.category_name || t.categoryName || 'Uncategorized';
         const description = t.description || '';
+        const dateRaw = t.date || t.entry_date || t.createdAt || t.created_at || null;
         const rawCity = t.city || t.cost_centre || t.costCentre || '';
         const city = normalizeCity(rawCity);
 
@@ -109,37 +125,95 @@ export default function O2Results() {
           categories[category].cities[city] = { total: 0, items: [] };
         }
         categories[category].cities[city].total += amountNum;
-        categories[category].cities[city].items.push({ description, amount: amountNum });
+        categories[category].cities[city].items.push({ description, amount: amountNum, date: dateRaw });
       }
     }
 
-    // Employee financial ledger: salaries for Owners2
+    // Employee financial ledger: HR (salaries + advances)
     if (hasLedger) {
+      const category = 'HR';
+      const salariesAgg = new Map();
+      const loansAgg = new Map();
+
       for (const row of employeeLedger) {
         const type = (row.type || '').toString().toLowerCase().trim();
-        if (type !== 'salary') continue;
+        if (type !== 'salary' && type !== 'advance') continue;
+
         const amountRaw = row.amount ?? 0;
         const amountNum = Number(amountRaw);
         if (!Number.isFinite(amountNum)) continue;
         total += amountNum;
 
-        const category = 'Salaries';
-        const rawCity = row.city || row.cost_centre || '';
-        const city = normalizeCity(rawCity);
         const empName = row.employee_shortname || row.employee_shortName || null;
-        const description = empName ? `Salary – ${empName}` : 'Salary';
+        const description = empName || '—';
+        const dateRaw = row.entry_date || row.date || row.createdAt || row.created_at || null;
 
-        if (!categories[category]) {
-          categories[category] = { total: 0, cities: {} };
+        const target = type === 'advance' ? loansAgg : salariesAgg;
+        const key = description; // aggregate by employee shortname
+        const existing = target.get(key);
+        if (!existing) {
+          target.set(key, {
+            description,
+            amount: amountNum,
+            date: dateRaw,
+          });
+        } else {
+          existing.amount += amountNum;
+          // Keep the earliest known entry_date
+          const a = existing.date ? String(existing.date).slice(0, 10) : '';
+          const b = dateRaw ? String(dateRaw).slice(0, 10) : '';
+          if (!a) existing.date = dateRaw;
+          else if (b && b < a) existing.date = dateRaw;
         }
-        categories[category].total += amountNum;
-
-        if (!categories[category].cities[city]) {
-          categories[category].cities[city] = { total: 0, items: [] };
-        }
-        categories[category].cities[city].total += amountNum;
-        categories[category].cities[city].items.push({ description, amount: amountNum });
       }
+
+      const toItems = (m) => Array.from(m.values());
+      const salaryItems = toItems(salariesAgg);
+      const loanItems = toItems(loansAgg);
+
+      const salaryTotal = salaryItems.reduce((s, it) => s + Number(it.amount || 0), 0);
+      const loanTotal = loanItems.reduce((s, it) => s + Number(it.amount || 0), 0);
+
+      if (!categories[category]) {
+        categories[category] = { total: 0, groups: {} };
+      }
+
+      categories[category].total += salaryTotal + loanTotal;
+      categories[category].groups = {
+        ...(categories[category].groups || {}),
+        ...(loanItems.length > 0 ? { Loans: { total: loanTotal, items: loanItems } } : {}),
+        ...(salaryItems.length > 0 ? { Salaries: { total: salaryTotal, items: salaryItems } } : {}),
+      };
+    }
+
+    // Software category completeness check (AWS, Office, Automate, Beyond)
+    // Attach missing list to the Software category object for UI rendering.
+    const softwareKey = Object.keys(categories).find(
+      (k) => (k || '').toString().trim().toLowerCase() === 'software'
+    );
+    if (softwareKey && categories[softwareKey]) {
+      const allItems = [];
+      const citiesObj = categories[softwareKey].cities || {};
+      Object.values(citiesObj).forEach((cityObj) => {
+        (cityObj.items || []).forEach((it) => allItems.push(it));
+      });
+
+      const haystack = allItems
+        .map((it) => (it?.description || '').toString().toLowerCase())
+        .join(' | ');
+
+      const expected = [
+        { label: 'AWS', patterns: ['aws', 'amazon web services'] },
+        { label: 'Office', patterns: ['microsoft', 'office', 'o365'] },
+        { label: 'Automate', patterns: ['power automate', 'powerautomate'] },
+        { label: 'Beyond', patterns: ['beyond', 'beyond pricing'] },
+      ];
+
+      const missing = expected
+        .filter((e) => !e.patterns.some((p) => haystack.includes(p)))
+        .map((e) => e.label);
+
+      categories[softwareKey].missingRecurring = missing;
     }
 
     return { total, categories };
@@ -183,7 +257,10 @@ export default function O2Results() {
     }
     load();
     return () => ac.abort();
-  }, [year, month]);
+  }, [year, month, reloadKey]);
+  const openNewExpenseDrawer = () => {
+    setO2TxDrawerOpen(true);
+  };
 
   const commissionSummary = useMemo(() => {
     if (!slices || slices.length === 0) {
@@ -264,6 +341,17 @@ export default function O2Results() {
     const [intPart, fracPart] = fixed.split('.');
     const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     return `${sign}$${withThousands},${fracPart}`;
+  };
+
+  const fmtDate = (raw) => {
+    if (!raw) return '';
+    // Accept YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
+    const s = String(raw);
+    const iso = s.length >= 10 ? s.slice(0, 10) : s;
+    const parts = iso.split('-');
+    if (parts.length !== 3) return iso;
+    const [y, m, d] = parts;
+    return `${d}/${m}`;
   };
 
   const totals = useMemo(() => {
@@ -643,9 +731,25 @@ export default function O2Results() {
                                           <ExpandMoreIcon fontSize="small" />
                                         )}
                                       </IconButton>
-                                      <Typography component="span" sx={{ ml: 0.25 }}>
-                                        {categoryName}
+                                  <Typography component="span" sx={{ ml: 0.25 }}>
+                                    {categoryName}
+                                  </Typography>
+                                  {Array.isArray(category?.missingRecurring) &&
+                                    category.missingRecurring.length > 0 && (
+                                      <Typography
+                                        component="span"
+                                        sx={{
+                                          ml: 1,
+                                          color: '#B26A00',
+                                          fontWeight: 500,
+                                          fontSize: 12,
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                        title={`Missing: ${category.missingRecurring.join(', ')}`}
+                                      >
+                                        ⚠ Missing: {category.missingRecurring.join(', ')}
                                       </Typography>
+                                    )}
                                     </Box>
                                   </TableCell>
                                   <TableCell
@@ -700,35 +804,74 @@ export default function O2Results() {
 
                 {/* Right: Expenses */}
                 <Grid item xs={12} sm={6} md={4} lg={4}>
-                  <Paper elevation={0} sx={{ p: 2, pt: 1, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', position: 'relative', maxWidth: 400 }}>
-                    <Box sx={{ position: 'absolute', top: -10, left: 12, px: 0.5, backgroundColor: 'background.paper' }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>Expenses</Typography>
+                  <Paper elevation={0} sx={{ p: 2, pt: 1, pl: 1, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', position: 'relative', maxWidth: 400 }}>
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: -10,
+                        left: 12,
+                        px: 0.5,
+                        backgroundColor: 'background.paper',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.5,
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                        Expenses
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={openNewExpenseDrawer}
+                        aria-label="Add expense"
+                        sx={{
+                          p: 0.25,
+                          color: '#4E8379',
+                          '&:hover': { backgroundColor: 'rgba(78,131,121,0.10)' },
+                        }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
                     </Box>
                     <TableContainer>
                       <Table size="small" aria-label="expenses table">
                         <TableHead>
                           <TableRow>
+                            <TableCell sx={{ width: '15%', borderBottom: 'none' }} />
                             <TableCell sx={{ width: '60%', borderBottom: 'none' }} />
                             <TableCell align="right" sx={{ borderBottom: 'none' }} />
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           <TableRow>
+                            <TableCell sx={{ borderBottom: 'none', pt: 0.5 }} />
                             <TableCell sx={{ borderBottom: 'none', pt: 0.5 }}><strong>Total</strong></TableCell>
                             <TableCell align="right" sx={{ borderBottom: 'none', pt: 0.5 }}><strong>{fmt(otherExpenses.total)}</strong></TableCell>
                           </TableRow>
 
                           {Object.entries(otherExpenses.categories || {})
-                            .sort(([aName], [bName]) => aName.localeCompare(bName))
+                            .sort(([aName], [bName]) => {
+                              const A = (aName || '').toString();
+                              const B = (bName || '').toString();
+
+                              const aIsOtros = A.toLowerCase() === 'otros';
+                              const bIsOtros = B.toLowerCase() === 'otros';
+
+                              if (aIsOtros && !bIsOtros) return 1;
+                              if (!aIsOtros && bIsOtros) return -1;
+
+                              return A.localeCompare(B);
+                            })
                             .map(([categoryName, category]) => (
                               <React.Fragment key={categoryName}>
                                 <TableRow hover>
+                                  <TableCell sx={{ borderBottom: 'none', py: 0.25 }} />
                                   <TableCell
                                     sx={{
                                       fontWeight: 600,
                                       borderBottom: 'none',
                                       py: 0.25,
-                                      pl: 1,
+                                      pl: 0,
                                     }}
                                   >
                                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -751,6 +894,24 @@ export default function O2Results() {
                                       <Typography component="span" sx={{ ml: 0.25 }}>
                                         {categoryName}
                                       </Typography>
+                                      {Array.isArray(category?.missingRecurring) &&
+                                        category.missingRecurring.length > 0 && (
+                                          <O2Tooltip title={`Missing: ${category.missingRecurring.join(', ')}`} placement="top">
+                                            <Typography
+                                              component="span"
+                                              sx={{
+                                                ml: 1,
+                                                color: '#B26A00',
+                                                fontWeight: 600,
+                                                fontSize: 13,
+                                                lineHeight: 1,
+                                                cursor: 'help',
+                                              }}
+                                            >
+                                              ⚠
+                                            </Typography>
+                                          </O2Tooltip>
+                                        )}
                                     </Box>
                                   </TableCell>
                                   <TableCell
@@ -762,71 +923,171 @@ export default function O2Results() {
                                 </TableRow>
 
                                 {expandedExpenseCentres.has(categoryName) &&
-                                  Object.entries(category.cities || {}).map(
-                                    ([cityName, cityObj]) => (
-                                      <React.Fragment
-                                        key={categoryName + '::' + cityName}
-                                      >
-                                        <TableRow>
-                                          <TableCell
-                                            sx={{
-                                              borderBottom: 'none',
-                                              pl: 3,
-                                              fontWeight: 600,
-                                            }}
-                                          >
-                                            {cityName}
-                                          </TableCell>
-                                          <TableCell
-                                            align="right"
-                                            sx={{
-                                              borderBottom: 'none',
-                                              fontWeight: 600,
-                                            }}
-                                          >
-                                            {fmt(cityObj.total)}
-                                          </TableCell>
-                                        </TableRow>
+                                  ((categoryName || '').toString().trim().toLowerCase() === 'hr'
+                                    ? Object.entries(category.groups || {}).map(([groupName, groupObj]) => {
+                                        const groupKey = `${categoryName}::${groupName}`;
+                                        const openGroup = expandedHrGroups.has(groupKey);
+                                        const items = Array.isArray(groupObj?.items) ? groupObj.items : [];
+                                        return (
+                                          <React.Fragment key={groupKey}>
+                                            <TableRow hover>
+                                              <TableCell sx={{ borderBottom: 'none', pl: 0 }} />
+                                              <TableCell
+                                                sx={{
+                                                  borderBottom: 'none',
+                                                  pl: 1,
+                                                  fontWeight: 600,
+                                                }}
+                                              >
+                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                                  <IconButton
+                                                    size="small"
+                                                    sx={{ p: 0, mr: 0.5 }}
+                                                    onClick={() => toggleHrGroup(groupKey)}
+                                                    aria-label={openGroup ? 'Collapse' : 'Expand'}
+                                                  >
+                                                    {openGroup ? (
+                                                      <ExpandLessIcon fontSize="small" />
+                                                    ) : (
+                                                      <ExpandMoreIcon fontSize="small" />
+                                                    )}
+                                                  </IconButton>
+                                                  <Typography component="span" sx={{ ml: 0.25 }}>
+                                                    {groupName}
+                                                  </Typography>
+                                                </Box>
+                                              </TableCell>
+                                              <TableCell
+                                                align="right"
+                                                sx={{
+                                                  borderBottom: 'none',
+                                                  fontWeight: 600,
+                                                }}
+                                              >
+                                                {fmt(groupObj?.total || 0)}
+                                              </TableCell>
+                                            </TableRow>
 
-                                        {cityObj.items.map((item, idx) => (
-                                          <TableRow
-                                            key={
-                                              categoryName +
-                                              '::' +
-                                              cityName +
-                                              '::' +
-                                              idx
-                                            }
-                                          >
-                                            <TableCell
-                                              sx={{
-                                                borderBottom: 'none',
-                                                pl: 6,
-                                                color: 'text.secondary',
-                                              }}
-                                            >
-                                              {item.description || '—'}
-                                            </TableCell>
-                                            <TableCell
-                                              align="right"
-                                              sx={{
-                                                borderBottom: 'none',
-                                                color: 'text.secondary',
-                                              }}
-                                            >
-                                              {fmt(item.amount)}
-                                            </TableCell>
-                                          </TableRow>
-                                        ))}
-                                      </React.Fragment>
-                                    )
-                                  )}
+                                            {openGroup &&
+                                              [...items]
+                                                .sort((a, b) => {
+                                                  const as = a?.date ? String(a.date).slice(0, 10) : '';
+                                                  const bs = b?.date ? String(b.date).slice(0, 10) : '';
+                                                  if (!as && !bs) return 0;
+                                                  if (!as) return 1;
+                                                  if (!bs) return -1;
+                                                  return as.localeCompare(bs);
+                                                })
+                                                .map((item, idx) => (
+                                                  <TableRow key={groupKey + '::' + idx}>
+                                                    <TableCell
+                                                      sx={{
+                                                        borderBottom: 'none',
+                                                        pl: 0,
+                                                        color: 'text.secondary',
+                                                        pr: 1,
+                                                      }}
+                                                    >
+                                                      {fmtDate(item.date)}
+                                                    </TableCell>
+                                                    <TableCell
+                                                      sx={{
+                                                        borderBottom: 'none',
+                                                        color: 'text.secondary',
+                                                        pl: 1,
+                                                      }}
+                                                    >
+                                                      {item.description || '—'}
+                                                    </TableCell>
+                                                    <TableCell
+                                                      align="right"
+                                                      sx={{
+                                                        borderBottom: 'none',
+                                                        color: 'text.secondary',
+                                                      }}
+                                                    >
+                                                      {fmt(item.amount)}
+                                                    </TableCell>
+                                                  </TableRow>
+                                                ))}
+                                          </React.Fragment>
+                                        );
+                                      })
+                                    : Object.entries(category.cities || {}).map(([cityName, cityObj]) => (
+                                        <React.Fragment key={categoryName + '::' + cityName}>
+                                          {(categoryName || '').toString().trim().toLowerCase() !== 'software' && (
+                                            <TableRow>
+                                              <TableCell sx={{ borderBottom: 'none', pl: 0 }} />
+                                              <TableCell
+                                                sx={{
+                                                  borderBottom: 'none',
+                                                  pl: 1,
+                                                  fontWeight: 600,
+                                                }}
+                                              >
+                                                {cityName}
+                                              </TableCell>
+                                              <TableCell
+                                                align="right"
+                                                sx={{
+                                                  borderBottom: 'none',
+                                                  fontWeight: 600,
+                                                }}
+                                              >
+                                                {fmt(cityObj.total)}
+                                              </TableCell>
+                                            </TableRow>
+                                          )}
+
+                                          {[...(cityObj.items || [])]
+                                            .sort((a, b) => {
+                                              const as = a?.date ? String(a.date).slice(0, 10) : '';
+                                              const bs = b?.date ? String(b.date).slice(0, 10) : '';
+                                              if (!as && !bs) return 0;
+                                              if (!as) return 1; // a has no date -> last
+                                              if (!bs) return -1; // b has no date -> last
+                                              return as.localeCompare(bs);
+                                            })
+                                            .map((item, idx) => (
+                                              <TableRow key={categoryName + '::' + cityName + '::' + idx}>
+                                                <TableCell
+                                                  sx={{
+                                                    borderBottom: 'none',
+                                                    pl: 0,
+                                                    color: 'text.secondary',
+                                                    pr: 1,
+                                                  }}
+                                                >
+                                                  {fmtDate(item.date)}
+                                                </TableCell>
+                                                <TableCell
+                                                  sx={{
+                                                    borderBottom: 'none',
+                                                    color: 'text.secondary',
+                                                    pl: 1,
+                                                  }}
+                                                >
+                                                  {item.description || '—'}
+                                                </TableCell>
+                                                <TableCell
+                                                  align="right"
+                                                  sx={{
+                                                    borderBottom: 'none',
+                                                    color: 'text.secondary',
+                                                  }}
+                                                >
+                                                  {fmt(item.amount)}
+                                                </TableCell>
+                                              </TableRow>
+                                            ))}
+                                        </React.Fragment>
+                                      )))}
                               </React.Fragment>
                             ))}
 
                           {otherExpenses.total === 0 && (
                             <TableRow>
-                              <TableCell colSpan={2} sx={{ borderBottom: 'none' }}>
+                              <TableCell colSpan={3} sx={{ borderBottom: 'none' }}>
                                 <Typography variant="body2" color="text.secondary">No expenses for this month.</Typography>
                               </TableCell>
                             </TableRow>
@@ -857,6 +1118,21 @@ export default function O2Results() {
           </Box>
         )}
       </Box>
+      <AppDrawer
+        open={o2TxDrawerOpen}
+        onClose={() => setO2TxDrawerOpen(false)}
+        title="New Expense"
+        width={520}
+      >
+        <NewO2TransactionForm
+          defaultType="expense"
+          onCancel={() => setO2TxDrawerOpen(false)}
+          onSuccess={() => {
+            setO2TxDrawerOpen(false);
+            setReloadKey((k) => k + 1);
+          }}
+        />
+      </AppDrawer>
     </PageScaffold>
   );
 }

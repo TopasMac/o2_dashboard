@@ -130,10 +130,10 @@ function endOfMonthDate(year, monthIndex0) {
   return new Date(year, monthIndex0 + 1, 0);
 }
 
-function buildMonthOptions(countAhead = 6) {
+function buildMonthOptions(pastCount = 3, futureCount = 2) {
   const now = new Date();
   const opts = [];
-  for (let i = 0; i <= countAhead; i += 1) {
+  for (let i = -pastCount; i <= futureCount; i += 1) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
     const y = d.getFullYear();
     const m0 = d.getMonth();
@@ -171,13 +171,16 @@ const HRTransactions = () => {
   const isXs = useMediaQuery(theme.breakpoints.down("sm"));
 
   // Payments helper (simple paid/unpaid tracking via salary rows)
-  const monthOptions = useMemo(() => buildMonthOptions(6), []);
+  const monthOptions = useMemo(() => buildMonthOptions(3, 2), []);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
   const openRequestPaymentFromPayments = () => {
     setPaymentsOpen(false);
     setPaymentDrawerOpen(true);
   };
-  const [paymentsMonth, setPaymentsMonth] = useState(monthOptions[0]?.value || "");
+  const [paymentsMonth, setPaymentsMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`;
+  });
   const [employeesOpt, setEmployeesOpt] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentsError, setPaymentsError] = useState(null);

@@ -104,6 +104,7 @@ class O2MonthlySummaryService
                 t.`type`,
                 t.`description`,
                 t.`amount`,
+                DATE_FORMAT(t.`date`, '%Y-%m-%d') AS `date`,
                 c.`name` AS category_name
             FROM `o2transactions` t
             LEFT JOIN `transaction_category` c ON t.`category_id` = c.`id`
@@ -120,7 +121,7 @@ class O2MonthlySummaryService
             return $row;
         }, $transactions);
 
-        // EMPLOYEE FINANCIAL LEDGER (salaries for Owners2, overlapping the month)
+        // EMPLOYEE FINANCIAL LEDGER (salaries + advances for Owners2, overlapping the month)
         $employeeLedgerSql = <<<SQL
             SELECT
                 l.`id`,
@@ -128,6 +129,7 @@ class O2MonthlySummaryService
                 e.`short_name` AS employee_shortname,
                 l.`type`,
                 l.`amount`,
+                DATE_FORMAT(l.`entry_date`, '%Y-%m-%d')   AS entry_date,
                 DATE_FORMAT(l.`period_start`, '%Y-%m-%d') AS period_start,
                 DATE_FORMAT(l.`period_end`, '%Y-%m-%d')   AS period_end,
                 l.`division`,
@@ -136,7 +138,7 @@ class O2MonthlySummaryService
             FROM `employee_financial_ledger` l
             LEFT JOIN `employee` e ON l.`employee_id` = e.`id`
             WHERE l.`division` = 'Owners2'
-              AND l.`type` = 'salary'
+              AND l.`type` IN ('salary', 'advance')
               AND l.`period_start` <= :end
               AND l.`period_end`   >= :start
             ORDER BY l.`period_start` ASC, l.`id` ASC
