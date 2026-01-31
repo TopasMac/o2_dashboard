@@ -48,6 +48,7 @@ function formatDate(dateStr) {
   }
 }
 
+
 function formatAmount(amount) {
   if (amount === null || amount === undefined) return "";
   const n = typeof amount === "number" ? amount : parseFloat(String(amount));
@@ -56,6 +57,57 @@ function formatAmount(amount) {
     .toFixed(2)
     .replace(/\B(?=(\d{3})+(?!\d))/g, ".")
     .replace(".", ",");
+}
+
+function buildDeductionNote(deductionRow) {
+  if (!deductionRow) return "";
+
+  // Try common field names for installment counters; fall back gracefully.
+  const current =
+    deductionRow.installmentCurrent ??
+    deductionRow.installment_current ??
+    deductionRow.installmentNumber ??
+    deductionRow.installment_number ??
+    deductionRow.part ??
+    deductionRow.current ??
+    null;
+
+  const total =
+    deductionRow.installmentTotal ??
+    deductionRow.installment_total ??
+    deductionRow.installmentsTotal ??
+    deductionRow.installments_total ??
+    deductionRow.total ??
+    deductionRow.parts ??
+    null;
+
+  // Fallback: try to parse installment counters from notes like "Loan repayment 1/4 ..." or "1/4"
+  let parsedCurrent = current;
+  let parsedTotal = total;
+  if ((!parsedCurrent || !parsedTotal) && typeof deductionRow.notes === "string") {
+    const m = deductionRow.notes.match(/(\d+)\s*\/\s*(\d+)/);
+    if (m) {
+      parsedCurrent = parsedCurrent || parseInt(m[1], 10);
+      parsedTotal = parsedTotal || parseInt(m[2], 10);
+    }
+  }
+
+  // Ensure amount is formatted as positive and displayed as MXN-style: $1.500,00
+  const rawAmt =
+    typeof deductionRow.amount === "number" ? deductionRow.amount : parseFloat(String(deductionRow.amount));
+  const amtNum = Number.isFinite(rawAmt) ? Math.abs(rawAmt) : NaN;
+  const amt = (() => {
+    if (!Number.isFinite(amtNum)) return "";
+    const fixed = amtNum.toFixed(2); // 1500.00
+    const [intPart, decPart] = fixed.split(".");
+    const intFmt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return `$${intFmt},${decPart}`;
+  })();
+
+  if (parsedCurrent && parsedTotal) {
+    return `Descuento ${parsedCurrent}/${parsedTotal} de ${amt} pesos`;
+  }
+  return `Descuento de ${amt} pesos`;
 }
 
 function pad2(n) {
@@ -67,6 +119,10 @@ function toYmd(dt) {
   const m = pad2(dt.getMonth() + 1);
   const d = pad2(dt.getDate());
   return `${y}-${m}-${d}`;
+}
+
+function todayYmd() {
+  return toYmd(new Date());
 }
 
 function endOfMonthDate(year, monthIndex0) {
@@ -117,17 +173,54 @@ const HRTransactions = () => {
   // Payments helper (simple paid/unpaid tracking via salary rows)
   const monthOptions = useMemo(() => buildMonthOptions(6), []);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
+  const openRequestPaymentFromPayments = () => {
+    setPaymentsOpen(false);
+    setPaymentDrawerOpen(true);
+  };
   const [paymentsMonth, setPaymentsMonth] = useState(monthOptions[0]?.value || "");
   const [employeesOpt, setEmployeesOpt] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentsError, setPaymentsError] = useState(null);
   const [salaryRows, setSalaryRows] = useState([]);
+  const [deductionRows, setDeductionRows] = useState([]);
 
   const [payModalOpen, setPayModalOpen] = useState(false);
   const [payTarget, setPayTarget] = useState(null); // { employee, halfKey: 'h1'|'h2', periodStart, periodEnd }
   const [payAmount, setPayAmount] = useState("");
   const [payNotes, setPayNotes] = useState("");
+  const [payDate, setPayDate] = useState(todayYmd());
   const [paySaving, setPaySaving] = useState(false);
+
+  const handlePaySave = async () => {
+    if (!payTarget?.employeeId) return;
+    const amt = String(payAmount || "").trim();
+    if (!amt) {
+      // eslint-disable-next-line no-alert
+      alert("Please enter an amount.");
+      return;
+    }
+    try {
+      setPaySaving(true);
+      await api.post("/api/employee-ledger", {
+        employeeId: payTarget.employeeId,
+        employee_id: payTarget.employeeId,
+        type: "salary",
+        date: payDate,
+        amount: amt,
+        period_start: payTarget.periodStart,
+        period_end: payTarget.periodEnd,
+        notes: payNotes || "",
+      });
+      setPayModalOpen(false);
+      await loadPaymentsData();
+      fetchData();
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      alert(e?.response?.data?.message || "Failed to register payment");
+    } finally {
+      setPaySaving(false);
+    }
+  };
 
   const columns = [
     {
@@ -172,8 +265,13 @@ const HRTransactions = () => {
     { header: "Amount", accessor: "amount", cell: (row) => formatAmount(row?.amount) },
     {
       header: "Granted",
-      accessor: "createdAt",
-      cell: (row) => (row?.type === 'advance' ? formatDate(row?.createdAt) : ''),
+      accessor: "date",
+      cell: (row) => {
+        if (row?.type === "advance" || row?.type === "salary") {
+          return formatDate(row?.date || row?.createdAt);
+        }
+        return "";
+      },
     },
     {
       header: "From",
@@ -229,6 +327,19 @@ const HRTransactions = () => {
     return idx;
   }, [salaryRows]);
 
+  const deductionIndex = useMemo(() => {
+    // key: `${employeeId}|${periodStart}|${periodEnd}` -> row
+    const idx = new Map();
+    (deductionRows || []).forEach((r) => {
+      const eid = r.employeeId ?? r.employee_id ?? r.employee?.id ?? null;
+      const ps = r.periodStart || r.period_start || "";
+      const pe = r.periodEnd || r.period_end || "";
+      if (!eid || !ps || !pe) return;
+      idx.set(`${eid}|${ps}|${pe}`, r);
+    });
+    return idx;
+  }, [deductionRows]);
+
   const paymentsTableRows = useMemo(() => {
     const list = Array.isArray(employeesOpt) ? employeesOpt : [];
     return list.map((e, i) => {
@@ -244,6 +355,54 @@ const HRTransactions = () => {
       };
     });
   }, [employeesOpt]);
+
+  // Hoisted openPayModal to ensure it's always up-to-date for paymentsColumns
+  function openPayModal(employeeRow, halfKey) {
+    if (!halfPeriods) return;
+    const half = halfKey === "h2" ? halfPeriods.h2 : halfPeriods.h1;
+    const employee = employeeRow?._employeeRaw || employeeRow;
+
+    const employeeId = employeeRow?.employeeId ?? employee?.id ?? employee?.value ?? null;
+    const k = `${employeeId}|${half.periodStart}|${half.periodEnd}`;
+    const dedRow = deductionIndex.get(k);
+    const dedNote = buildDeductionNote(dedRow);
+
+    setPayTarget({
+      employee,
+      employeeId,
+      employeeShortName: employeeRow?.shortName || employee?.shortName || employee?.label || "",
+      halfKey,
+      periodStart: half.periodStart,
+      periodEnd: half.periodEnd,
+      deductionRow: dedRow || null,
+      deductionNote: dedNote || "",
+    });
+    const rawSalary =
+      employeeRow?.current_salary ??
+      employee?.current_salary ??
+      employeeRow?.currentSalary ??
+      employee?.currentSalary ??
+      null;
+
+    const salaryNum = rawSalary === null || rawSalary === undefined ? NaN : parseFloat(String(rawSalary));
+    const halfSalary = Number.isFinite(salaryNum) ? (salaryNum / 2).toFixed(2) : "";
+
+    // If there is a deduction for this same period, default the payment Amount to net-to-transfer.
+    // Deductions are stored as negative amounts; subtract the absolute value from the gross half-salary.
+    const grossNum = halfSalary ? parseFloat(String(halfSalary)) : NaN;
+    const dedNumRaw = dedRow?.amount === undefined || dedRow?.amount === null ? NaN : parseFloat(String(dedRow.amount));
+    const dedAbs = Number.isFinite(dedNumRaw) ? Math.abs(dedNumRaw) : 0;
+
+    if (dedRow && Number.isFinite(grossNum)) {
+      const net = Math.max(grossNum - dedAbs, 0);
+      setPayAmount(net.toFixed(2));
+    } else {
+      setPayAmount(halfSalary);
+    }
+    setPayNotes(dedNote || "");
+    setPayDate(todayYmd());
+    setPayModalOpen(true);
+  }
 
   const paymentsColumns = useMemo(() => {
     const renderPaidCell = (halfKey) => (r) => {
@@ -308,7 +467,7 @@ const HRTransactions = () => {
         cell: renderPaidCell("h2"),
       },
     ];
-  }, [halfPeriods, salaryIndex, paymentsTableRows]);
+  }, [halfPeriods, salaryIndex, deductionIndex, paymentsTableRows]);
 
   const loadPaymentsData = async () => {
     if (!halfPeriods || !selectedMonthMeta) return;
@@ -335,6 +494,18 @@ const HRTransactions = () => {
       const salPayload = salRes.data || {};
       const salList = Array.isArray(salPayload) ? salPayload : salPayload.rows || [];
       setSalaryRows(salList);
+
+      const dedRes = await api.get("/api/employee-ledger", {
+        params: {
+          type: "deduction",
+          periodStart: monthStart,
+          periodEnd: monthEnd,
+          limit: 500,
+        },
+      });
+      const dedPayload = dedRes.data || {};
+      const dedList = Array.isArray(dedPayload) ? dedPayload : dedPayload.rows || [];
+      setDeductionRows(dedList);
     } catch (e) {
       setPaymentsError(e?.response?.data?.message || "Failed to load payments data");
     } finally {
@@ -342,22 +513,6 @@ const HRTransactions = () => {
     }
   };
 
-  const openPayModal = (employeeRow, halfKey) => {
-    if (!halfPeriods) return;
-    const half = halfKey === "h2" ? halfPeriods.h2 : halfPeriods.h1;
-    const employee = employeeRow?._employeeRaw || employeeRow;
-    setPayTarget({
-      employee,
-      employeeId: employeeRow?.employeeId ?? employee?.id ?? employee?.value ?? null,
-      employeeShortName: employeeRow?.shortName || employee?.shortName || employee?.label || "",
-      halfKey,
-      periodStart: half.periodStart,
-      periodEnd: half.periodEnd,
-    });
-    setPayAmount("");
-    setPayNotes("");
-    setPayModalOpen(true);
-  };
 
   const exportLedger = () => {
     // Placeholder for exporting functionality
@@ -384,6 +539,7 @@ const HRTransactions = () => {
           costCentre: item.costCentre,
           type: item.type,
           amount: item.amount,
+          date: item.date,
           periodStart: item.periodStart,
           periodEnd: item.periodEnd,
           notes: item.notes,
@@ -441,7 +597,7 @@ const HRTransactions = () => {
           "&:hover": { backgroundColor: "rgba(78,131,121,0.08)", borderColor: "#4E8379" },
         }}
       >
-        + Add
+        Add
       </Button>
       <Button
         variant="outlined"
@@ -458,30 +614,18 @@ const HRTransactions = () => {
       >
         Reset filters
       </Button>
-      <Button
-        variant="contained"
-        color="primary"
-        sx={{
-          textTransform: "none",
-          backgroundColor: "#4E8379",
-          "&:hover": { backgroundColor: "#3c685f" },
-        }}
-        onClick={() => setPaymentDrawerOpen(true)}
-      >
-        Request Payment
-      </Button>
-      <Button
-        variant="outlined"
-        sx={{
-          textTransform: "none",
-          borderColor: "#4E8379",
-          color: "#4E8379",
-          "&:hover": { backgroundColor: "rgba(78,131,121,0.08)", borderColor: "#4E8379" },
-        }}
-        onClick={() => setPaymentsOpen(true)}
-      >
-        Payments
-      </Button>
+  <Button
+    variant="contained"
+    sx={{
+      textTransform: "none",
+      backgroundColor: "#4E8379",
+      color: "#fff",
+      "&:hover": { backgroundColor: "#3c685f" },
+    }}
+    onClick={() => setPaymentsOpen(true)}
+  >
+    Payments
+  </Button>
     </Stack>
   );
 
@@ -624,10 +768,9 @@ const HRTransactions = () => {
                 color: "#4E8379",
                 "&:hover": { backgroundColor: "rgba(78,131,121,0.08)", borderColor: "#4E8379" },
               }}
-              onClick={() => loadPaymentsData()}
-              disabled={paymentsLoading}
+              onClick={openRequestPaymentFromPayments}
             >
-              Refresh
+              Request Payment
             </Button>
           </Box>
 
@@ -657,49 +800,53 @@ const HRTransactions = () => {
         onClose={() => setPayModalOpen(false)}
         title={
           payTarget
-            ? `Register payment — ${payTarget.employeeShortName} (${payTarget.periodEnd})`
+            ? `Register payment: ${payTarget.employeeShortName} • ${formatDate(payTarget.periodStart)} → ${formatDate(
+                payTarget.periodEnd
+              )}`
             : "Register payment"
         }
-        onCancel={() => setPayModalOpen(false)}
-        onSave={async () => {
-          if (!payTarget?.employeeId) return;
-          const amt = String(payAmount || "").trim();
-          if (!amt) {
-            // eslint-disable-next-line no-alert
-            alert("Please enter an amount.");
-            return;
-          }
-          try {
-            setPaySaving(true);
-            await api.post("/api/employee-ledger", {
-              employee_id: payTarget.employeeId,
-              type: "salary",
-              amount: amt,
-              period_start: payTarget.periodStart,
-              period_end: payTarget.periodEnd,
-              notes: payNotes || "",
-            });
-            setPayModalOpen(false);
-            await loadPaymentsData();
-            fetchData();
-          } catch (e) {
-            // eslint-disable-next-line no-alert
-            alert(e?.response?.data?.message || "Failed to register payment");
-          } finally {
-            setPaySaving(false);
-          }
-        }}
-        saveLabel={paySaving ? "Saving…" : "Save"}
-        cancelLabel="Cancel"
-        disableSave={paySaving}
+        actions={
+          <>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={paySaving}
+              onClick={() => setPayModalOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={paySaving}
+              onClick={handlePaySave}
+            >
+              {paySaving ? "Saving…" : "Save"}
+            </button>
+          </>
+        }
       >
         {payTarget && (
           <Stack spacing={2}>
-            <Typography variant="body2" sx={{ color: "#5d8782" }}>
-              Period: <b>{payTarget.periodStart}</b> → <b>{payTarget.periodEnd}</b>
-            </Typography>
-
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+              <Box>
+                <Typography variant="caption" sx={{ display: "block", mb: 0.5, color: "#5d8782" }}>
+                  Date
+                </Typography>
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 8,
+                    border: "1px solid rgba(0,0,0,0.18)",
+                    fontSize: 14,
+                  }}
+                />
+              </Box>
+
               <Box>
                 <Typography variant="caption" sx={{ display: "block", mb: 0.5, color: "#5d8782" }}>
                   Amount
@@ -724,6 +871,11 @@ const HRTransactions = () => {
                 <Typography variant="caption" sx={{ display: "block", mb: 0.5, color: "#5d8782" }}>
                   Notes (optional)
                 </Typography>
+                {payTarget?.deductionNote ? (
+                  <Typography variant="caption" sx={{ display: "block", mb: 0.8, color: "#D9822B" }}>
+                    {payTarget.deductionNote}
+                  </Typography>
+                ) : null}
                 <textarea
                   value={payNotes}
                   onChange={(e) => setPayNotes(e.target.value)}

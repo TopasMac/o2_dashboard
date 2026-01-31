@@ -151,7 +151,7 @@ class EmployeeLedgerService
         // Sorting
         $sort = $q['sort'] ?? 'id';
         $dir  = strtoupper((string) ($q['dir'] ?? 'DESC')) === 'ASC' ? 'ASC' : 'DESC';
-        $allowedSorts = ['id', 'code', 'type', 'amount', 'division', 'city', 'periodStart', 'periodEnd', 'createdAt'];
+        $allowedSorts = ['id', 'code', 'type', 'amount', 'division', 'city', 'periodStart', 'periodEnd', 'entryDate', 'createdAt'];
         if (!in_array($sort, $allowedSorts, true)) {
             $sort = 'id';
         }
@@ -219,6 +219,14 @@ class EmployeeLedgerService
             }
         }
 
+        $entryDate = null;
+        if (!empty($payload['entryDate'])) {
+            $entryDate = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $payload['entryDate'], $utc);
+            if ($entryDate === false) {
+                throw new \InvalidArgumentException('Invalid entryDate (YYYY-MM-DD)');
+            }
+        }
+
         // Division / City defaults
         $division = $payload['division'] ?? (method_exists($emp, 'getDivision') ? $emp->getDivision() : null);
         $city     = $payload['city'] ?? (method_exists($emp, 'getCity') ? $emp->getCity() : null);
@@ -253,6 +261,7 @@ class EmployeeLedgerService
         $row->setArea($payload['area'] ?? (method_exists($emp, 'getArea') ? $emp->getArea() : null));
         $row->setPeriodStart($periodStart);
         $row->setPeriodEnd($periodEnd);
+        $row->setEntryDate($entryDate);
 
         // Code generation (EFLXXXXX) if not provided
         $code = $payload['code'] ?? null;
@@ -405,6 +414,19 @@ class EmployeeLedgerService
             }
         }
 
+        if (array_key_exists('entryDate', $payload)) {
+            $utc = new \DateTimeZone('UTC');
+            if ($payload['entryDate'] === null || $payload['entryDate'] === '') {
+                $row->setEntryDate(null);
+            } else {
+                $dt = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $payload['entryDate'], $utc);
+                if ($dt === false) {
+                    throw new \InvalidArgumentException('Invalid entryDate (YYYY-MM-DD)');
+                }
+                $row->setEntryDate($dt);
+            }
+        }
+
         // Code is immutable once set; ignore changes unless it's empty for some reason
         if ($row->getCode() === null || $row->getCode() === '') {
             $row->setCode($this->generateCode());
@@ -444,6 +466,7 @@ class EmployeeLedgerService
             'city' => $l->getCity(),
             'area' => $l->getArea(),
             'costCentre' => $l->getCostCentre(),
+            'date' => $fmt($l->getEntryDate()),
             'periodStart' => $fmt($l->getPeriodStart()),
             'periodEnd' => $fmt($l->getPeriodEnd()),
             'notes' => $l->getNotes(),

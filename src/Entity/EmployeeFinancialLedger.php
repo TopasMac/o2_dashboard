@@ -40,6 +40,10 @@ class EmployeeFinancialLedger
     #[ORM\Column(name: 'period_end', type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $periodEnd = null;
 
+    // Business date (e.g., advance granted date / salary payment date)
+    #[ORM\Column(name: 'entry_date', type: 'date_immutable', nullable: true)]
+    private ?\DateTimeImmutable $entryDate = null;
+
     // Division: Owners2, Housekeepers
     #[ORM\Column(type: 'string', length: 40, nullable: true)]
     private ?string $division = null;
@@ -135,6 +139,17 @@ class EmployeeFinancialLedger
     public function setPeriodEnd(?\DateTimeImmutable $periodEnd): self
     {
         $this->periodEnd = $periodEnd;
+        return $this;
+    }
+
+    public function getEntryDate(): ?\DateTimeImmutable
+    {
+        return $this->entryDate;
+    }
+
+    public function setEntryDate(?\DateTimeImmutable $entryDate): self
+    {
+        $this->entryDate = $entryDate;
         return $this;
     }
 

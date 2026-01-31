@@ -88,6 +88,24 @@ class EmployeeLedgerController extends AbstractController
             if (!is_array($data)) {
                 return $this->json(['error' => 'invalid_json', 'message' => 'Invalid JSON body'], 400);
             }
+            // Normalize common snake_case fields from legacy/FE payloads
+            if (!isset($data['employeeId']) && isset($data['employee_id'])) {
+                $data['employeeId'] = $data['employee_id'];
+            }
+            if (!isset($data['periodStart']) && isset($data['period_start'])) {
+                $data['periodStart'] = $data['period_start'];
+            }
+            if (!isset($data['periodEnd']) && isset($data['period_end'])) {
+                $data['periodEnd'] = $data['period_end'];
+            }
+            if (!isset($data['costCentre']) && isset($data['cost_centre'])) {
+                $data['costCentre'] = $data['cost_centre'];
+            }
+            // Business date (advance granted / salary paid date)
+            // Accept both entryDate and date; service will persist to entry_date.
+            if (!isset($data['entryDate']) && isset($data['date'])) {
+                $data['entryDate'] = $data['date'];
+            }
         try {
             $row = $this->service->create($data);
             return $this->json([
@@ -119,6 +137,23 @@ class EmployeeLedgerController extends AbstractController
         $data = json_decode($request->getContent() ?: '[]', true);
         if (!is_array($data)) {
             return $this->json(['error' => 'invalid_json', 'message' => 'Invalid JSON body'], 400);
+        }
+        // Normalize common snake_case fields from legacy/FE payloads
+        if (!isset($data['employeeId']) && isset($data['employee_id'])) {
+            $data['employeeId'] = $data['employee_id'];
+        }
+        if (!isset($data['periodStart']) && isset($data['period_start'])) {
+            $data['periodStart'] = $data['period_start'];
+        }
+        if (!isset($data['periodEnd']) && isset($data['period_end'])) {
+            $data['periodEnd'] = $data['period_end'];
+        }
+        if (!isset($data['costCentre']) && isset($data['cost_centre'])) {
+            $data['costCentre'] = $data['cost_centre'];
+        }
+        // Business date (advance granted / salary paid date)
+        if (!isset($data['entryDate']) && isset($data['date'])) {
+            $data['entryDate'] = $data['date'];
         }
 
         // Guard: only allow period edits for deductions
