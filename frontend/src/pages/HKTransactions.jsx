@@ -9,16 +9,26 @@ import HKTransactionNewFormRHF from '../components/forms/HKTransactionNewFormRHF
 import MarkUpCalculatorFormRHF from '../components/forms/MarkUpCalculatorFormRHF';
 // import '../components/layouts/Buttons.css';
 import { Calculate } from '@mui/icons-material';
-import * as XLSX from 'xlsx';
 import AppShell from '../components/layout/AppShell';
 import TableLite from '../components/layout/TableLite';
 import PageScaffold from '../components/layout/PageScaffold';
+import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 
 const formatUnitLabel = (value = '') => {
   if (value === 'Housekeepers_Playa') return 'HK Playa';
   if (value === 'Housekeepers_Tulum') return 'HK Tulum';
   if (value === 'Housekeepers_General') return 'HK General';
   return value;
+};
+
+const formatDateDMY = (isoDate) => {
+  if (!isoDate) return '';
+  const s = String(isoDate).split('T')[0];
+  const parts = s.split('-');
+  if (parts.length !== 3) return s;
+  const [y, m, d] = parts;
+  if (!y || !m || !d) return s;
+  return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
 };
 
 const HKTransactions = () => {
@@ -34,7 +44,6 @@ const HKTransactions = () => {
   const [formOptions, setFormOptions] = useState({ units: [], categories: [] });
   const [visibleRows, setVisibleRows] = useState([]);
   const [unitFilter, setUnitFilter] = useState('');
-  const [cityFilter, setCityFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [costCentreFilter, setCostCentreFilter] = useState('');
 
@@ -79,12 +88,40 @@ const HKTransactions = () => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
   };
 
+  // Filtered rows for display in TableLite based on month/year picker and Alor default exclusion
+  const displayRows = useMemo(() => {
+    const base = Array.isArray(allTransactions) ? allTransactions : [];
+
+    // Default: exclude Alor rows unless the user explicitly filters by cost centre
+    const shouldExcludeAlor = !costCentreFilter;
+
+    return base.filter((tx) => {
+      // Month filter
+      let matchesMonth = true;
+      if (initialMonthRange && !selYM) {
+        const d = tx.date || '';
+        matchesMonth = d.startsWith(currentMonthYM) || d.startsWith(prevMonthYM);
+      } else if (!selYM || selYM === 'all') {
+        matchesMonth = true;
+      } else {
+        matchesMonth = tx.date ? tx.date.startsWith(selYM) : false;
+      }
+
+      // Default exclusion for Alor
+      if (shouldExcludeAlor) {
+        const status = String(tx.unitStatus || '').toLowerCase();
+        if (status === 'alor') return false;
+      }
+
+      return matchesMonth;
+    });
+  }, [allTransactions, selYM, initialMonthRange, currentMonthYM, prevMonthYM, costCentreFilter]);
+
   const clearAllFilters = () => {
     setTransactions(allTransactions);
     setSelYM('all');
     setInitialMonthRange(false);
     setUnitFilter('');
-    setCityFilter('');
     setCategoryFilter('');
     setCostCentreFilter('');
     setFilterKey((k) => k + 1); // force DataTable remount to clear header filters
@@ -187,14 +224,13 @@ const HKTransactions = () => {
       } else {
         matchesMonth = tx.date ? tx.date.startsWith(selYM) : false;
       }
-      const matchesUnit = unitFilter ? String(tx.unitName || '') === String(unitFilter) : true;
-      const matchesCity = cityFilter ? String(tx.cityLabel || '') === String(cityFilter) : true;
+      const matchesUnit = unitFilter ? String(`${tx.unitName || ''} ${tx.cityLabel || ''}`).toLowerCase().includes(String(unitFilter).toLowerCase()) : true;
       const matchesCategory = categoryFilter ? String(tx.categoryName || '') === String(categoryFilter) : true;
       const matchesCostCentre = costCentreFilter ? String(tx.costCentre || '') === String(costCentreFilter) : true;
-      return matchesMonth && matchesUnit && matchesCity && matchesCategory && matchesCostCentre;
+      return matchesMonth && matchesUnit && matchesCategory && matchesCostCentre;
     });
     setVisibleRows(filtered);
-  }, [transactions, selYM, unitFilter, cityFilter, categoryFilter, costCentreFilter, initialMonthRange, currentMonthYM, prevMonthYM]);
+  }, [transactions, selYM, unitFilter, categoryFilter, costCentreFilter, initialMonthRange, currentMonthYM, prevMonthYM]);
 
   const unitFilterOptions = useMemo(() => {
     const base = Array.isArray(allTransactions) ? allTransactions : [];
@@ -211,16 +247,23 @@ const HKTransactions = () => {
     }));
   }, [allTransactions]);
 
-  const cityFilterOptions = useMemo(() => {
+  // Combined Unit and City filter options for merged Unit column
+  const unitOrCityFilterOptions = useMemo(() => {
     const base = Array.isArray(allTransactions) ? allTransactions : [];
-    const values = Array.from(
-      new Set(
-        base
-          .map((tx) => tx.cityLabel)
-          .filter((name) => !!name)
-      )
+
+    const unitValues = Array.from(
+      new Set(base.map((tx) => tx.unitName).filter((v) => !!v))
     ).sort((a, b) => String(a).localeCompare(String(b)));
-    return values.map((value) => ({ value, label: value }));
+
+    const cityValues = Array.from(
+      new Set(base.map((tx) => tx.cityLabel).filter((v) => !!v))
+    ).sort((a, b) => String(a).localeCompare(String(b)));
+
+    const out = [];
+    unitValues.forEach((v) => out.push({ value: v, label: formatUnitLabel(v) }));
+    cityValues.forEach((v) => out.push({ value: v, label: v }));
+
+    return out;
   }, [allTransactions]);
 
   const categoryFilterOptions = useMemo(() => {
@@ -272,66 +315,73 @@ const HKTransactions = () => {
 
   const columns = [
     {
-      header: 'Code',
+      header: 'Transaction',
       accessor: 'transactionCode',
-      width: 110,
+      width: 150,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
       render: (value, row) => (
-        <a
-          href="#"
-          className="table-link"
-          onClick={(e) => {
-            e.preventDefault();
-            setSelectedId(row.id);
-            setDrawerOpen(true);
-          }}
-        >
-          {row.transactionCode}
-        </a>
+        <div className="o2-cell-two-line">
+          <div className="o2-cell-sub">{formatDateDMY(row.date)}</div>
+          <a
+            href="#"
+            className="table-link o2-cell-main"
+            onClick={(e) => {
+              e.preventDefault();
+              setSelectedId(row.id);
+              setDrawerOpen(true);
+            }}
+          >
+            {row.transactionCode}
+          </a>
+        </div>
       ),
-    },
-    {
-      header: 'Date',
-      accessor: 'date',
-      format: 'date',
-      width: 110,
-      cellStyle: { py: 1, px: 1.5 },
-      headerStyle: { textAlign: 'left' },
-      filterable: true,
-      filterType: 'monthYear',
-      inlineFilter: true,
     },
     {
       header: 'Unit',
       accessor: 'unitName',
-      width: 180,
+      width: 200,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
-      render: (value) => formatUnitLabel(value || ''),
+      render: (value, row) => (
+        <div className="o2-cell-two-line o2-two-line-standard">
+          <div className="o2-cell-main">{formatUnitLabel(value || '')}</div>
+          <div className="o2-cell-sub">{row.cityLabel || ''}</div>
+        </div>
+      ),
       filter: {
         type: 'autocomplete',
         inline: true,
-        placeholder: 'Unit',
-        options: unitFilterOptions,
+        placeholder: 'Unit / City',
+        options: unitOrCityFilterOptions,
+        valueAccessor: (row) => `${row?.unitName || ''} ${row?.cityLabel || ''}`,
         getOptionLabel: (option) => {
           if (option == null) return '';
-          if (typeof option === 'string') return formatUnitLabel(option);
-          return formatUnitLabel(option.label ?? option.value ?? '');
+          if (typeof option === 'string') return option;
+          return String(option.label ?? option.value ?? '');
         },
       },
     },
     {
-      header: 'City',
-      accessor: 'cityLabel',
+      header: 'C. Centre',
+      accessor: 'costCentre',
       width: 140,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
+      render: (value, row) => {
+        const status = String(row?.unitStatus || '').toLowerCase();
+        if (status === 'alor') return 'Alor';
+        const v = row?.costCentre || '';
+        if (v === 'Housekeepers_Playa') return 'HK Playa';
+        if (v === 'Housekeepers_Tulum') return 'HK Tulum';
+        if (v === 'Housekeepers_General') return 'HK General';
+        return v;
+      },
       filter: {
         type: 'select',
         inline: true,
-        placeholder: 'City',
-        options: cityFilterOptions,
+        placeholder: 'C. Centre',
+        options: costCentreFilterOptions,
       },
     },
     {
@@ -348,31 +398,16 @@ const HKTransactions = () => {
       },
     },
     {
-      header: 'C. Centre',
-      accessor: 'costCentre',
-      width: 140,
-      cellStyle: { py: 1, px: 1.5 },
-      headerStyle: { textAlign: 'left' },
-      render: (value, row) => {
-        const v = row?.costCentre || '';
-        if (v === 'Housekeepers_Playa') return 'HK Playa';
-        if (v === 'Housekeepers_Tulum') return 'HK Tulum';
-        if (v === 'Housekeepers_General') return 'HK General';
-        return v;
-      },
-      filter: {
-        type: 'select',
-        inline: true,
-        placeholder: 'C. Centre',
-        options: costCentreFilterOptions,
-      },
-    },
-    {
       header: 'Description',
       accessor: 'description',
-      width: 240,
+      width: 250,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
+      twoLineClassName: 'o2-two-line-standard',
+      render: (value, row) => ({
+        primary: value || '',
+        meta: row?.notes || '',
+      }),
     },
     {
       header: 'Paid',
@@ -391,13 +426,6 @@ const HKTransactions = () => {
       width: 110,
       cellStyle: { py: 1, px: 1.5, textAlign: 'right' },
       headerStyle: { textAlign: 'right' },
-    },
-    {
-      header: 'Notes',
-      accessor: 'notes',
-      width: 220,
-      cellStyle: { py: 1, px: 1.5 },
-      headerStyle: { textAlign: 'left' },
     },
     {
       header: 'Documents',
@@ -456,80 +484,8 @@ const HKTransactions = () => {
   const totalTulum = sumBy(monthlyRows, (r) => String(r.city || '') === 'Tulum');
 
   const diff = (obj) => (obj.charged - obj.paid);
-  const selectedRow = selectedId ? transactions.find(r => r.id === selectedId) : null;
+  const selectedRow = selectedId ? allTransactions.find(r => r.id === selectedId) : null;
 
-  const exportToXLSX = () => {
-    try {
-      const rows = Array.isArray(visibleRows) ? visibleRows : [];
-      if (!rows.length) {
-        alert('No rows to export for the selected month.');
-        return;
-      }
-
-      // Prepare data with the requested fields: Date; Unit; Category; Description; Charged
-      const data = rows.map(r => ({
-        Date: r.date || '',
-        Unit: r.unitName || '',
-        Category: r.categoryName || '',
-        Description: r.description || '',
-        Charged: (r.charged !== null && r.charged !== undefined) ? Number(r.charged) : null
-      }));
-
-      // Compute total of Charged (numbers only)
-      const totalCharged = rows.reduce((acc, r) => {
-        const v = (r.charged !== null && r.charged !== undefined) ? Number(r.charged) : 0;
-        return acc + (isFinite(v) ? v : 0);
-      }, 0);
-
-      // Append only a Total row
-      data.push({
-        Date: '',
-        Unit: '',
-        Category: '',
-        Description: 'Total',
-        Charged: totalCharged
-      });
-
-      // Create worksheet and workbook
-      const headers = ['Date','Unit','Category','Description','Charged'];
-      const ws = XLSX.utils.json_to_sheet(data, { header: headers });
-
-      // Set an autoFilter to give an Excel table-like experience
-      const lastRow = data.length + 1; // +1 for header row
-      ws['!autofilter'] = { ref: `A1:E${lastRow}` };
-
-      // Column widths for readability
-      ws['!cols'] = [
-        { wch: 12 }, // Date
-        { wch: 24 }, // Unit
-        { wch: 18 }, // Category
-        { wch: 40 }, // Description
-        { wch: 12 }  // Charged
-      ];
-
-      // Apply European number format: dot thousands, comma decimals, always 2 decimals, 0 -> 0,00
-      for (let r = 2; r <= lastRow; r++) {
-        const addr = 'E' + r;
-        if (ws[addr]) {
-          const value = Number(ws[addr].v || 0);
-          ws[addr].t = 'n';
-          ws[addr].v = isNaN(value) ? 0 : value;
-          ws[addr].z = '#,##0.00'; // ensures 2 decimals with thousand separator
-        }
-      }
-
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
-
-      // Name the file using the first visible row's month (YYYY-MM), fallback to selYM or 'all'
-      const ymForName = (rows?.[0]?.date ? String(rows[0].date).slice(0,7) : (selYM || 'all'));
-      const fileName = `HK_Alorvacations_${ymForName}.xlsx`;
-      XLSX.writeFile(wb, fileName);
-    } catch (e) {
-      console.error('XLSX export failed', e);
-      alert('Failed to export Excel file.');
-    }
-  };
 
   // Prepare actionsHeader for stickyHeader prop
   const actionsHeader = (
@@ -549,26 +505,21 @@ const HKTransactions = () => {
         Markup
         <Calculate style={{ marginLeft: 4, fontSize: '1rem', padding: 0, lineHeight: 1, marginBottom: -2 }} />
       </button>
-      <button
-        className="btn btn-primary"
-        style={{ minWidth: 120 }}
-        onClick={() => setTransactions(allTransactions.filter(tx => String(tx.unitStatus).toLowerCase() === 'active'))}
-      >
-        Owners2
-      </button>
-      <button
-        className="btn btn-secondary"
-        style={{ minWidth: 120 }}
-        onClick={() => setTransactions(allTransactions.filter(tx => String(tx.unitStatus).toLowerCase() === 'alor'))}
-      >
-        Alorvacations
-      </button>
-      <Button variant="outlined" size="small" onClick={clearAllFilters}>
-        Clear Filters
-      </Button>
-      <Button variant="outlined" size="small" onClick={exportToXLSX}>
-        Export Excel
-      </Button>
+      <YearMonthPicker
+        label="Month"
+        value={(!initialMonthRange && selYM && selYM !== 'all') ? selYM : ''}
+        onChange={(ym) => {
+          if (!ym) {
+            // Reset to default view (current + previous month)
+            setSelYM('');
+            setInitialMonthRange(true);
+            return;
+          }
+          setInitialMonthRange(false);
+          setSelYM(ym);
+        }}
+        sx={{ minWidth: 200 }}
+      />
     </div>
   );
 
@@ -584,27 +535,20 @@ const HKTransactions = () => {
       >
         <TableLite
           columns={columns}
-          rows={transactions}
+          rows={displayRows}
           loading={loading}
           error={null}
           defaultStringTransform={null}
-          optionsSourceRows={transactions}
+          optionsSourceRows={allTransactions}
           enableFilters
           filterValues={{
-            date: (!initialMonthRange && selYM && selYM !== 'all') ? selYM : '',
             unitName: unitFilter || '',
-            cityLabel: cityFilter || '',
             categoryName: categoryFilter || '',
             costCentre: costCentreFilter || '',
           }}
           onFilterChange={(key, value) => {
-            if (key === 'date') {
-              setInitialMonthRange(false);
-              setSelYM(value || 'all');
-            } else if (key === 'unitName') {
+            if (key === 'unitName') {
               setUnitFilter(value || '');
-            } else if (key === 'cityLabel') {
-              setCityFilter(value || '');
             } else if (key === 'categoryName') {
               setCategoryFilter(value || '');
             } else if (key === 'costCentre') {

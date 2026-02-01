@@ -25,6 +25,7 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 
 import { formatDateDMY, formatMoney, capitalizeFirst } from '../../utils/formatters';
 import DocumentPreview from '../common/DocumentPreview';
+import O2Tooltip from '../common/O2Tooltip';
 
 // Compact select with placeholder-like label (matches our DataTable look)
 
@@ -525,7 +526,7 @@ const TableLite = forwardRef(function TableLite(
         const fv = effectiveFilterValues[key];
         const type = col.filter?.type || 'select';
         const isMonthYear = !!col.filter?.monthYear;
-        if (type === 'text') {
+        if (type === 'text' || type === 'autocomplete') {
           const hay = rawVal == null ? '' : String(rawVal).toLowerCase();
           const needle = String(fv).toLowerCase();
           return hay.includes(needle);
@@ -537,7 +538,7 @@ const TableLite = forwardRef(function TableLite(
           const ym = `${parsed.y}-${String(parsed.m).padStart(2, '0')}`;
           return ym === String(fv);
         }
-        // select / autocomplete -> exact match on stringified value
+        // select -> exact match on stringified value
         return String(rawVal) === String(fv);
       })
     );
@@ -870,6 +871,12 @@ const TableLite = forwardRef(function TableLite(
                               }
                               handleFilterChange(filterKey, val);
                             }}
+                            onInputChange={(_, inputVal, reason) => {
+                              // Keep filter in sync with what the user types.
+                              // Avoid stomping value during internal resets.
+                              if (reason === 'reset') return;
+                              handleFilterChange(filterKey, inputVal ?? '');
+                            }}
                             clearIcon={<ClearRoundedIcon fontSize="small" />}
                             {...(col.filter.autocompleteProps || {})}
                             renderInput={(params) => (
@@ -995,6 +1002,9 @@ const TableLite = forwardRef(function TableLite(
                       : row[col.accessor];
                     const isReactElementValue = React.isValidElement(value);
                     const shouldTruncate = (col.truncate !== false) && !isReactElementValue;
+                    const shouldShowTooltip =
+                      col.tooltip === true
+                      || (col.tooltip !== false && shouldTruncate);
                     const autoUrlEntries = !col.render ? normalizeUrlEntries(value) : [];
                     const isIconRow = autoUrlEntries.length > 0;
                     const explicitWhiteSpace = (cellSx && cellSx.whiteSpace) || (col.cellStyle && col.cellStyle.whiteSpace);
@@ -1072,22 +1082,99 @@ const TableLite = forwardRef(function TableLite(
                             rendered = formatCellValue(col, value, row);
                           }
 
-                          // Option A: special shape { top, bottom } => use two-line cell CSS classes
+                          // Option A: special shape for two-line cells.
+                          // Supports both legacy { top, bottom } and semantic { primary, meta }.
+                          // Renders primary on top, meta on bottom.
+                          // Also supports the hybrid tooltip behavior by default when truncated.
                           if (
                             rendered
                             && typeof rendered === 'object'
                             && !React.isValidElement(rendered)
-                            && ('top' in rendered || 'bottom' in rendered)
+                            && (
+                              'primary' in rendered
+                              || 'meta' in rendered
+                              || 'top' in rendered
+                              || 'bottom' in rendered
+                            )
                           ) {
-                            const top = rendered.top ?? '';
-                            const bottom = rendered.bottom ?? '';
+                            const primary = rendered.primary ?? rendered.bottom ?? '';
+                            const meta = rendered.meta ?? rendered.top ?? '';
 
-                            return (
-                              <div className="o2-cell-two-line">
-                                {top ? <div className="o2-cell-sub">{top}</div> : null}
-                                {bottom ? <div className="o2-cell-main">{bottom}</div> : null}
+                            const variantClass = col.twoLineClassName ? ` ${col.twoLineClassName}` : '';
+
+                            const twoLineEl = (
+                              <div className={`o2-cell-two-line${variantClass}`}>
+                                {primary ? <div className="o2-cell-primary">{primary}</div> : null}
+                                {meta ? <div className="o2-cell-meta">{meta}</div> : null}
                               </div>
                             );
+
+                            if (shouldShowTooltip && shouldTruncate) {
+                              const primaryText = primary == null ? '' : String(primary);
+                              const metaText = meta == null ? '' : String(meta);
+
+                              const hasPrimary = Boolean(String(primaryText).trim());
+                              const hasMeta = Boolean(String(metaText).trim());
+
+                              if (hasPrimary || hasMeta) {
+                                const tooltipNode = (
+                                  <Box
+                                    sx={{
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: 0.5,
+                                      maxWidth: 520,
+                                      whiteSpace: 'normal',
+                                      wordBreak: 'break-word',
+                                    }}
+                                  >
+                                    {hasPrimary ? (
+                                      <Box component="div" sx={{ fontWeight: 600 }}>
+                                        {primaryText}
+                                      </Box>
+                                    ) : null}
+                                    {hasMeta ? (
+                                      <Box component="div">
+                                        {metaText}
+                                      </Box>
+                                    ) : null}
+                                  </Box>
+                                );
+
+                                return (
+                                  <O2Tooltip title={tooltipNode} placement="top">
+                                    <Box component="span" sx={{ display: 'inline-block', maxWidth: '100%' }}>
+                                      {twoLineEl}
+                                    </Box>
+                                  </O2Tooltip>
+                                );
+                              }
+                            }
+
+                            return twoLineEl;
+                          }
+
+                          // Hybrid tooltip: show tooltip for truncated cells by default,
+                          // unless explicitly disabled; also allow forcing tooltip via col.tooltip=true.
+                          // Only wrap primitive text/number values (avoid wrapping complex JSX).
+                          if (
+                            shouldShowTooltip
+                            && shouldTruncate
+                            && rendered !== null
+                            && rendered !== undefined
+                            && !React.isValidElement(rendered)
+                            && (typeof rendered === 'string' || typeof rendered === 'number')
+                          ) {
+                            const tooltipText = String(rendered);
+                            if (tooltipText.trim()) {
+                              return (
+                                <O2Tooltip title={tooltipText} placement="top">
+                                  <Box component="span" sx={{ display: 'inline-block', maxWidth: '100%' }}>
+                                    {tooltipText}
+                                  </Box>
+                                </O2Tooltip>
+                              );
+                            }
                           }
 
                           return rendered;
@@ -1200,6 +1287,8 @@ TableLite.propTypes = {
       cellStyle: PropTypes.object,
       headerStyle: PropTypes.object,
       truncate: PropTypes.bool,
+      tooltip: PropTypes.bool,
+      twoLineClassName: PropTypes.string,
       filter: PropTypes.shape({
         type: PropTypes.oneOf(['select', 'autocomplete', 'text']),
         options: PropTypes.array,

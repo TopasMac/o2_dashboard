@@ -1,19 +1,55 @@
-
-
 .o2-cell-two-line {
   display: flex;
   flex-direction: column;
   padding: 2px 0;
+  gap: 2px; /* default: date on top, code below */
 }
 
-.o2-cell-main {
+.o2-cell-main,
+.o2-cell-primary {
   line-height: 16px;
-  font-weight: 600;
+  font-weight: 400; /* no bold */
+  font-size: 13px;
+  color: #1e6f68;   /* teal */
+  text-decoration: none;
 }
 
-.o2-cell-sub {
+.o2-cell-main:hover,
+.o2-cell-primary:hover {
+  color: #f59e0b; /* orange on hover */
+  text-decoration: none;
+}
+
+.o2-cell-sub,
+.o2-cell-meta {
   line-height: 16px;
-  font-size: 12px;
-  color: #555;
-  margin-top: 4px; /* increased gap */
+  font-size: 11px;
+  color: #6b7280; /* muted gray */
+  margin-top: 0;
+}
+
+/* Two-line standard variant: top line = standard table text, bottom = muted meta */
+.o2-cell-two-line.o2-two-line-standard .o2-cell-main,
+.o2-cell-two-line.o2-two-line-standard .o2-cell-primary {
+  line-height: 16px;
+  font-weight: 400;
+  font-size: inherit;   /* inherit TableLite body font */
+  color: inherit;       /* inherit TableLite text color */
+}
+
+.o2-cell-two-line.o2-two-line-standard .o2-cell-sub,
+.o2-cell-two-line.o2-two-line-standard .o2-cell-meta {
+  line-height: 16px;
+  font-size: 11px;
+  color: #6b7280; /* muted meta (same as date style) */
+  margin-top: 0;
+}
+
+/* Semantic aliases */
+.o2-cell-primary {
+  line-height: 16px;
+}
+
+.o2-cell-meta {
+  line-height: 16px;
 }
