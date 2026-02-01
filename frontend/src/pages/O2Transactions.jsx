@@ -7,6 +7,7 @@ import NewO2TransactionForm from '../components/forms/NewO2TransactionForm';
 import AppDrawer from '../components/common/AppDrawer';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import PageScaffold from '../components/layout/PageScaffold';
+import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 import { Button, Stack, Typography } from '@mui/material';
 
 // Helpers to avoid timezone shifts — treat API dates as plain dates
@@ -16,11 +17,19 @@ const toYmd = (s) => {
   // Take only the first 10 chars (YYYY-MM-DD), ignoring any time / timezone
   return str.length >= 10 ? str.slice(0, 10) : str;
 };
+
 const toDdMmYy = (s) => {
   const ymd = toYmd(s);
   if (!ymd.includes('-')) return '';
   const [y, m, d] = ymd.split('-');
   return `${d}-${m}-${y}`;
+};
+
+// Helper to get current YYYY-MM
+const getCurrentYm = () => {
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  return `${now.getFullYear()}-${mm}`;
 };
 
 
@@ -39,6 +48,8 @@ export default function O2Transactions() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [resetNonce, setResetNonce] = useState(0);
+
+  const [yearMonthFilter, setYearMonthFilter] = useState('');
 
   const location = useLocation();
   const [focusHandled, setFocusHandled] = useState(false);
@@ -75,6 +86,20 @@ export default function O2Transactions() {
     }
   };
 
+
+  const filteredRows = useMemo(() => {
+    if (!rows || rows.length === 0) return rows;
+
+    // If a specific month is selected, filter strictly by it
+    if (yearMonthFilter) {
+      return rows.filter((r) => r.yearMonth === yearMonthFilter);
+    }
+
+    // Default: current month + all previous months (exclude future)
+    const currentYm = getCurrentYm();
+    return rows.filter((r) => r.yearMonth && r.yearMonth <= currentYm);
+  }, [rows, yearMonthFilter]);
+
   // Define columns (no `id` column)
   const columns = useMemo(() => [
     {
@@ -108,8 +133,16 @@ export default function O2Transactions() {
         ),
       }),
     },
-    { header: 'Cost Centre', accessor: 'costCentre' },
-    { header: 'City', accessor: 'city' },
+    {
+      header: 'Cost Centre',
+      accessor: 'costCentre',
+      render: (value) => {
+        if (value === 'Owners2_Playa') return 'Playa';
+        if (value === 'Owners2_Tulum') return 'Tulum';
+        if (value === 'Owners2') return 'General';
+        return value;
+      },
+    },
     {
       header: 'Category',
       accessor: 'categoryName',
@@ -282,6 +315,7 @@ useEffect(() => {
 }, [location.search, loading, rows, focusHandled]);
 
   const handleResetFilters = async () => {
+    setYearMonthFilter('');
     try {
       setResetNonce((n) => n + 1);
     } catch (_) {}
@@ -296,13 +330,16 @@ useEffect(() => {
   };
 
   const stickyHeader = (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap', alignItems: { sm: 'center' } }}>
       <Button variant="contained" onClick={openNewDrawer}>
         + New Transaction
       </Button>
-      <Button variant="outlined" onClick={handleResetFilters}>
-        Reset filters
-      </Button>
+      <YearMonthPicker
+        value={yearMonthFilter}
+        onChange={(ym) => setYearMonthFilter(ym || '')}
+        label="Month"
+        sx={{ minWidth: 160 }}
+      />
     </Stack>
   );
 
@@ -325,16 +362,16 @@ useEffect(() => {
             <TableLite
               key={resetNonce}
               columns={columns}
-              rows={rows}
+              rows={filteredRows}
               loading={loading}
               error={error}
               dense
               enableFilters
-              optionsSourceRows={rows}
+              optionsSourceRows={filteredRows}
               onRowClick={(row) => openDrawer(row.id)}
             />
           </div>
-          {!loading && rows.length === 0 && (
+          {!loading && filteredRows.length === 0 && (
             <Typography variant="body2" sx={{ mt: 1.5 }}>
               No transactions found.
             </Typography>

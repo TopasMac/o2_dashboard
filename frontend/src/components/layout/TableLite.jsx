@@ -688,7 +688,7 @@ const TableLite = forwardRef(function TableLite(
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       py: 1,
-                      px: 0.5,
+                      px: 2,
                       ...col.headerStyle,
                       ...(headerSx || {}),
                     }}
@@ -1017,7 +1017,7 @@ const TableLite = forwardRef(function TableLite(
                           fontSize: 14.5,
                           lineHeight: 1.5,
                           py: basePy,
-                          px: 0.5,
+                          px: 2,
                           ...(isIconRow ? { py: basePy } : {}),
                           ...col.cellStyle,
                           ...(cellSx || {}),
