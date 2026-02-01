@@ -1,15 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, Grid, Paper, Tabs, Tab } from '@mui/material';
-import O2Tooltip from '../common/O2Tooltip';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider, IconButton } from '@mui/material';
+import CCO2Results from './CCO2Results';
+import HKResults from './HKResults';
 import PageScaffold from '../layout/PageScaffold';
-import { BACKEND_BASE } from '../../api';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-
-import AddIcon from '@mui/icons-material/Add';
+import api, { BACKEND_BASE } from '../../api';
 import AppDrawer from '../common/AppDrawer';
 import NewO2TransactionForm from '../forms/NewO2TransactionForm';
+import EditO2TransactionForm from '../forms/EditO2TransactionForm';
 
 import YearMonthPicker from '../layout/components/YearMonthPicker';
 import useYearMonth from '../layout/helpers/useYearMonth';
@@ -56,8 +53,14 @@ export default function O2Results() {
   const [expandedHrGroups, setExpandedHrGroups] = useState(() => new Set());
   const [employeeLedger, setEmployeeLedger] = useState([]);
 
+  const [hkData, setHkData] = useState(null);
+  const [hkLoading, setHkLoading] = useState(false);
+  const [hkError, setHkError] = useState(null);
+
   const [tab, setTab] = useState(0);
   const [o2TxDrawerOpen, setO2TxDrawerOpen] = useState(false);
+  const [editTxDrawerOpen, setEditTxDrawerOpen] = useState(false);
+  const [editTx, setEditTx] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   // Helper to normalize city labels for expenses
@@ -258,8 +261,45 @@ export default function O2Results() {
     load();
     return () => ac.abort();
   }, [year, month, reloadKey]);
+
+  useEffect(() => {
+    // Only load HK data when user is on HK or All tab
+    if (tab !== 1 && tab !== 2) return;
+
+    let cancelled = false;
+
+    async function loadHk() {
+      setHkLoading(true);
+      setHkError(null);
+      try {
+        const res = await api.get('/api/reports/hk/monthly-summary', {
+          params: { year: Number(year), month: Number(month) },
+        });
+        if (cancelled) return;
+        setHkData(res?.data ?? null);
+      } catch (e) {
+        if (cancelled) return;
+        console.error('Failed to load HK monthly summary', e);
+        const msg = e?.response?.data?.message || e?.message || 'Failed to load';
+        setHkError(msg);
+        setHkData(null);
+      } finally {
+        if (!cancelled) setHkLoading(false);
+      }
+    }
+
+    loadHk();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, year, month, reloadKey]);
   const openNewExpenseDrawer = () => {
     setO2TxDrawerOpen(true);
+  };
+  const openEditTxDrawer = (tx) => {
+    if (!tx) return;
+    setEditTx(tx);
+    setEditTxDrawerOpen(true);
   };
 
   const commissionSummary = useMemo(() => {
@@ -315,7 +355,8 @@ export default function O2Results() {
 
       const category = t.category_name || t.categoryName || 'Uncategorized';
       const description = t.description || '';
-      const city = t.city || 'General';
+      const rawCity = t.city || t.cost_centre || t.costCentre || '';
+      const city = normalizeCity(rawCity);
       // const date = t.date || null;
 
       if (!categories[category]) {
@@ -327,7 +368,7 @@ export default function O2Results() {
         categories[category].cities[city] = { total: 0, items: [] };
       }
       categories[category].cities[city].total += amountNum;
-      categories[category].cities[city].items.push({ description, amount: amountNum });
+      categories[category].cities[city].items.push({ tx: t, description, amount: amountNum });
     }
 
     return { total, categories };
@@ -436,678 +477,47 @@ export default function O2Results() {
 
         {/* Loading/Error note (no counts) */}
         <Typography variant="body2" color="text.secondary">
-          {loading && 'Loading…'}
-          {!loading && error && `Error: ${error}`}
+          {tab === 0 && loading && 'Loading…'}
+          {tab === 0 && !loading && error && `Error: ${error}`}
+
+          {(tab === 1 || tab === 2) && hkLoading && 'Loading…'}
+          {(tab === 1 || tab === 2) && !hkLoading && hkError && `Error: ${hkError}`}
         </Typography>
 
         {tab === 0 && (
-          <>
-            {/* Single summary card: Income / Expenses / Net */}
-            <Box sx={{ mt: 2, maxWidth: 950, ml: 0, mr: 'auto' }}>
-              <Paper
-                elevation={0}
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  pt: 1.5,
-                  borderRadius: 2,
-                  position: 'relative',
-                }}
-              >
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    top: -10,
-                    left: 12,
-                    px: 0.5,
-                    backgroundColor: 'background.paper',
-                  }}
-                >
-                  <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                    Owners2 – Monthly Result
-                  </Typography>
-                </Box>
-
-                <Table
-                  size="small"
-                  sx={{
-                    mt: 0.5,
-                    '& td, & th': {
-                      borderBottom: 'none',
-                      py: 0.4,
-                      px: 0,
-                    },
-                  }}
-                >
-                  <TableBody>
-                    {/* Income */}
-                    <TableRow>
-                      <TableCell align="left" sx={{ pl: 0 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Total Income
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" sx={{ pr: 0 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {fmt(totals.income)}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-
-
-                    {/* Expenses */}
-                    <TableRow>
-                      <TableCell align="left" sx={{ pl: 0, pt: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Total Expenses
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" sx={{ pr: 0, pt: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {fmt(
-                            Number.isFinite(Number(totals.expenses))
-                              ? totals.expenses
-                              : otherExpenses?.total ?? 0
-                          )}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-
-                    {/* Net result */}
-                    <TableRow>
-                      <TableCell align="left" sx={{ pl: 0, pt: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          Net Result
-                          {Number.isFinite(netMarginPct) && (
-                            <Typography
-                              component="span"
-                              variant="body2"
-                              sx={{
-                                ml: 1,
-                                fontWeight: 400,
-                                color: 'text.secondary',
-                              }}
-                            >
-                              ({netMarginPct.toFixed(1).replace('.', ',')}%)
-                            </Typography>
-                          )}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right" sx={{ pr: 0, pt: 1 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 700,
-                          }}
-                        >
-                          {fmt(totals.month)}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </Paper>
-            </Box>
-
-            <Box sx={{ mt: 6 }}>
-              <Grid container spacing={2}>
-                {/* Left: Commissions (existing table) */}
-                <Grid item xs={12} sm={6} md={4} lg={4}>
-                  <Paper elevation={0} sx={{ p: 2, pt: 1, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', position: 'relative', maxWidth: 400 }}>
-                    <Box sx={{ position: 'absolute', top: -10, left: 12, px: 0.5, backgroundColor: 'background.paper' }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>Commissions</Typography>
-                    </Box>
-                    <TableContainer>
-                      <Table size="small" aria-label="commissions table">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ width: '60%', borderBottom: 'none' }} />
-                            <TableCell align="right" sx={{ borderBottom: 'none' }} />
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          <TableRow>
-                            <TableCell sx={{ borderBottom: 'none', pt: 0.5 }}><strong>Total</strong></TableCell>
-                            <TableCell align="right" sx={{ borderBottom: 'none', pt: 0.5 }}><strong>{fmt(commissionSummary.total)}</strong></TableCell>
-                          </TableRow>
-                          {Object.entries(commissionSummary.cities).map(([city, entry]) => {
-                            const open = expandedCities.has(city);
-                            return (
-                              <React.Fragment key={city}>
-                                <TableRow hover>
-                                  <TableCell sx={{ fontWeight: 600, borderBottom: 'none', py: 0.25, pl: 1 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                      <IconButton size="small" sx={{ p: 0, mr: 0.5 }} onClick={() => toggleCity(city)} aria-label={open ? 'Collapse' : 'Expand'}>
-                                        {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                                      </IconButton>
-                                      <Typography component="span" sx={{ ml: 0.25 }}>{city}</Typography>
-                                      {(() => {
-                                        const base = Number(commissionSummary.total || 0);
-                                        const pct = base > 0 ? (Number(entry.total || 0) / base) * 100 : 0;
-                                        const pctStr = pct.toFixed(1).replace('.', ',');
-                                        return (
-                                          <Typography component="span" sx={{ ml: 1, color: 'text.secondary', fontWeight: 400 }}>
-                                            {pctStr}%
-                                          </Typography>
-                                        );
-                                      })()}
-                                    </Box>
-                                  </TableCell>
-                                  <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.primary' }}>{fmt(entry.total)}</TableCell>
-                                </TableRow>
-                                {open &&
-                                  (() => {
-                                    const unitEntries = Object.entries(entry.units || {});
-                                    if (unitEntries.length === 0) {
-                                      return null;
-                                    }
-
-                                    // Sort by amount (desc) to find top/bottom performers
-                                    const sortedByAmount = [...unitEntries].sort(
-                                      ([, aAmount], [, bAmount]) =>
-                                        Number(bAmount || 0) - Number(aAmount || 0)
-                                    );
-
-                                    const topNames = new Set(
-                                      sortedByAmount
-                                        .slice(0, Math.min(3, sortedByAmount.length))
-                                        .map(([name]) => name)
-                                    );
-                                    const bottomNames = new Set(
-                                      sortedByAmount
-                                        .slice(
-                                          Math.max(sortedByAmount.length - 3, 0),
-                                          sortedByAmount.length
-                                        )
-                                        .map(([name]) => name)
-                                    );
-
-                                    // Render alphabetically, but with background color
-                                    return unitEntries
-                                      .sort(([aName], [bName]) =>
-                                        aName.localeCompare(bName)
-                                      )
-                                      .map(([unitName, amount]) => {
-                                        let bg = 'transparent';
-                                        if (topNames.has(unitName)) {
-                                          bg = '#E8F5E9'; // light green
-                                        } else if (bottomNames.has(unitName)) {
-                                          bg = '#FFEBEE'; // light red
-                                        }
-                                        return (
-                                          <TableRow key={unitName} sx={{ backgroundColor: bg }}>
-                                            <TableCell
-                                              sx={{
-                                                pl: 6,
-                                                borderBottom: 'none',
-                                                color: 'text.secondary',
-                                              }}
-                                            >
-                                              {unitName}
-                                            </TableCell>
-                                            <TableCell
-                                              align="right"
-                                              sx={{
-                                                borderBottom: 'none',
-                                                color: 'text.secondary',
-                                              }}
-                                            >
-                                              {fmt(amount)}
-                                            </TableCell>
-                                          </TableRow>
-                                        );
-                                      });
-                                  })()}
-                              </React.Fragment>
-                            );
-                          })}
-                          {slices.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={2} sx={{ borderBottom: 'none' }}>
-                                <Typography variant="body2" color="text.secondary">No data for this month yet.</Typography>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-
-                {/* Middle: Other Incomes */}
-                <Grid item xs={12} sm={6} md={4} lg={4}>
-                  <Paper elevation={0} sx={{ p: 2, pt: 1, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', position: 'relative', maxWidth: 400 }}>
-                    <Box sx={{ position: 'absolute', top: -10, left: 12, px: 0.5, backgroundColor: 'background.paper' }}>
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>Other Incomes</Typography>
-                    </Box>
-                    <TableContainer>
-                      <Table size="small" aria-label="other incomes table">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ width: '60%', borderBottom: 'none' }} />
-                            <TableCell align="right" sx={{ borderBottom: 'none' }} />
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          <TableRow>
-                            <TableCell sx={{ borderBottom: 'none', pt: 0.5 }}>
-                              <strong>Total</strong>
-                            </TableCell>
-                            <TableCell
-                              align="right"
-                              sx={{ borderBottom: 'none', pt: 0.5 }}
-                            >
-                              <strong>{fmt(otherIncome.total)}</strong>
-                            </TableCell>
-                          </TableRow>
-
-                          {Object.entries(otherIncome.categories || {})
-                            .sort(([aName], [bName]) => aName.localeCompare(bName))
-                            .map(([categoryName, category]) => (
-                              <React.Fragment key={categoryName}>
-                                <TableRow hover>
-                                  <TableCell
-                                    sx={{
-                                      fontWeight: 600,
-                                      borderBottom: 'none',
-                                      py: 0.25,
-                                      pl: 1,
-                                    }}
-                                  >
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                      <IconButton
-                                        size="small"
-                                        sx={{ p: 0, mr: 0.5 }}
-                                        onClick={() => toggleCentre(categoryName)}
-                                        aria-label={
-                                          expandedCentres.has(categoryName)
-                                            ? 'Collapse'
-                                            : 'Expand'
-                                        }
-                                      >
-                                        {expandedCentres.has(categoryName) ? (
-                                          <ExpandLessIcon fontSize="small" />
-                                        ) : (
-                                          <ExpandMoreIcon fontSize="small" />
-                                        )}
-                                      </IconButton>
-                                  <Typography component="span" sx={{ ml: 0.25 }}>
-                                    {categoryName}
-                                  </Typography>
-                                  {Array.isArray(category?.missingRecurring) &&
-                                    category.missingRecurring.length > 0 && (
-                                      <Typography
-                                        component="span"
-                                        sx={{
-                                          ml: 1,
-                                          color: '#B26A00',
-                                          fontWeight: 500,
-                                          fontSize: 12,
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                        title={`Missing: ${category.missingRecurring.join(', ')}`}
-                                      >
-                                        ⚠ Missing: {category.missingRecurring.join(', ')}
-                                      </Typography>
-                                    )}
-                                    </Box>
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ borderBottom: 'none', fontWeight: 600 }}
-                                  >
-                                    {fmt(category.total)}
-                                  </TableCell>
-                                </TableRow>
-
-                                {expandedCentres.has(categoryName) &&
-                                  Object.entries(category.cities).map(([cityName, cityObj]) => (
-                                    <React.Fragment key={categoryName + '::' + cityName}>
-                                      <TableRow>
-                                        <TableCell sx={{ borderBottom: 'none', pl: 3, fontWeight: 600 }}>
-                                          {cityName}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderBottom: 'none', fontWeight: 600 }}>
-                                          {fmt(cityObj.total)}
-                                        </TableCell>
-                                      </TableRow>
-
-                                      {cityObj.items.map((item, idx2) => (
-                                        <TableRow key={categoryName + '::' + cityName + '::' + idx2}>
-                                          <TableCell sx={{ borderBottom: 'none', pl: 6, color: 'text.secondary' }}>
-                                            {item.description || '—'}
-                                          </TableCell>
-                                          <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                                            {fmt(item.amount)}
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </React.Fragment>
-                                  ))}
-                              </React.Fragment>
-                            ))}
-
-                          {otherIncome.total === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={2} sx={{ borderBottom: 'none' }}>
-                                <Typography variant="body2" color="text.secondary">
-                                  No other incomes for this month.
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-
-                {/* Right: Expenses */}
-                <Grid item xs={12} sm={6} md={4} lg={4}>
-                  <Paper elevation={0} sx={{ p: 2, pt: 1, pl: 1, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', position: 'relative', maxWidth: 400 }}>
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: -10,
-                        left: 12,
-                        px: 0.5,
-                        backgroundColor: 'background.paper',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                        Expenses
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={openNewExpenseDrawer}
-                        aria-label="Add expense"
-                        sx={{
-                          p: 0.25,
-                          color: '#4E8379',
-                          '&:hover': { backgroundColor: 'rgba(78,131,121,0.10)' },
-                        }}
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                    <TableContainer>
-                      <Table size="small" aria-label="expenses table">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ width: '15%', borderBottom: 'none' }} />
-                            <TableCell sx={{ width: '60%', borderBottom: 'none' }} />
-                            <TableCell align="right" sx={{ borderBottom: 'none' }} />
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          <TableRow>
-                            <TableCell sx={{ borderBottom: 'none', pt: 0.5 }} />
-                            <TableCell sx={{ borderBottom: 'none', pt: 0.5 }}><strong>Total</strong></TableCell>
-                            <TableCell align="right" sx={{ borderBottom: 'none', pt: 0.5 }}><strong>{fmt(otherExpenses.total)}</strong></TableCell>
-                          </TableRow>
-
-                          {Object.entries(otherExpenses.categories || {})
-                            .sort(([aName], [bName]) => {
-                              const A = (aName || '').toString();
-                              const B = (bName || '').toString();
-
-                              const aIsOtros = A.toLowerCase() === 'otros';
-                              const bIsOtros = B.toLowerCase() === 'otros';
-
-                              if (aIsOtros && !bIsOtros) return 1;
-                              if (!aIsOtros && bIsOtros) return -1;
-
-                              return A.localeCompare(B);
-                            })
-                            .map(([categoryName, category]) => (
-                              <React.Fragment key={categoryName}>
-                                <TableRow hover>
-                                  <TableCell sx={{ borderBottom: 'none', py: 0.25 }} />
-                                  <TableCell
-                                    sx={{
-                                      fontWeight: 600,
-                                      borderBottom: 'none',
-                                      py: 0.25,
-                                      pl: 0,
-                                    }}
-                                  >
-                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                      <IconButton
-                                        size="small"
-                                        sx={{ p: 0, mr: 0.5 }}
-                                        onClick={() => toggleExpenseCentre(categoryName)}
-                                        aria-label={
-                                          expandedExpenseCentres.has(categoryName)
-                                            ? 'Collapse'
-                                            : 'Expand'
-                                        }
-                                      >
-                                        {expandedExpenseCentres.has(categoryName) ? (
-                                          <ExpandLessIcon fontSize="small" />
-                                        ) : (
-                                          <ExpandMoreIcon fontSize="small" />
-                                        )}
-                                      </IconButton>
-                                      <Typography component="span" sx={{ ml: 0.25 }}>
-                                        {categoryName}
-                                      </Typography>
-                                      {Array.isArray(category?.missingRecurring) &&
-                                        category.missingRecurring.length > 0 && (
-                                          <O2Tooltip title={`Missing: ${category.missingRecurring.join(', ')}`} placement="top">
-                                            <Typography
-                                              component="span"
-                                              sx={{
-                                                ml: 1,
-                                                color: '#B26A00',
-                                                fontWeight: 600,
-                                                fontSize: 13,
-                                                lineHeight: 1,
-                                                cursor: 'help',
-                                              }}
-                                            >
-                                              ⚠
-                                            </Typography>
-                                          </O2Tooltip>
-                                        )}
-                                    </Box>
-                                  </TableCell>
-                                  <TableCell
-                                    align="right"
-                                    sx={{ borderBottom: 'none', fontWeight: 600 }}
-                                  >
-                                    {fmt(category.total)}
-                                  </TableCell>
-                                </TableRow>
-
-                                {expandedExpenseCentres.has(categoryName) &&
-                                  ((categoryName || '').toString().trim().toLowerCase() === 'hr'
-                                    ? Object.entries(category.groups || {}).map(([groupName, groupObj]) => {
-                                        const groupKey = `${categoryName}::${groupName}`;
-                                        const openGroup = expandedHrGroups.has(groupKey);
-                                        const items = Array.isArray(groupObj?.items) ? groupObj.items : [];
-                                        return (
-                                          <React.Fragment key={groupKey}>
-                                            <TableRow hover>
-                                              <TableCell sx={{ borderBottom: 'none', pl: 0 }} />
-                                              <TableCell
-                                                sx={{
-                                                  borderBottom: 'none',
-                                                  pl: 1,
-                                                  fontWeight: 600,
-                                                }}
-                                              >
-                                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                                  <IconButton
-                                                    size="small"
-                                                    sx={{ p: 0, mr: 0.5 }}
-                                                    onClick={() => toggleHrGroup(groupKey)}
-                                                    aria-label={openGroup ? 'Collapse' : 'Expand'}
-                                                  >
-                                                    {openGroup ? (
-                                                      <ExpandLessIcon fontSize="small" />
-                                                    ) : (
-                                                      <ExpandMoreIcon fontSize="small" />
-                                                    )}
-                                                  </IconButton>
-                                                  <Typography component="span" sx={{ ml: 0.25 }}>
-                                                    {groupName}
-                                                  </Typography>
-                                                </Box>
-                                              </TableCell>
-                                              <TableCell
-                                                align="right"
-                                                sx={{
-                                                  borderBottom: 'none',
-                                                  fontWeight: 600,
-                                                }}
-                                              >
-                                                {fmt(groupObj?.total || 0)}
-                                              </TableCell>
-                                            </TableRow>
-
-                                            {openGroup &&
-                                              [...items]
-                                                .sort((a, b) => {
-                                                  const as = a?.date ? String(a.date).slice(0, 10) : '';
-                                                  const bs = b?.date ? String(b.date).slice(0, 10) : '';
-                                                  if (!as && !bs) return 0;
-                                                  if (!as) return 1;
-                                                  if (!bs) return -1;
-                                                  return as.localeCompare(bs);
-                                                })
-                                                .map((item, idx) => (
-                                                  <TableRow key={groupKey + '::' + idx}>
-                                                    <TableCell
-                                                      sx={{
-                                                        borderBottom: 'none',
-                                                        pl: 0,
-                                                        color: 'text.secondary',
-                                                        pr: 1,
-                                                      }}
-                                                    >
-                                                      {fmtDate(item.date)}
-                                                    </TableCell>
-                                                    <TableCell
-                                                      sx={{
-                                                        borderBottom: 'none',
-                                                        color: 'text.secondary',
-                                                        pl: 1,
-                                                      }}
-                                                    >
-                                                      {item.description || '—'}
-                                                    </TableCell>
-                                                    <TableCell
-                                                      align="right"
-                                                      sx={{
-                                                        borderBottom: 'none',
-                                                        color: 'text.secondary',
-                                                      }}
-                                                    >
-                                                      {fmt(item.amount)}
-                                                    </TableCell>
-                                                  </TableRow>
-                                                ))}
-                                          </React.Fragment>
-                                        );
-                                      })
-                                    : Object.entries(category.cities || {}).map(([cityName, cityObj]) => (
-                                        <React.Fragment key={categoryName + '::' + cityName}>
-                                          {(categoryName || '').toString().trim().toLowerCase() !== 'software' && (
-                                            <TableRow>
-                                              <TableCell sx={{ borderBottom: 'none', pl: 0 }} />
-                                              <TableCell
-                                                sx={{
-                                                  borderBottom: 'none',
-                                                  pl: 1,
-                                                  fontWeight: 600,
-                                                }}
-                                              >
-                                                {cityName}
-                                              </TableCell>
-                                              <TableCell
-                                                align="right"
-                                                sx={{
-                                                  borderBottom: 'none',
-                                                  fontWeight: 600,
-                                                }}
-                                              >
-                                                {fmt(cityObj.total)}
-                                              </TableCell>
-                                            </TableRow>
-                                          )}
-
-                                          {[...(cityObj.items || [])]
-                                            .sort((a, b) => {
-                                              const as = a?.date ? String(a.date).slice(0, 10) : '';
-                                              const bs = b?.date ? String(b.date).slice(0, 10) : '';
-                                              if (!as && !bs) return 0;
-                                              if (!as) return 1; // a has no date -> last
-                                              if (!bs) return -1; // b has no date -> last
-                                              return as.localeCompare(bs);
-                                            })
-                                            .map((item, idx) => (
-                                              <TableRow key={categoryName + '::' + cityName + '::' + idx}>
-                                                <TableCell
-                                                  sx={{
-                                                    borderBottom: 'none',
-                                                    pl: 0,
-                                                    color: 'text.secondary',
-                                                    pr: 1,
-                                                  }}
-                                                >
-                                                  {fmtDate(item.date)}
-                                                </TableCell>
-                                                <TableCell
-                                                  sx={{
-                                                    borderBottom: 'none',
-                                                    color: 'text.secondary',
-                                                    pl: 1,
-                                                  }}
-                                                >
-                                                  {item.description || '—'}
-                                                </TableCell>
-                                                <TableCell
-                                                  align="right"
-                                                  sx={{
-                                                    borderBottom: 'none',
-                                                    color: 'text.secondary',
-                                                  }}
-                                                >
-                                                  {fmt(item.amount)}
-                                                </TableCell>
-                                              </TableRow>
-                                            ))}
-                                        </React.Fragment>
-                                      )))}
-                              </React.Fragment>
-                            ))}
-
-                          {otherExpenses.total === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={3} sx={{ borderBottom: 'none' }}>
-                                <Typography variant="body2" color="text.secondary">No expenses for this month.</Typography>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </Box>
-          </>
+          <CCO2Results
+            totals={totals}
+            netMarginPct={netMarginPct}
+            fmt={fmt}
+            fmtDate={fmtDate}
+            slices={slices}
+            commissionSummary={commissionSummary}
+            expandedCities={expandedCities}
+            onToggleCity={toggleCity}
+            otherIncome={otherIncome}
+            expandedCentres={expandedCentres}
+            onToggleCentre={toggleCentre}
+            otherExpenses={otherExpenses}
+            expandedExpenseCentres={expandedExpenseCentres}
+            onToggleExpenseCentre={toggleExpenseCentre}
+            expandedHrGroups={expandedHrGroups}
+            onToggleHrGroup={toggleHrGroup}
+            onOpenNewExpenseDrawer={openNewExpenseDrawer}
+            onOpenEditTxDrawer={openEditTxDrawer}
+          />
         )}
 
         {tab === 1 && (
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="body2" color="text.secondary">
-              Housekeepers view will be added here.
-            </Typography>
-          </Box>
+          <HKResults
+            year={year}
+            month={month}
+            yearMonth={hkData?.yearMonth || ym}
+            rows={Array.isArray(hkData?.data) ? hkData.data : []}
+            loading={hkLoading}
+            error={hkError}
+            fmt={fmt}
+            fmtDate={fmtDate}
+          />
         )}
 
         {tab === 2 && (
@@ -1132,6 +542,30 @@ export default function O2Results() {
             setReloadKey((k) => k + 1);
           }}
         />
+      </AppDrawer>
+     <AppDrawer
+        open={editTxDrawerOpen}
+        onClose={() => {
+          setEditTxDrawerOpen(false);
+          setEditTx(null);
+        }}
+        title="Edit Transaction"
+        width={520}
+      >
+        {editTx ? (
+          <EditO2TransactionForm
+            id={editTx?.id ?? editTx?.transaction_id ?? editTx?.transactionId ?? null}
+            onCancel={() => {
+              setEditTxDrawerOpen(false);
+              setEditTx(null);
+            }}
+            onSaved={() => {
+              setEditTxDrawerOpen(false);
+              setEditTx(null);
+              setReloadKey((k) => k + 1);
+            }}
+          />
+        ) : null}
       </AppDrawer>
     </PageScaffold>
   );

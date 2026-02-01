@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, Grid, FormControl, InputLabel, Select, MenuItem, Paper, IconButton } from '@mui/material';
+import { Box, Typography, Paper, IconButton } from '@mui/material';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Divider } from '@mui/material';
 import api, { BACKEND_BASE } from '../../api';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import PageScaffold from '../layout/PageScaffold';
 
 function fmtMoney(n) {
   if (n == null || n === '') return '—';
@@ -13,19 +12,15 @@ function fmtMoney(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
 }
 
-export default function HKResults() {
-  const now = new Date();
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const [month, setMonth] = useState(String(prev.getMonth() + 1).padStart(2, '0'));
-  const [year, setYear] = useState(String(prev.getFullYear()));
+export default function HKResults({ year, month }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState({}); // { [categoryName]: boolean }
   const toggleExpanded = (cat) => setExpanded(prev => ({ ...prev, [cat]: !prev[cat] }));
-  // For cleaning result expand/collapse
-  const [cleaningExpanded, setCleaningExpanded] = useState({});
-  const toggleCleaning = (city) => setCleaningExpanded(prev => ({ ...prev, [city]: !prev[city] }));
+  // For Incomes expand/collapse by city
+  const [incomeCityOpen, setIncomeCityOpen] = useState({});
+  const toggleIncomeCity = (key) => setIncomeCityOpen(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Month options January to December
   const monthOptions = [
@@ -43,12 +38,6 @@ export default function HKResults() {
     { value: '12', label: 'December' },
   ];
 
-  // Year options: current year ± 5
-  const currentYear = new Date().getFullYear();
-  const yearOptions = [];
-  for (let y = currentYear - 5; y <= currentYear + 5; y++) {
-    yearOptions.push(y.toString());
-  }
 
   // Display city helper
   const displayCity = (c) => (c === 'General' ? 'Admin' : c === 'Playa' ? 'Playa del Carmen' : c);
@@ -56,8 +45,13 @@ export default function HKResults() {
   const buildUrl = () => {
     const base = `${BACKEND_BASE}/api/reports/hk/monthly-summary`;
     const params = new URLSearchParams();
-    if (year) params.set('year', year);
-    if (month) params.set('month', String(parseInt(month, 10))); // "08" -> 8
+
+    const y = year != null && year !== '' ? String(year) : '';
+    const mNum = month != null && month !== '' ? Number(month) : NaN;
+
+    if (y) params.set('year', y);
+    if (!Number.isNaN(mNum) && mNum >= 1 && mNum <= 12) params.set('month', String(mNum));
+
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
   };
@@ -68,7 +62,8 @@ export default function HKResults() {
     try {
       const url = buildUrl();
       const { data } = await api.get(url, { headers: { Accept: 'application/json' } });
-      setRows(Array.isArray(data) ? data : []);
+      const rowsArr = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      setRows(rowsArr);
     } catch (e) {
       // 401s will be handled by api interceptor (auto-redirect). Surface other errors.
       const msg = e?.response?.data ? JSON.stringify(e.response.data).slice(0, 180) : (e.message || String(e));
@@ -84,6 +79,71 @@ export default function HKResults() {
   const filteredRows = useMemo(() => {
     return rows.filter(r => (r.unit_status || '').toLowerCase() !== 'alor');
   }, [rows]);
+
+  // ===== Incomes: Cleaning fees =====
+  const cleaningIncome = useMemo(() => {
+    const out = {
+      total: 0,
+      cities: {
+        Playa: { total: 0 },
+        Tulum: { total: 0 },
+      },
+    };
+
+    for (const r of filteredRows) {
+      if ((r.category_name || '').toLowerCase() !== 'cleaning fee') continue;
+      if ((r.category_type || '').toLowerCase() !== 'income') continue;
+
+      const amount = Number(r.charged || 0) || 0;
+      out.total += amount;
+
+      const cityRaw = (r.city || '').toLowerCase();
+      const cityKey = cityRaw.includes('tulum') ? 'Tulum' : (cityRaw.includes('playa') ? 'Playa' : null);
+      if (!cityKey) continue;
+      out.cities[cityKey].total += amount;
+    }
+
+    return out;
+  }, [filteredRows]);
+
+  // ===== Incomes: Mantenimientos (difference between paid and charged) =====
+  const mantenimientoIncome = useMemo(() => {
+    const out = {
+      total: 0,
+      cities: {
+        Playa: { total: 0 },
+        Tulum: { total: 0 },
+      },
+    };
+
+    for (const r of filteredRows) {
+      // transaction_category id:2 (backend uses category_id)
+      const catId = r.category_id != null ? Number(r.category_id) : null;
+      const catName = (r.category_name || '').toString().toLowerCase();
+      const isMant = catId === 2 || catName === 'mantenimiento' || catName === 'mantenimientos';
+      if (!isMant) continue;
+
+      // Income is (charged - paid) but never negative (result is 0 or positive)
+      // Example: paid=1400, charged=1650 => income=250
+      const paid = Number(r.paid || 0) || 0;
+      const charged = Number(r.charged || 0) || 0;
+      const diff = Math.max(0, charged - paid);
+      if (!diff) continue;
+
+      out.total += diff;
+
+      const cityRaw = (r.city || '').toLowerCase();
+      const cityKey = cityRaw.includes('tulum') ? 'Tulum' : (cityRaw.includes('playa') ? 'Playa' : null);
+      if (!cityKey) continue;
+      out.cities[cityKey].total += diff;
+    }
+
+    return out;
+  }, [filteredRows]);
+
+  // Expand/collapse for Incomes groups
+  const [cleaningsOpen, setCleaningsOpen] = useState(false);
+  const [mantenimientosOpen, setMantenimientosOpen] = useState(false);
 
   // ===== City+Category summary =====
   const normalizeCity = (r) => {
@@ -148,44 +208,145 @@ export default function HKResults() {
     return out;
   }, [filteredRows]);
 
-  const actionsHeader = (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-      <FormControl size="small" sx={{ minWidth: 160 }}>
-        <InputLabel id="month-label">Month</InputLabel>
-        <Select labelId="month-label" label="Month" value={month} onChange={(e) => setMonth(e.target.value)}>
-          <MenuItem value=""><em>None</em></MenuItem>
-          {monthOptions.map(opt => (
-            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <FormControl size="small" sx={{ minWidth: 140 }}>
-        <InputLabel id="year-label">Year</InputLabel>
-        <Select labelId="year-label" label="Year" value={year} onChange={(e) => setYear(e.target.value)}>
-          <MenuItem value=""><em>None</em></MenuItem>
-          {yearOptions.map(y => (
-            <MenuItem key={y} value={y}>{y}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-    </Box>
-  );
-
   return (
-    <PageScaffold
-      layout="table"
-      withCard
-      title="Housekeepers — Monthly Results"
-      stickyHeader={actionsHeader}
-      headerPlacement="inside"
-    >
-      <Box sx={{ pb: 3 }}>
+    <Box sx={{ pb: 3 }}>
         {error && (
           <Box sx={{ mb: 2 }}>
             <Typography color="error">{error}</Typography>
             <Divider sx={{ mt: 1 }} />
           </Box>
         )}
+
+        {/* ===== Incomes ===== */}
+        <Box sx={{ mt: 2, maxWidth: 400 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              pt: 1.5,
+              borderRadius: 2,
+              border: '1px solid rgba(0,0,0,0.08)',
+              position: 'relative',
+            }}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                top: -10,
+                left: 12,
+                px: 0.5,
+                backgroundColor: 'background.paper',
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                Incomes
+              </Typography>
+            </Box>
+
+            <Table size="small">
+              <TableBody>
+                <TableRow hover onClick={() => setCleaningsOpen(v => !v)} sx={{ cursor: 'pointer' }}>
+                  <TableCell sx={{ borderBottom: 'none', fontWeight: 600 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {cleaningsOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                      Cleanings
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right" sx={{ borderBottom: 'none', fontWeight: 600 }}>
+                    {fmtMoney(cleaningIncome.total)}
+                  </TableCell>
+                </TableRow>
+
+                {cleaningsOpen && (
+                  <>
+                    {/* Playa */}
+                    <TableRow
+                      hover
+                      onClick={() => toggleIncomeCity('cleanings::Playa')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {incomeCityOpen['cleanings::Playa'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                          Playa del Carmen
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                        {fmtMoney(cleaningIncome.cities.Playa.total)}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Tulum */}
+                    <TableRow
+                      hover
+                      onClick={() => toggleIncomeCity('cleanings::Tulum')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {incomeCityOpen['cleanings::Tulum'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                          Tulum
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                        {fmtMoney(cleaningIncome.cities.Tulum.total)}
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )}
+
+                {/* Mantenimientos */}
+                <TableRow hover onClick={() => setMantenimientosOpen(v => !v)} sx={{ cursor: 'pointer' }}>
+                  <TableCell sx={{ borderBottom: 'none', fontWeight: 600, pt: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {mantenimientosOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                      Mantenimientos
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right" sx={{ borderBottom: 'none', fontWeight: 600, pt: 1 }}>
+                    {fmtMoney(mantenimientoIncome.total)}
+                  </TableCell>
+                </TableRow>
+
+                {mantenimientosOpen && (
+                  <>
+                    <TableRow
+                      hover
+                      onClick={() => toggleIncomeCity('mant::Playa')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {incomeCityOpen['mant::Playa'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                          Playa del Carmen
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                        {fmtMoney(mantenimientoIncome.cities.Playa.total)}
+                      </TableCell>
+                    </TableRow>
+
+                    <TableRow
+                      hover
+                      onClick={() => toggleIncomeCity('mant::Tulum')}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {incomeCityOpen['mant::Tulum'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                          Tulum
+                        </Box>
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                        {fmtMoney(mantenimientoIncome.cities.Tulum.total)}
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
+          </Paper>
+        </Box>
 
         {/* Monthly Summary by City & Category */}
         <>
@@ -203,7 +364,8 @@ export default function HKResults() {
             const playaBalance = (playaData.totals?.charged || 0) - (playaData.totals?.paid || 0);
             const tulumBalance = (tulumData.totals?.charged || 0) - (tulumData.totals?.paid || 0);
             const totalBalance = generalBalance + playaBalance + tulumBalance;
-            const monthName = monthOptions.find(opt => opt.value === month)?.label || '';
+            const mStr = month != null ? String(month).padStart(2, '0') : '';
+            const monthName = monthOptions.find(opt => opt.value === mStr)?.label || '';
             if (!cityCategory.General) return null;
             return (
               <Box sx={{ display: 'flex', gap: 2 }}>
@@ -445,6 +607,5 @@ export default function HKResults() {
           ))}
         </>
       </Box>
-    </PageScaffold>
   );
 }

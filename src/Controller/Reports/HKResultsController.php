@@ -20,14 +20,30 @@ class HKResultsController extends AbstractController
             $year  = (int)$yearParam;
             $month = (int)$monthParam;
             if ($year >= 2000 && $year <= 2100 && $month >= 1 && $month <= 12) {
+                $yearOut = $year;
+                $monthOut = $month;
+                $yearMonth = sprintf('%04d-%02d', $yearOut, $monthOut);
                 $rows = $svc->getTransactionsByMonth($year, $month);
             } else {
                 $rows = [];
+                $yearOut = null;
+                $monthOut = null;
+                $yearMonth = null;
             }
         } else {
-            $rows = $svc->getAllTransactions();
+            $now = new \DateTimeImmutable('now');
+            $yearOut = (int) $now->format('Y');
+            $monthOut = (int) $now->format('n');
+            $yearMonth = sprintf('%04d-%02d', $yearOut, $monthOut);
+            $rows = $svc->getTransactionsByMonth($yearOut, $monthOut);
         }
 
-        return $this->json($rows);
+        return $this->json([
+            'ok' => true,
+            'year' => $yearOut,
+            'month' => $monthOut,
+            'yearMonth' => $yearMonth,
+            'data' => $rows,
+        ]);
     }
 }
