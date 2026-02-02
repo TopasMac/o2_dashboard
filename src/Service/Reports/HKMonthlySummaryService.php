@@ -33,7 +33,7 @@ class HKMonthlySummaryService
               hk.description,
               hk.paid,
               hk.charged,
-              hk.city,
+              COALESCE(u.city, hk.city) AS city,
               hk.allocation_target,
               NULL AS source
             FROM hktransactions hk
@@ -46,8 +46,12 @@ class HKMonthlySummaryService
     }
 
     /**
-     * Build synthetic HK income rows from booking cleaning fees for bookings
-     * with check_out in the selected month.
+     * Build HK income rows for cleaning fees using hk_cleanings (checkout rows).
+     *
+     * We treat hk_cleanings as the source of truth for "a checkout cleaning exists".
+     * The income amount is the cleaning fee collected from the guest.
+     *
+     * We prefer hc.o2_collected_fee when present; otherwise fall back to all_bookings.cleaning_fee.
      *
      * @return array<int, array<string,mixed>>
      */
@@ -57,29 +61,31 @@ class HKMonthlySummaryService
 
         $sql = "
             SELECT
-              CONCAT('CLEAN-', ab.id)                    AS id,
-              ab.unit_id                                 AS unit_id,
-              ab.source                                  AS source,
-              u.unit_name                                AS unit_name,
-              u.status                                   AS unit_status,
-              CONCAT('CLEAN-', ab.id)                    AS transaction_code,
-              DATE(ab.check_out)                         AS `date`,
-              NULL                                       AS category_id,
-              'Cleaning fee'                             AS category_name,
-              'Income'                                   AS category_type,
-              0                                          AS allow_hk,
-              'Owners2'                                  AS cost_centre,
-              CONCAT('Cleaning fee (', u.unit_name, ')')  AS description,
-              CAST(ab.cleaning_fee AS DECIMAL(10,2))      AS paid,
-              CAST(ab.cleaning_fee AS DECIMAL(10,2))      AS charged,
-              u.city                                     AS city,
-              'Income'                                   AS allocation_target
-            FROM all_bookings ab
-            LEFT JOIN unit u ON u.id = ab.unit_id
-            WHERE DATE(ab.check_out) BETWEEN :start AND LAST_DAY(:start)
-              AND COALESCE(ab.status, '') NOT IN ('Cancelled', 'Expired')
-              AND COALESCE(ab.cleaning_fee, 0) > 0
-            ORDER BY DATE(ab.check_out) ASC, ab.id ASC
+              CONCAT('CLEAN-', COALESCE(hc.booking_id, hc.id))        AS id,
+              hc.unit_id                                             AS unit_id,
+              COALESCE(hc.source, ab.source)                         AS source,
+              u.unit_name                                            AS unit_name,
+              u.status                                               AS unit_status,
+              CONCAT('CLEAN-', COALESCE(hc.booking_id, hc.id))        AS transaction_code,
+              DATE(hc.checkout_date)                                 AS `date`,
+              NULL                                                   AS category_id,
+              'Cleaning fee'                                         AS category_name,
+              'Income'                                               AS category_type,
+              0                                                      AS allow_hk,
+              'Owners2'                                              AS cost_centre,
+              CONCAT('Cleaning fee (', u.unit_name, ')')              AS description,
+              CAST(COALESCE(hc.o2_collected_fee, ab.cleaning_fee, 0) AS DECIMAL(10,2)) AS paid,
+              CAST(COALESCE(hc.o2_collected_fee, ab.cleaning_fee, 0) AS DECIMAL(10,2)) AS charged,
+              COALESCE(u.city, hc.city, ab.city, 'Unknown')           AS city,
+              'Income'                                               AS allocation_target
+            FROM hk_cleanings hc
+            LEFT JOIN unit u ON u.id = hc.unit_id
+            LEFT JOIN all_bookings ab ON ab.id = hc.booking_id
+            WHERE hc.cleaning_type = 'checkout'
+              AND DATE(hc.checkout_date) BETWEEN :start AND LAST_DAY(:start)
+              AND (hc.status IS NULL OR LOWER(hc.status) <> 'cancelled')
+              AND COALESCE(hc.o2_collected_fee, ab.cleaning_fee, 0) > 0
+            ORDER BY DATE(hc.checkout_date) ASC, hc.id ASC
         ";
 
         return $this->db->fetchAllAssociative($sql, ['start' => $start]);
@@ -113,7 +119,7 @@ class HKMonthlySummaryService
               hk.description,
               hk.paid,
               hk.charged,
-              hk.city,
+              COALESCE(u.city, hk.city) AS city,
               hk.allocation_target,
               NULL AS source
             FROM hktransactions hk
@@ -132,7 +138,25 @@ class HKMonthlySummaryService
             $da = (string)($a['date'] ?? '');
             $db = (string)($b['date'] ?? '');
             if ($da === $db) {
-                return (int)($a['id'] ?? 0) <=> (int)($b['id'] ?? 0);
+                $ida = $a['id'] ?? 0;
+                $idb = $b['id'] ?? 0;
+
+                $na = 0;
+                $nb = 0;
+
+                if (is_numeric($ida)) {
+                    $na = (int)$ida;
+                } elseif (is_string($ida) && preg_match('/(\d+)/', $ida, $m)) {
+                    $na = (int)$m[1];
+                }
+
+                if (is_numeric($idb)) {
+                    $nb = (int)$idb;
+                } elseif (is_string($idb) && preg_match('/(\d+)/', $idb, $m)) {
+                    $nb = (int)$m[1];
+                }
+
+                return $na <=> $nb;
             }
             return strcmp($da, $db);
         });

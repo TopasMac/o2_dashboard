@@ -5,7 +5,7 @@ namespace App\Entity;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
-#[ORM\Table(name: 'hk_cleanings_reconcile')]
+#[ORM\Table(name: 'hk_cleanings_reconcile', uniqueConstraints: [new ORM\UniqueConstraint(name: 'uniq_hk_cleaning', columns: ['hk_cleaning_id'])])]
 #[ORM\HasLifecycleCallbacks]
 class HKCleaningsReconcile
 {
@@ -34,16 +34,30 @@ class HKCleaningsReconcile
     private ?Unit $unit = null;
 
     /**
+     * Linked cleaning row (FK to hk_cleanings).
+     * This is the stable anchor for reconciliation (1 reconcile row per cleaning).
+     */
+    #[ORM\ManyToOne(targetEntity: HKCleanings::class)]
+    #[ORM\JoinColumn(name: 'hk_cleaning_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    private ?HKCleanings $hkCleaning = null;
+
+    /**
      * Date of the service/cleaning (matches checkout date for comparisons).
      */
     #[ORM\Column(name: 'service_date', type: 'date_immutable')]
     private \DateTimeImmutable $serviceDate;
 
     /**
-     * How much we owe the housekeeper for the cleaning (reported by HK).
+     * Expected cleaning cost (our expected/forecasted cost).
      */
     #[ORM\Column(name: 'cleaning_cost', type: 'decimal', precision: 10, scale: 2)]
     private string $cleaningCost = '0.00';
+
+    /**
+     * How much the housekeeper actually charged for the cleaning (real/invoiced).
+     */
+    #[ORM\Column(name: 'real_cleaning_cost', type: 'decimal', precision: 10, scale: 2)]
+    private string $realCleaningCost = '0.00';
 
     /**
      * Laundry cost (reported by HK). Default 0.
@@ -121,6 +135,17 @@ class HKCleaningsReconcile
         return $this;
     }
 
+    public function getHkCleaning(): ?HKCleanings
+    {
+        return $this->hkCleaning;
+    }
+
+    public function setHkCleaning(?HKCleanings $hkCleaning): self
+    {
+        $this->hkCleaning = $hkCleaning;
+        return $this;
+    }
+
     public function getServiceDate(): \DateTimeImmutable
     {
         return $this->serviceDate;
@@ -143,6 +168,20 @@ class HKCleaningsReconcile
     public function setCleaningCost(string $cleaningCost): self
     {
         $this->cleaningCost = $cleaningCost;
+        return $this;
+    }
+
+    /**
+     * Stored as string because Doctrine decimal maps to string.
+     */
+    public function getRealCleaningCost(): string
+    {
+        return $this->realCleaningCost;
+    }
+
+    public function setRealCleaningCost(string $realCleaningCost): self
+    {
+        $this->realCleaningCost = $realCleaningCost;
         return $this;
     }
 
@@ -182,11 +221,11 @@ class HKCleaningsReconcile
     }
 
     /**
-     * Convenience: cleaning + laundry as a numeric string with 2 decimals.
+     * Convenience: real cleaning + laundry as a numeric string with 2 decimals.
      */
     public function getTotalCost(): string
     {
-        $clean = (float) $this->cleaningCost;
+        $clean = (float) $this->realCleaningCost;
         $laundry = (float) $this->laundryCost;
         return number_format($clean + $laundry, 2, '.', '');
     }

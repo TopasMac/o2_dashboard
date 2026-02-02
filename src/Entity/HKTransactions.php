@@ -53,6 +53,7 @@ class HKTransactions
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
     private ?Unit $unit = null;
 
+    // allocationTarget: internal allocation/division (Unit vs Housekeepers_Playa/Tulum/General)
     #[ORM\Column(type: 'string', length: 32, options: ["default" => "Unit"])]
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
     #[Assert\Choice(choices: HKTransactions::ALLOCATION_TARGETS, message: 'Invalid allocation target.')] 
@@ -67,6 +68,7 @@ class HKTransactions
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
     private ?TransactionCategory $category = null;
 
+    // costCentre: who pays (e.g. Owners2, Client, Guest)
     #[ORM\Column(type: 'string', length: 50)]
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
     private ?string $costCentre = null;
@@ -257,7 +259,9 @@ class HKTransactions
         }
     }
     /**
-     * Returns the unit label for this transaction.
+     * Returns the unit/division label for this transaction.
+     * - If a Unit exists: return the unit name
+     * - If allocated to Housekeepers_* and no unit: return a human label per division
      */
     #[Groups(['hktransactions:read'])]
     public function getUnitLabel(): string
@@ -265,10 +269,19 @@ class HKTransactions
         if ($this->getUnit() !== null) {
             return $this->getUnit()->getUnitName() ?: '';
         }
-        if ($this->allocationTarget === 'Housekeepers') {
-            return 'Housekeepers';
+
+        switch ($this->allocationTarget) {
+            case self::ALLOC_HK_PLAYA:
+                return 'Housekeepers (Playa)';
+            case self::ALLOC_HK_TULUM:
+                return 'Housekeepers (Tulum)';
+            case self::ALLOC_HK_GENERAL:
+            case self::ALLOC_HK_BOTH:
+                return 'Housekeepers (General)';
+            case self::ALLOC_UNIT:
+            default:
+                return '';
         }
-        return '';
     }
     /**
      * @return Collection<int, UnitDocument>

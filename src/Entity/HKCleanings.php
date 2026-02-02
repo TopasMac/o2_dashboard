@@ -15,6 +15,11 @@ class HKCleanings
     public const TYPE_MIDSTAY  = 'midstay';
     public const TYPE_DEEP     = 'deep';
     public const TYPE_OWNER    = 'owner';
+    public const TYPE_REDO     = 'redo';
+
+    public const BILL_TO_OWNERS2 = 'OWNERS2';
+    public const BILL_TO_CLIENT  = 'CLIENT';
+    public const BILL_TO_GUEST   = 'GUEST';
 
     public const STATUS_SCHEDULED = 'scheduled';
     public const STATUS_DONE      = 'done';
@@ -51,6 +56,20 @@ class HKCleanings
     #[ORM\Column(name: 'cleaning_type', type: 'string', length: 16)]
     private string $cleaningType = self::TYPE_CHECKOUT;
 
+    // Allocation (who to bill for this cleaning)
+    #[ORM\Column(name: 'bill_to', type: 'string', length: 16, nullable: true)]
+    private ?string $billTo = null;
+    public function getBillTo(): ?string
+    {
+        return $this->billTo;
+    }
+
+    public function setBillTo(?string $billTo): self
+    {
+        $this->billTo = $billTo;
+        return $this;
+    }
+
     // Fee actually collected by O2 (optional, may differ)
     #[ORM\Column(name: 'o2_collected_fee', type: 'decimal', precision: 10, scale: 2, nullable: true)]
     private ?string $o2CollectedFee = null;
@@ -58,6 +77,12 @@ class HKCleanings
     // Amount Owners2 pays housekeeper in Tulum per cleaning
     #[ORM\Column(name: 'cleaning_cost', type: 'decimal', precision: 10, scale: 2, nullable: true)]
     private ?string $cleaningCost = null;
+
+    #[ORM\Column(name: 'source', type: 'string', length: 32, nullable: true)]
+    private ?string $source = null;
+
+    #[ORM\Column(name: 'laundry_cost', type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $laundryCost = null;
 
 
     // Workflow status
@@ -167,6 +192,28 @@ class HKCleanings
         return $this;
     }
 
+    public function getSource(): ?string
+    {
+        return $this->source;
+    }
+
+    public function setSource(?string $source): self
+    {
+        $this->source = $source;
+        return $this;
+    }
+
+    public function getLaundryCost(): ?string
+    {
+        return $this->laundryCost;
+    }
+
+    public function setLaundryCost(?string $laundryCost): self
+    {
+        $this->laundryCost = $laundryCost;
+        return $this;
+    }
+
     public function getO2CollectedFee(): ?string
     {
         return $this->o2CollectedFee;
@@ -255,6 +302,18 @@ class HKCleanings
         }
         if (!$this->status) {
             $this->status = self::STATUS_PENDING;
+        }
+        // bill_to = who is billed for this cleaning (payer), not which division supports the cost.
+        // Defaults:
+        // - checkout: fee is collected by Owners2 (guest pays Owners2) => billed to OWNERS2
+        // - owner: owner pays Owners2 and Owners2 pays HK => billed to CLIENT
+        // - redo: not charged to anyone (no revenue) but still belongs to HK workflow; leave billTo as null.
+        if ($this->billTo === null) {
+            if ($this->cleaningType === self::TYPE_CHECKOUT) {
+                $this->billTo = self::BILL_TO_OWNERS2;
+            } elseif ($this->cleaningType === self::TYPE_OWNER) {
+                $this->billTo = self::BILL_TO_CLIENT;
+            }
         }
     }
 

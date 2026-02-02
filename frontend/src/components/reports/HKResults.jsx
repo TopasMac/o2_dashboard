@@ -42,6 +42,20 @@ export default function HKResults({ year, month }) {
   // Display city helper
   const displayCity = (c) => (c === 'General' ? 'Admin' : c === 'Playa' ? 'Playa del Carmen' : c);
 
+  // ===== City normalization (used by multiple aggregations) =====
+  const normalizeCity = (r) => {
+    // Business rules provided:
+    // - cost_centre Housekeepers_General → bucket "General"
+    // - Otherwise use city (Playa del Carmen → "Playa", Tulum → "Tulum")
+    // - Fallback "Unknown"
+    const cc = (r.cost_centre || '').toLowerCase();
+    if (cc === 'housekeepers_general' || cc === 'housekeepers general') return 'General';
+    const c = (r.city || '').toLowerCase();
+    if (c.includes('tulum')) return 'Tulum';
+    if (c.includes('playa')) return 'Playa';
+    return 'Unknown';
+  };
+
   const buildUrl = () => {
     const base = `${BACKEND_BASE}/api/reports/hk/monthly-summary`;
     const params = new URLSearchParams();
@@ -80,84 +94,96 @@ export default function HKResults({ year, month }) {
     return rows.filter(r => (r.unit_status || '').toLowerCase() !== 'alor');
   }, [rows]);
 
-  // ===== Incomes: Cleaning fees =====
-  const cleaningIncome = useMemo(() => {
-    const out = {
-      total: 0,
-      cities: {
-        Playa: { total: 0 },
-        Tulum: { total: 0 },
-      },
-    };
+  // ===== Net result per unit (single source of truth for HK results) =====
+  const perUnitNet = useMemo(() => {
+    const map = {};
 
     for (const r of filteredRows) {
-      if ((r.category_name || '').toLowerCase() !== 'cleaning fee') continue;
-      if ((r.category_type || '').toLowerCase() !== 'income') continue;
+      if (!r.unit_id) continue;
 
-      const amount = Number(r.charged || 0) || 0;
-      out.total += amount;
+      if (!map[r.unit_id]) {
+        map[r.unit_id] = {
+          unit_id: r.unit_id,
+          unit_name: r.unit_name,
+          city: normalizeCity(r),
+          charged: 0,
+          paid: 0,
+          net: 0,
+          rows: [],
+        };
+      }
 
-      const cityRaw = (r.city || '').toLowerCase();
-      const cityKey = cityRaw.includes('tulum') ? 'Tulum' : (cityRaw.includes('playa') ? 'Playa' : null);
-      if (!cityKey) continue;
-      out.cities[cityKey].total += amount;
-    }
-
-    return out;
-  }, [filteredRows]);
-
-  // ===== Incomes: Mantenimientos (difference between paid and charged) =====
-  const mantenimientoIncome = useMemo(() => {
-    const out = {
-      total: 0,
-      cities: {
-        Playa: { total: 0 },
-        Tulum: { total: 0 },
-      },
-    };
-
-    for (const r of filteredRows) {
-      // transaction_category id:2 (backend uses category_id)
-      const catId = r.category_id != null ? Number(r.category_id) : null;
-      const catName = (r.category_name || '').toString().toLowerCase();
-      const isMant = catId === 2 || catName === 'mantenimiento' || catName === 'mantenimientos';
-      if (!isMant) continue;
-
-      // Income is (charged - paid) but never negative (result is 0 or positive)
-      // Example: paid=1400, charged=1650 => income=250
       const paid = Number(r.paid || 0) || 0;
       const charged = Number(r.charged || 0) || 0;
-      const diff = Math.max(0, charged - paid);
-      if (!diff) continue;
 
-      out.total += diff;
-
-      const cityRaw = (r.city || '').toLowerCase();
-      const cityKey = cityRaw.includes('tulum') ? 'Tulum' : (cityRaw.includes('playa') ? 'Playa' : null);
-      if (!cityKey) continue;
-      out.cities[cityKey].total += diff;
+      map[r.unit_id].paid += paid;
+      map[r.unit_id].charged += charged;
+      map[r.unit_id].net += (charged - paid);
+      map[r.unit_id].rows.push(r);
     }
 
-    return out;
+    return Object.values(map).sort((a, b) => a.net - b.net);
   }, [filteredRows]);
 
-  // Expand/collapse for Incomes groups
-  const [cleaningsOpen, setCleaningsOpen] = useState(false);
-  const [mantenimientosOpen, setMantenimientosOpen] = useState(false);
+  // ===== Helper constants and functions for per-unit filtering =====
+  const HOUSEKEEPERS_UNIT_ID = 29;
+  const isHousekeepersUnit = (u) =>
+    Number(u?.unit_id) === HOUSEKEEPERS_UNIT_ID ||
+    String(u?.unit_name || '').toLowerCase().includes('housekeepers');
+  const EPS = 0.0001;
 
-  // ===== City+Category summary =====
-  const normalizeCity = (r) => {
-    // Business rules provided:
-    // - cost_centre Housekeepers_General → bucket "General"
-    // - Otherwise use city (Playa del Carmen → "Playa", Tulum → "Tulum")
-    // - Fallback "Unknown"
-    const cc = (r.cost_centre || '').toLowerCase();
-    if (cc === 'housekeepers_general' || cc === 'housekeepers general') return 'General';
-    const c = (r.city || '').toLowerCase();
-    if (c.includes('tulum')) return 'Tulum';
-    if (c.includes('playa')) return 'Playa';
-    return 'Unknown';
-  };
+  // Per-unit expand/collapse
+  const [unitOpen, setUnitOpen] = useState({});
+  const toggleUnitOpen = (unitId) => setUnitOpen(prev => ({ ...prev, [unitId]: !prev[unitId] }));
+
+  // Group perUnitNet by city and compute totals, with special handling for Housekeepers unit and net~0 filtering
+  const perUnitByCity = useMemo(() => {
+    // Build buckets by city, separating housekeepers unit and real units
+    const cityBuckets = {};
+    let totalNet = 0;
+    for (const u of perUnitNet) {
+      const city = u.city || 'Unknown';
+      if (!cityBuckets[city]) {
+        cityBuckets[city] = {
+          city,
+          netTotal: 0,
+          hkUnit: null,
+          units: [],
+        };
+      }
+      cityBuckets[city].netTotal += Number(u.net || 0) || 0;
+      totalNet += Number(u.net || 0) || 0;
+      if (isHousekeepersUnit(u)) {
+        cityBuckets[city].hkUnit = u;
+      } else {
+        // Only include real units with abs(net) > EPS
+        if (Math.abs(Number(u.net) || 0) > EPS) {
+          cityBuckets[city].units.push(u);
+        }
+      }
+    }
+    // Only keep cities with at least one hkUnit (with abs(net)>EPS) or at least one real unit
+    const displayCities = Object.values(cityBuckets).filter(c => {
+      const hkOk = c.hkUnit && Math.abs(Number(c.hkUnit.net) || 0) > EPS;
+      return hkOk || c.units.length > 0;
+    });
+    // stable ordering: General, Playa, Tulum, Unknown, then alpha
+    const order = ['General', 'Playa', 'Tulum', 'Unknown'];
+    displayCities.sort((a, b) => {
+      const ai = order.indexOf(a.city);
+      const bi = order.indexOf(b.city);
+      if (ai !== -1 || bi !== -1) {
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      }
+      return String(a.city).localeCompare(String(b.city));
+    });
+    // sort units inside city by net asc (worst first)
+    for (const c of displayCities) {
+      c.units.sort((a, b) => (Number(a.net || 0) || 0) - (Number(b.net || 0) || 0));
+    }
+    return { totalNet, cities: displayCities };
+  }, [perUnitNet, isHousekeepersUnit, EPS]);
+
 
   const cityCategory = useMemo(() => {
     // Structure: { [city]: { categories: { [name]: {paid, charged, rows, clientPaid, clientCharged, clientRows} }, totals: {...} } }
@@ -217,8 +243,8 @@ export default function HKResults({ year, month }) {
           </Box>
         )}
 
-        {/* ===== Incomes ===== */}
-        <Box sx={{ mt: 2, maxWidth: 400 }}>
+        {/* ===== Per-Unit HK Results ===== */}
+        <Box sx={{ mt: 2, maxWidth: 950, ml: 0, mr: 'auto' }}>
           <Paper
             elevation={0}
             sx={{
@@ -239,112 +265,178 @@ export default function HKResults({ year, month }) {
               }}
             >
               <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                Incomes
+                Per-Unit HK Results
               </Typography>
             </Box>
 
-            <Table size="small">
-              <TableBody>
-                <TableRow hover onClick={() => setCleaningsOpen(v => !v)} sx={{ cursor: 'pointer' }}>
-                  <TableCell sx={{ borderBottom: 'none', fontWeight: 600 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {cleaningsOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                      Cleanings
-                    </Box>
-                  </TableCell>
-                  <TableCell align="right" sx={{ borderBottom: 'none', fontWeight: 600 }}>
-                    {fmtMoney(cleaningIncome.total)}
-                  </TableCell>
-                </TableRow>
+            <TableContainer>
+              <Table size="small" aria-label="per-unit hk results">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ borderBottom: 'none' }} />
+                    <TableCell sx={{ borderBottom: 'none' }} />
+                    <TableCell align="right" sx={{ borderBottom: 'none' }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell sx={{ borderBottom: 'none', pt: 0.5 }} />
+                    <TableCell sx={{ borderBottom: 'none', pt: 0.5 }}>
+                      <strong>Total</strong>
+                    </TableCell>
+                    <TableCell align="right" sx={{ borderBottom: 'none', pt: 0.5 }}>
+                      <strong>{fmtMoney(perUnitByCity.totalNet)}</strong>
+                    </TableCell>
+                  </TableRow>
 
-                {cleaningsOpen && (
-                  <>
-                    {/* Playa */}
-                    <TableRow
-                      hover
-                      onClick={() => toggleIncomeCity('cleanings::Playa')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {incomeCityOpen['cleanings::Playa'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                          Playa del Carmen
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                        {fmtMoney(cleaningIncome.cities.Playa.total)}
+                  {perUnitByCity.cities.map((c) => {
+                    const cityKey = `unitnet::${c.city}`;
+                    const openCity = !!incomeCityOpen[cityKey];
+                    return (
+                      <React.Fragment key={c.city}>
+                        <TableRow
+                          hover
+                          onClick={() => toggleIncomeCity(cityKey)}
+                          sx={{ cursor: 'pointer' }}
+                        >
+                          <TableCell sx={{ borderBottom: 'none', pt: 1, width: 28 }}>
+                            {openCity ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                          </TableCell>
+                          <TableCell sx={{ borderBottom: 'none', pt: 1, fontWeight: 700 }}>
+                            {displayCity(c.city)}
+                          </TableCell>
+                          <TableCell align="right" sx={{ borderBottom: 'none', pt: 1, fontWeight: 700 }}>
+                            {fmtMoney(c.netTotal)}
+                          </TableCell>
+                        </TableRow>
+
+                        {openCity && (
+                          <>
+                            {/* Housekeepers unit row if present and net significant */}
+                            {c.hkUnit && Math.abs(Number(c.hkUnit.net) || 0) > EPS && (
+                              <React.Fragment key={`hkunit-${c.hkUnit.unit_id}`}>
+                                <TableRow
+                                  hover
+                                  onClick={() => toggleUnitOpen(c.hkUnit.unit_id)}
+                                  sx={{ cursor: 'pointer' }}
+                                >
+                                  <TableCell sx={{ borderBottom: 'none', pl: 4, width: 28, color: 'text.secondary' }}>
+                                    {unitOpen[c.hkUnit.unit_id] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                  </TableCell>
+                                  <TableCell sx={{ borderBottom: 'none', pl: 0, color: 'text.secondary' }}>
+                                    {c.hkUnit.unit_name || `Unit #${c.hkUnit.unit_id}`}
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                    {fmtMoney(c.hkUnit.net)}
+                                  </TableCell>
+                                </TableRow>
+                                {unitOpen[c.hkUnit.unit_id] &&
+                                  (c.hkUnit.rows || [])
+                                    .slice()
+                                    .sort((a, b) => {
+                                      const as = a?.date ? String(a.date).slice(0, 10) : '';
+                                      const bs = b?.date ? String(b.date).slice(0, 10) : '';
+                                      if (!as && !bs) return 0;
+                                      if (!as) return 1;
+                                      if (!bs) return -1;
+                                      return as.localeCompare(bs);
+                                    })
+                                    .map((r, idx) => {
+                                      const paid = Number(r.paid || 0) || 0;
+                                      const charged = Number(r.charged || 0) || 0;
+                                      const net = charged - paid;
+                                      return (
+                                        <TableRow key={`${c.hkUnit.unit_id}::${idx}`}>
+                                          <TableCell sx={{ borderBottom: 'none', pl: 8, pr: 1, color: 'text.secondary', width: 28 }} />
+                                          <TableCell sx={{ borderBottom: 'none', pl: 0, color: 'text.secondary' }}>
+                                            <Typography variant="caption" color="text.secondary">
+                                              {r.date ? String(r.date).slice(0, 10) : '—'}
+                                              {r.description ? ` • ${r.description}` : ''}
+                                            </Typography>
+                                          </TableCell>
+                                          <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                            <Typography variant="caption" color="text.secondary">
+                                              {fmtMoney(net)}
+                                            </Typography>
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                              </React.Fragment>
+                            )}
+                            {/* Real units */}
+                            {c.units.map((u) => {
+                              const openUnit = !!unitOpen[u.unit_id];
+                              return (
+                                <React.Fragment key={u.unit_id}>
+                                  <TableRow
+                                    hover
+                                    onClick={() => toggleUnitOpen(u.unit_id)}
+                                    sx={{ cursor: 'pointer' }}
+                                  >
+                                    <TableCell sx={{ borderBottom: 'none', pl: 4, width: 28, color: 'text.secondary' }}>
+                                      {openUnit ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                    </TableCell>
+                                    <TableCell sx={{ borderBottom: 'none', pl: 0, color: 'text.secondary' }}>
+                                      {u.unit_name || `Unit #${u.unit_id}`}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                      {fmtMoney(u.net)}
+                                    </TableCell>
+                                  </TableRow>
+                                  {openUnit &&
+                                    (u.rows || [])
+                                      .slice()
+                                      .sort((a, b) => {
+                                        const as = a?.date ? String(a.date).slice(0, 10) : '';
+                                        const bs = b?.date ? String(b.date).slice(0, 10) : '';
+                                        if (!as && !bs) return 0;
+                                        if (!as) return 1;
+                                        if (!bs) return -1;
+                                        return as.localeCompare(bs);
+                                      })
+                                      .map((r, idx) => {
+                                        const paid = Number(r.paid || 0) || 0;
+                                        const charged = Number(r.charged || 0) || 0;
+                                        const net = charged - paid;
+                                        return (
+                                          <TableRow key={`${u.unit_id}::${idx}`}>
+                                            <TableCell sx={{ borderBottom: 'none', pl: 8, pr: 1, color: 'text.secondary', width: 28 }} />
+                                            <TableCell sx={{ borderBottom: 'none', pl: 0, color: 'text.secondary' }}>
+                                              <Typography variant="caption" color="text.secondary">
+                                                {r.date ? String(r.date).slice(0, 10) : '—'}
+                                                {r.description ? ` • ${r.description}` : ''}
+                                              </Typography>
+                                            </TableCell>
+                                            <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                              <Typography variant="caption" color="text.secondary">
+                                                {fmtMoney(net)}
+                                              </Typography>
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      })}
+                                </React.Fragment>
+                              );
+                            })}
+                          </>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {perUnitByCity.cities.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} sx={{ borderBottom: 'none' }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No data for this month.
+                        </Typography>
                       </TableCell>
                     </TableRow>
-
-                    {/* Tulum */}
-                    <TableRow
-                      hover
-                      onClick={() => toggleIncomeCity('cleanings::Tulum')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {incomeCityOpen['cleanings::Tulum'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                          Tulum
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                        {fmtMoney(cleaningIncome.cities.Tulum.total)}
-                      </TableCell>
-                    </TableRow>
-                  </>
-                )}
-
-                {/* Mantenimientos */}
-                <TableRow hover onClick={() => setMantenimientosOpen(v => !v)} sx={{ cursor: 'pointer' }}>
-                  <TableCell sx={{ borderBottom: 'none', fontWeight: 600, pt: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {mantenimientosOpen ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                      Mantenimientos
-                    </Box>
-                  </TableCell>
-                  <TableCell align="right" sx={{ borderBottom: 'none', fontWeight: 600, pt: 1 }}>
-                    {fmtMoney(mantenimientoIncome.total)}
-                  </TableCell>
-                </TableRow>
-
-                {mantenimientosOpen && (
-                  <>
-                    <TableRow
-                      hover
-                      onClick={() => toggleIncomeCity('mant::Playa')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {incomeCityOpen['mant::Playa'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                          Playa del Carmen
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                        {fmtMoney(mantenimientoIncome.cities.Playa.total)}
-                      </TableCell>
-                    </TableRow>
-
-                    <TableRow
-                      hover
-                      onClick={() => toggleIncomeCity('mant::Tulum')}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell sx={{ borderBottom: 'none', pl: 4, color: 'text.secondary' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          {incomeCityOpen['mant::Tulum'] ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-                          Tulum
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                        {fmtMoney(mantenimientoIncome.cities.Tulum.total)}
-                      </TableCell>
-                    </TableRow>
-                  </>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Paper>
         </Box>
 

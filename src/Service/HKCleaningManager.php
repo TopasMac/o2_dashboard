@@ -125,15 +125,32 @@ class HKCleaningManager
                     $hk->setCleaningCost((string)$resolved);
                 }
             }
-            // For Owner stays, default collected fee to Unit cleaning_fee if not provided
-            if ($cleaningType === HKCleanings::TYPE_OWNER && empty($data['o2CollectedFee']) && method_exists($unit, 'getCleaningFee') && method_exists($hk, 'setO2CollectedFee')) {
-                $unitFee = $unit->getCleaningFee();
-                if ($unitFee !== null && $unitFee !== '') {
-                    $hk->setO2CollectedFee((string)$unitFee);
+            // Defaults for o2_collected_fee (charged amount)
+            // - checkout: default to Unit cleaning_fee
+            // - owner:    default to Unit cleaning_fee
+            // - redo:     force to 0 (internal redo, not charged)
+            $typeLower = strtolower((string)$cleaningType);
+            $isRedo = ($typeLower === 'redo') || (defined(HKCleanings::class . '::TYPE_REDO') && $cleaningType === HKCleanings::TYPE_REDO);
+            $isOwner = ($typeLower === strtolower((string)HKCleanings::TYPE_OWNER));
+            $isCheckout = ($typeLower === strtolower((string)HKCleanings::TYPE_CHECKOUT));
+
+            if ($isRedo) {
+                if (method_exists($hk, 'setO2CollectedFee')) {
+                    $hk->setO2CollectedFee('0');
                 }
-            }
-            if (!empty($data['o2CollectedFee']) && method_exists($hk, 'setO2CollectedFee')) {
-                $hk->setO2CollectedFee((string)$data['o2CollectedFee']);
+            } else {
+                // If caller provided a collected fee, it wins.
+                if (!empty($data['o2CollectedFee']) && method_exists($hk, 'setO2CollectedFee')) {
+                    $hk->setO2CollectedFee((string)$data['o2CollectedFee']);
+                } else {
+                    // For checkout/owner, default collected fee to Unit cleaning_fee if available.
+                    if (($isOwner || $isCheckout) && method_exists($unit, 'getCleaningFee') && method_exists($hk, 'setO2CollectedFee')) {
+                        $unitFee = $unit->getCleaningFee();
+                        if ($unitFee !== null && $unitFee !== '') {
+                            $hk->setO2CollectedFee((string)$unitFee);
+                        }
+                    }
+                }
             }
 
             // Ensure created_at is set if supported and empty
@@ -158,7 +175,12 @@ class HKCleaningManager
     }
 
     /**
-     * Mark a cleaning as done and create the matching hk_transactions row.
+     * Mark a cleaning as done and (only when bill_to=CLIENT) create the matching hk_transactions row.
+     *
+     * Why: checkout cleanings are an internal HK record and should NOT create hk_transactions rows
+     * (they would double-count incomes). Only client-billed cleanings (e.g. owner stay / client-billed
+     * extra cleaning) should generate an HKTransactions row so they show up in the unit monthly report.
+     *
      * Idempotent: if a transaction already exists linked to this cleaning, it will be returned.
      */
     public function markDoneAndCreateTransaction(HKCleanings $hk): array
@@ -168,6 +190,35 @@ class HKCleaningManager
             if ($hk->getStatus() !== HKCleanings::STATUS_DONE) {
                 $hk->setStatus(HKCleanings::STATUS_DONE);
             }
+        }
+
+        $unit = method_exists($hk, 'getUnit') ? $hk->getUnit() : null;
+        if (!$unit instanceof Unit) {
+            throw new \RuntimeException('HKCleaning has no Unit; cannot create transaction');
+        }
+
+        $date = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
+        if (!$date instanceof \DateTimeInterface) {
+            throw new \RuntimeException('HKCleaning has no checkout date; cannot create transaction');
+        }
+        // Ensure immutable for HKTransactions::setDate(\DateTimeImmutable)
+        $dateImmutable = $date instanceof \DateTimeImmutable ? $date : \DateTimeImmutable::createFromInterface($date);
+
+        // Only generate an HKTransactions row when this cleaning is billed to the Client.
+        $billTo = '';
+        if (method_exists($hk, 'getBillTo')) {
+            $billTo = strtoupper(trim((string) $hk->getBillTo()));
+        }
+
+        // If bill_to is not CLIENT, do not create any transaction.
+        if ($billTo !== 'CLIENT') {
+            return [
+                'id' => null,
+                'transactionCode' => null,
+                'alreadyExisted' => false,
+                'skipped' => true,
+                'reason' => 'bill_to_not_client',
+            ];
         }
 
         // Idempotency: if a tx already links to this cleaning, return it (fast-path via cleaning -> transaction, then repo fallback)
@@ -195,18 +246,6 @@ class HKCleaningManager
             ];
         }
 
-        $unit = method_exists($hk, 'getUnit') ? $hk->getUnit() : null;
-        if (!$unit instanceof Unit) {
-            throw new \RuntimeException('HKCleaning has no Unit; cannot create transaction');
-        }
-
-        $date = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
-        if (!$date instanceof \DateTimeInterface) {
-            throw new \RuntimeException('HKCleaning has no checkout date; cannot create transaction');
-        }
-        // Ensure immutable for HKTransactions::setDate(\DateTimeImmutable)
-        $dateImmutable = $date instanceof \DateTimeImmutable ? $date : \DateTimeImmutable::createFromInterface($date);
-
         $city = method_exists($hk, 'getCity') ? (string)$hk->getCity() : (method_exists($unit, 'getCity') ? (string)$unit->getCity() : '');
         $dateYmd = $dateImmutable->format('Y-m-d');
 
@@ -215,19 +254,24 @@ class HKCleaningManager
             $isOwner = strtolower((string)$hk->getCleaningType()) === HKCleanings::TYPE_OWNER;
         }
 
-        // Resolve Paid via rate resolver
+        // Resolve Paid via rate resolver (what we pay the HK)
         $paid = $this->rateResolver->resolveAmountForDateStr((int)$unit->getId(), $city, $dateYmd);
         $paidStr = $paid !== null ? (string)$paid : null;
 
-        // Resolve Charged from unit cleaning_fee if available
-        $charged = null;
-        if (method_exists($unit, 'getCleaningFee')) {
-            $ufee = $unit->getCleaningFee();
-            if ($ufee !== null && $ufee !== '') {
-                $charged = $ufee;
+        // Resolve Charged (what we charge the owner/client)
+        $chargedStr = null;
+        if (method_exists($hk, 'getO2CollectedFee')) {
+            $collected = $hk->getO2CollectedFee();
+            if ($collected !== null && $collected !== '') {
+                $chargedStr = (string) $collected;
             }
         }
-        $chargedStr = $charged !== null ? (string)$charged : null;
+        if (($chargedStr === null || $chargedStr === '') && method_exists($unit, 'getCleaningFee')) {
+            $ufee = $unit->getCleaningFee();
+            if ($ufee !== null && $ufee !== '') {
+                $chargedStr = (string) $ufee;
+            }
+        }
 
         $tx = new HKTransactions();
         if (method_exists($tx, 'setDate')) {
@@ -278,25 +322,31 @@ class HKCleaningManager
         }
         if (method_exists($tx, 'setCategory')) { $tx->setCategory($cat); }
 
+        // cost_centre = who pays (Client/Owners2/Guest)
+        // allocation_target = internal division bucket (Housekeepers_Playa / Housekeepers_Tulum / Housekeepers_General)
         if (method_exists($tx, 'setCostCentre')) {
-            $tx->setCostCentre($isOwner ? 'Client' : 'Owners2');
+            $tx->setCostCentre('Client');
         }
+
+        if (method_exists($tx, 'setAllocationTarget')) {
+            $cityNorm = strtolower(trim((string) $city));
+            if (str_contains($cityNorm, 'tulum')) {
+                $tx->setAllocationTarget(HKTransactions::ALLOC_HK_TULUM);
+            } elseif (str_contains($cityNorm, 'playa')) {
+                $tx->setAllocationTarget(HKTransactions::ALLOC_HK_PLAYA);
+            } else {
+                $tx->setAllocationTarget('Housekeepers_General');
+            }
+        }
+
         if (method_exists($tx, 'setDescription')) {
-            $tx->setDescription($isOwner ? 'Estadia propietario' : '');
+            $tx->setDescription($isOwner ? 'Estadia propietario' : 'Limpieza extra');
         }
         if (method_exists($tx, 'setPaid')) {
             $tx->setPaid($paidStr);
         }
         if (method_exists($tx, 'setCharged')) {
-            if ($isOwner && method_exists($hk, 'getO2CollectedFee')) {
-                $collected = $hk->getO2CollectedFee();
-                $tx->setCharged(($collected !== null && $collected !== '') ? (string)$collected : $chargedStr);
-            } else {
-                $tx->setCharged($chargedStr);
-            }
-        }
-        if ($isOwner && method_exists($tx, 'setAllocationTarget')) {
-            $tx->setAllocationTarget('Unit');
+            $tx->setCharged($chargedStr);
         }
         if (method_exists($tx, 'generateTransactionCode')) {
             $tx->generateTransactionCode();
