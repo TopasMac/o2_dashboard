@@ -44,6 +44,7 @@ export default function O2Results() {
 
   const [bookings, setBookings] = useState([]);
   const [slices, setSlices] = useState([]);
+  const [commissionByUnit, setCommissionByUnit] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -239,6 +240,7 @@ export default function O2Results() {
         const data = await res.json();
         setBookings(Array.isArray(data.bookings) ? data.bookings : []);
         setSlices(Array.isArray(data.slices) ? data.slices : []);
+        setCommissionByUnit(Array.isArray(data.commissionByUnit) ? data.commissionByUnit : []);
         // Transactions can arrive as `transactions` or `o2transactions` depending on backend shape
         const tx = Array.isArray(data.transactions)
           ? data.transactions
@@ -251,6 +253,7 @@ export default function O2Results() {
           setError(e.message || 'Failed to load');
           setBookings([]);
           setSlices([]);
+          setCommissionByUnit([]);
           setTransactions([]);
           setEmployeeLedger([]);
         }
@@ -303,15 +306,44 @@ export default function O2Results() {
   };
 
   const commissionSummary = useMemo(() => {
+    // Preferred: backend provides a canonical breakdown with unit_name + city.
+    if (Array.isArray(commissionByUnit) && commissionByUnit.length > 0) {
+      const cities = {};
+      let total = 0;
+
+      for (const r of commissionByUnit) {
+        const unitId = Number(r.unit_id ?? r.unitId ?? 0);
+        const unitName = (r.unit_name || r.unitName || (unitId ? `Unit ${unitId}` : 'Unit')).toString();
+        let city = (r.city || '').toString() || 'Unknown';
+        if (city === 'Playa del Carmen') city = 'Playa';
+
+        const commission = Number(r.o2_commission ?? r.o2Commission ?? 0);
+        if (!Number.isFinite(commission)) continue;
+
+        total += commission;
+        if (!cities[city]) cities[city] = { total: 0, units: {} };
+        cities[city].total += commission;
+        cities[city].units[unitName] = (cities[city].units[unitName] || 0) + commission;
+      }
+
+      return { total, cities };
+    }
+
+    // Fallback: derive from slices + bookings
     if (!slices || slices.length === 0) {
       return { total: 0, cities: {} };
     }
 
     // Build a lookup: unit_id -> { unit_name, city }
     const unitInfo = new Map();
-    (bookings || []).forEach(b => {
-      if (!unitInfo.has(b.unit_id)) {
-        unitInfo.set(b.unit_id, { unit_name: b.unit_name || `Unit ${b.unit_id}`, city: b.city || 'Unknown' });
+    (bookings || []).forEach((b) => {
+      const id = b.unit_id;
+      if (!id) return;
+      if (!unitInfo.has(id)) {
+        unitInfo.set(id, {
+          unit_name: b.unit_name || `Unit ${id}`,
+          city: b.city || 'Unknown',
+        });
       }
     });
 
@@ -321,6 +353,8 @@ export default function O2Results() {
     for (const s of slices) {
       const unitId = s.unit_id;
       const commission = Number(s.o2_commission_in_month || 0);
+      if (!Number.isFinite(commission)) continue;
+
       total += commission;
       const info = unitInfo.get(unitId) || { unit_name: `Unit ${unitId}`, city: 'Unknown' };
       let city = info.city || 'Unknown';
@@ -333,7 +367,7 @@ export default function O2Results() {
     }
 
     return { total, cities };
-  }, [bookings, slices]);
+  }, [bookings, slices, commissionByUnit]);
 
   const otherIncome = useMemo(() => {
     if (!Array.isArray(transactions) || transactions.length === 0) {
@@ -484,7 +518,7 @@ export default function O2Results() {
           {(tab === 1 || tab === 2) && !hkLoading && hkError && `Error: ${hkError}`}
         </Typography>
 
-        {tab === 0 && (
+       {tab === 0 && (
           <CCO2Results
             totals={totals}
             netMarginPct={netMarginPct}
@@ -493,15 +527,15 @@ export default function O2Results() {
             slices={slices}
             commissionSummary={commissionSummary}
             expandedCities={expandedCities}
-            onToggleCity={toggleCity}
+            toggleCity={toggleCity}
             otherIncome={otherIncome}
             expandedCentres={expandedCentres}
-            onToggleCentre={toggleCentre}
+            toggleCentre={toggleCentre}
             otherExpenses={otherExpenses}
             expandedExpenseCentres={expandedExpenseCentres}
-            onToggleExpenseCentre={toggleExpenseCentre}
+            toggleExpenseCentre={toggleExpenseCentre}
             expandedHrGroups={expandedHrGroups}
-            onToggleHrGroup={toggleHrGroup}
+            toggleHrGroup={toggleHrGroup}
             onOpenNewExpenseDrawer={openNewExpenseDrawer}
             onOpenEditTxDrawer={openEditTxDrawer}
           />

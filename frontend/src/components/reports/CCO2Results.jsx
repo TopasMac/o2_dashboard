@@ -379,48 +379,103 @@ export default function CCO2Results(props) {
                           </TableRow>
                           {open &&
                             (() => {
-                              const unitEntries = Object.entries(entry.units || {});
-                              if (unitEntries.length === 0) {
-                                return null;
-                              }
+                              // Support both shapes:
+                              // 1) legacy: entry.units = { [unitLabel]: amount }
+                              // 2) new:    entry.units = [ { unit_id, unit_name, amount } ]
 
-                              // Sort by amount (desc) to find top/bottom performers
-                              const sortedByAmount = [...unitEntries].sort(
-                                ([, aAmount], [, bAmount]) =>
-                                  Number(bAmount || 0) - Number(aAmount || 0)
-                              );
+                              const IGNORE_HIGHLIGHT_UNIT_IDS = new Set([10, 11]);
+                              const IGNORE_HIGHLIGHT_UNIT_NAMES = new Set(['sunrise', 'sunset']);
 
-                              const topNames = new Set(
+                              const shouldIgnoreHighlight = (u) => {
+                                const id = u?.unit_id != null ? Number(u.unit_id) : null;
+                                const name = (u?.unit_name ?? u?.name ?? '').toString().trim().toLowerCase();
+                                return (id != null && IGNORE_HIGHLIGHT_UNIT_IDS.has(id)) || (name !== '' && IGNORE_HIGHLIGHT_UNIT_NAMES.has(name));
+                              };
+
+                              const normalizeUnits = (units) => {
+                                if (Array.isArray(units)) {
+                                  return units
+                                    .map((u) => {
+                                      const unitId = u?.unit_id != null ? Number(u.unit_id) : null;
+                                      const amount = Number(u?.amount ?? u?.o2_commission ?? 0);
+                                      const unitNameRaw = (u?.unit_name ?? u?.name ?? '').toString().trim();
+                                      const unitName = unitNameRaw !== ''
+                                        ? unitNameRaw
+                                        : unitId != null
+                                          ? `Unit ${unitId}`
+                                          : '—';
+                                      return {
+                                        unit_id: Number.isFinite(unitId) ? unitId : null,
+                                        unit_name: unitName,
+                                        amount: Number.isFinite(amount) ? amount : 0,
+                                      };
+                                    })
+                                    .filter((u) => u.unit_name && u.unit_name !== '—');
+                                }
+
+                                // legacy object map
+                                const parseUnitIdFromLabel = (label) => {
+                                  if (label == null) return null;
+                                  const s = String(label).trim();
+                                  // Common legacy format: "Unit 10" or just "10"
+                                  const m = s.match(/^(?:unit\s*)?(\d+)$/i) || s.match(/^unit\s+(\d+)$/i);
+                                  if (m && m[1]) {
+                                    const n = Number(m[1]);
+                                    return Number.isFinite(n) ? n : null;
+                                  }
+                                  return null;
+                                };
+
+                                return Object.entries(units || {}).map(([label, amt]) => {
+                                  const unitId = parseUnitIdFromLabel(label);
+                                  const amount = Number(amt || 0);
+                                  const unitName = String(label || '').trim() || (unitId != null ? `Unit ${unitId}` : '—');
+                                  return {
+                                    unit_id: unitId,
+                                    unit_name: unitName,
+                                    amount: Number.isFinite(amount) ? amount : 0,
+                                  };
+                                });
+                              };
+
+                              const unitRows = normalizeUnits(entry.units);
+                              if (unitRows.length === 0) return null;
+
+                              const eligibleForRanking = unitRows.filter((u) => !shouldIgnoreHighlight(u));
+                              const rowsForRanking = eligibleForRanking.length > 0 ? eligibleForRanking : unitRows;
+
+                              const sortedByAmount = [...rowsForRanking].sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+
+                              const topKeys = new Set(
                                 sortedByAmount
                                   .slice(0, Math.min(3, sortedByAmount.length))
-                                  .map(([name]) => name)
-                              );
-                              const bottomNames = new Set(
-                                sortedByAmount
-                                  .slice(
-                                    Math.max(sortedByAmount.length - 3, 0),
-                                    sortedByAmount.length
-                                  )
-                                  .map(([name]) => name)
+                                  .map((u) => String(u.unit_id ?? u.unit_name))
                               );
 
-                              // Render alphabetically, but with background color
-                              return unitEntries
-                                .sort(([aName], [bName]) =>
-                                  aName.localeCompare(bName)
-                                )
-                                .map(([unitName, amount]) => {
+                              const bottomKeys = new Set(
+                                sortedByAmount
+                                  .slice(Math.max(sortedByAmount.length - 3, 0), sortedByAmount.length)
+                                  .map((u) => String(u.unit_id ?? u.unit_name))
+                              );
+
+                              // Render alphabetically by unit_name, but with highlight based on ranking
+                              return [...unitRows]
+                                .sort((a, b) => String(a.unit_name).localeCompare(String(b.unit_name)))
+                                .map((u) => {
+                                  const ignored = shouldIgnoreHighlight(u);
+                                  const keyForRank = String(u.unit_id ?? u.unit_name);
+
                                   let bg = 'transparent';
-                                  if (topNames.has(unitName)) {
+                                  if (!ignored && topKeys.has(keyForRank)) {
                                     bg = '#E8F5E9'; // light green
-                                  } else if (bottomNames.has(unitName)) {
+                                  } else if (!ignored && bottomKeys.has(keyForRank)) {
                                     bg = '#FFEBEE'; // light red
                                   }
+
+                                  const rowKey = u.unit_id != null ? `${u.unit_id}` : u.unit_name;
+
                                   return (
-                                    <TableRow
-                                      key={unitName}
-                                      sx={{ backgroundColor: bg }}
-                                    >
+                                    <TableRow key={rowKey} sx={{ backgroundColor: bg }}>
                                       <TableCell
                                         sx={{
                                           pl: 6,
@@ -428,7 +483,7 @@ export default function CCO2Results(props) {
                                           color: 'text.secondary',
                                         }}
                                       >
-                                        {unitName}
+                                        {u.unit_name}
                                       </TableCell>
                                       <TableCell
                                         align="right"
@@ -437,7 +492,7 @@ export default function CCO2Results(props) {
                                           color: 'text.secondary',
                                         }}
                                       >
-                                        {fmt(amount)}
+                                        {fmt(u.amount)}
                                       </TableCell>
                                     </TableRow>
                                   );

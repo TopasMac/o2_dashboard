@@ -3,6 +3,7 @@
 namespace App\Service\Reports;
 
 use Doctrine\DBAL\Connection;
+use App\Service\Reports\BookingMonthSliceMetricsService;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -13,10 +14,14 @@ use DateTimeZone;
 class O2MonthlySummaryService
 {
     private Connection $db;
+    private BookingMonthSliceMetricsService $metrics;
 
-    public function __construct(Connection $db)
-    {
+    public function __construct(
+        Connection $db,
+        BookingMonthSliceMetricsService $metrics
+    ) {
         $this->db = $db;
+        $this->metrics = $metrics;
     }
 
     /**
@@ -26,7 +31,13 @@ class O2MonthlySummaryService
      *   yearMonth:string,
      *   window:{start:string,end:string},
      *   bookings:list<array{id:int,unit_name:string,unit_id:int,source:string,city:string,guests:int,check_in:string,check_out:string}>,
-     *   slices:list<array{id:int,booking_id:int,unit_id:int,year_month:string,room_fee_in_month:float,o2_commission_in_month:float,owner_payout_in_month:float}>,
+     *   slices:list<array{id:int,booking_id:int,unit_id:int,year_month:string,room_fee_in_month:float,o2_commission_in_month:float,net_payout_in_month:float,owner_payout_in_month:float}>,
+     *   commissionByUnit:list<array{unit_id:int|null,unit_name:string|null,city:string|null,o2_commission:float}>,
+     *   commissionByCity:list<array{city:string|null,o2_commission:float}>,
+     *   commissionBySource:list<array{source:string|null,o2_commission:float}>,
+     *   commissionBySourceCity:list<array{city:string|null,source:string|null,o2_commission:float}>,
+     *   payoutByCity:list<array{city:string|null,net_payout:float,owner_payout:float}>,
+     *   payoutTotals:array{net_payout:float,owner_payout:float},
      *   transactions:list<array{id:int,category_id:int,cost_centre:string,type:string,description:string,amount:float,category_name:string}>,
      *   employeeLedger:list<array{
      *     id:int,
@@ -43,7 +54,7 @@ class O2MonthlySummaryService
      *   count:array{bookings:int,slices:int}
      * }
      */
-    public function getMonthlySummary(int $year, int $month): array
+    public function getMonthlySummary(int $year, int $month, array $options = []): array
     {
         // Bound month to a safe range
         if ($month < 1 || $month > 12) {
@@ -55,26 +66,31 @@ class O2MonthlySummaryService
         $end = $start->modify('last day of this month')->setTime(23, 59, 59);
         $yearMonth = $start->format('Y-m');
 
-        // BOOKINGS overlapping the month window
-        $bookingsSql = <<<SQL
-            SELECT
-                `id`,
-                `unit_name`,
-                `unit_id`,
-                `source`,
-                `city`,
-                `guests`,
-                DATE_FORMAT(`check_in`, '%Y-%m-%d')   AS `check_in`,
-                DATE_FORMAT(`check_out`, '%Y-%m-%d')  AS `check_out`
-            FROM `all_bookings`
-            WHERE `check_in` <= :end AND `check_out` >= :start
-            ORDER BY `check_in` ASC, `id` ASC
-        SQL;
+        $includeBookings = (bool)($options['includeBookings'] ?? false);
 
-        $bookings = $this->db->fetchAllAssociative($bookingsSql, [
-            'start' => $start->format('Y-m-d H:i:s'),
-            'end'   => $end->format('Y-m-d H:i:s'),
-        ]);
+        // BOOKINGS overlapping the month window (optional; can be large)
+        $bookings = [];
+        if ($includeBookings) {
+            $bookingsSql = <<<SQL
+                SELECT
+                    `id`,
+                    `unit_name`,
+                    `unit_id`,
+                    `source`,
+                    `city`,
+                    `guests`,
+                    DATE_FORMAT(`check_in`, '%Y-%m-%d')   AS `check_in`,
+                    DATE_FORMAT(`check_out`, '%Y-%m-%d')  AS `check_out`
+                FROM `all_bookings`
+                WHERE `check_in` <= :end AND `check_out` >= :start
+                ORDER BY `check_in` ASC, `id` ASC
+            SQL;
+
+            $bookings = $this->db->fetchAllAssociative($bookingsSql, [
+                'start' => $start->format('Y-m-d H:i:s'),
+                'end'   => $end->format('Y-m-d H:i:s'),
+            ]);
+        }
 
         // MONTH SLICES for the exact year-month
         $slicesSql = <<<SQL
@@ -85,6 +101,7 @@ class O2MonthlySummaryService
                 `year_month`,
                 `room_fee_in_month`,
                 `o2_commission_in_month`,
+                `net_payout_in_month`,
                 `owner_payout_in_month`
             FROM `booking_month_slice`
             WHERE `year_month` = :yearMonth
@@ -94,6 +111,72 @@ class O2MonthlySummaryService
         $slices = $this->db->fetchAllAssociative($slicesSql, [
             'yearMonth' => $yearMonth,
         ]);
+
+        // COMMISSIONS + PAYOUTS via shared metrics service
+        $commissionByUnit = $this->metrics->getCommissionByUnit($yearMonth);
+        $commissionByCity = $this->metrics->getCommissionByCity($yearMonth);
+        $commissionBySource = $this->metrics->getCommissionBySource($yearMonth);
+        $commissionBySourceCity = $this->metrics->getCommissionBySourceCity($yearMonth);
+
+        $payoutByCity = $this->metrics->getPayoutByCity($yearMonth);
+        $payoutTotals = $this->metrics->getPayoutTotals($yearMonth);
+
+        // A compact structure for the UI: per-city units list like
+        // [ { city: 'Playa del Carmen', units: [ {unit_id, unit_name, amount}, ... ] }, ... ]
+        // Keeps `commissionByUnit` intact for other consumers.
+        $commissionByCityUnits = [];
+        $commissionTotals = [
+            'overall' => 0.0,
+            'byCity' => [],
+        ];
+
+        foreach ($commissionByUnit as $row) {
+            $city = (string)($row['city'] ?? '');
+            $cityKey = $city !== '' ? $city : 'Unknown';
+
+            $unitId = isset($row['unit_id']) ? (int)$row['unit_id'] : null;
+            $unitName = (string)($row['unit_name'] ?? '');
+            $amount = isset($row['o2_commission']) ? (float)$row['o2_commission'] : 0.0;
+
+            if (!isset($commissionByCityUnits[$cityKey])) {
+                $commissionByCityUnits[$cityKey] = [
+                    'city' => $cityKey,
+                    'units' => [],
+                ];
+            }
+
+            $commissionByCityUnits[$cityKey]['units'][] = [
+                'unit_id' => $unitId,
+                'unit_name' => $unitName,
+                'amount' => $amount,
+            ];
+
+            $commissionTotals['overall'] += $amount;
+            if (!isset($commissionTotals['byCity'][$cityKey])) {
+                $commissionTotals['byCity'][$cityKey] = 0.0;
+            }
+            $commissionTotals['byCity'][$cityKey] += $amount;
+        }
+
+        // sort units within each city by unit_name (stable UI ordering)
+        foreach ($commissionByCityUnits as &$bucket) {
+            usort($bucket['units'], static function (array $a, array $b): int {
+                return strcmp((string)($a['unit_name'] ?? ''), (string)($b['unit_name'] ?? ''));
+            });
+        }
+        unset($bucket);
+
+        // convert map to list ordered by city
+        $commissionByCityUnits = array_values($commissionByCityUnits);
+        usort($commissionByCityUnits, static function (array $a, array $b): int {
+            return strcmp((string)($a['city'] ?? ''), (string)($b['city'] ?? ''));
+        });
+
+        // round totals for consistent API output
+        $commissionTotals['overall'] = round((float)$commissionTotals['overall'], 2);
+        foreach ($commissionTotals['byCity'] as $k => $v) {
+            $commissionTotals['byCity'][$k] = round((float)$v, 2);
+        }
 
         // TRANSACTIONS for the exact year-month
         $transactionsSql = <<<SQL
@@ -160,12 +243,14 @@ class O2MonthlySummaryService
         }, $employeeLedger);
 
         // Cast numeric strings to floats/ints where applicable
-        $bookings = array_map(function(array $row) {
-            $row['id'] = (int)$row['id'];
-            $row['unit_id'] = isset($row['unit_id']) ? (int)$row['unit_id'] : null;
-            $row['guests'] = isset($row['guests']) ? (int)$row['guests'] : null;
-            return $row;
-        }, $bookings);
+        if ($includeBookings) {
+            $bookings = array_map(function(array $row) {
+                $row['id'] = (int)$row['id'];
+                $row['unit_id'] = isset($row['unit_id']) ? (int)$row['unit_id'] : null;
+                $row['guests'] = isset($row['guests']) ? (int)$row['guests'] : null;
+                return $row;
+            }, $bookings);
+        }
 
         $slices = array_map(function(array $row) {
             $row['id'] = (int)$row['id'];
@@ -173,11 +258,15 @@ class O2MonthlySummaryService
             $row['unit_id'] = (int)$row['unit_id'];
             $row['room_fee_in_month'] = isset($row['room_fee_in_month']) ? (float)$row['room_fee_in_month'] : 0.0;
             $row['o2_commission_in_month'] = isset($row['o2_commission_in_month']) ? (float)$row['o2_commission_in_month'] : 0.0;
+            $row['net_payout_in_month'] = isset($row['net_payout_in_month']) ? (float)$row['net_payout_in_month'] : 0.0;
             $row['owner_payout_in_month'] = isset($row['owner_payout_in_month']) ? (float)$row['owner_payout_in_month'] : 0.0;
             return $row;
         }, $slices);
 
         return [
+            '_meta' => [
+                'includeBookings' => $includeBookings,
+            ],
             'year' => $year,
             'month' => $month,
             'yearMonth' => $yearMonth,
@@ -187,6 +276,14 @@ class O2MonthlySummaryService
             ],
             'bookings' => $bookings,
             'slices' => $slices,
+            'commissionByUnit' => $commissionByUnit,
+            'commissionByCity' => $commissionByCity,
+            'commissionBySource' => $commissionBySource,
+            'commissionBySourceCity' => $commissionBySourceCity,
+            'commissionByCityUnits' => $commissionByCityUnits,
+            'commissionTotals' => $commissionTotals,
+            'payoutByCity' => $payoutByCity,
+            'payoutTotals' => $payoutTotals,
             'transactions' => $transactions,
             'employeeLedger' => $employeeLedger,
             'count' => [

@@ -16,8 +16,15 @@ class O2ResultsController extends AbstractController
         $year = (int)($request->query->get('year') ?? date('Y'));
         $month = (int)($request->query->get('month') ?? date('n'));
 
+        $includeBookings = filter_var(
+            $request->query->get('includeBookings', false),
+            FILTER_VALIDATE_BOOLEAN
+        );
+
         try {
-            $data = $service->getMonthlySummary($year, $month);
+            $data = $service->getMonthlySummary($year, $month, [
+                'includeBookings' => $includeBookings,
+            ]);
             return $this->json($data);
         } catch (\Throwable $e) {
             return $this->json([

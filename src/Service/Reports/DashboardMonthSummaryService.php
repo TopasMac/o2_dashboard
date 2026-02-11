@@ -5,6 +5,7 @@ namespace App\Service\Reports;
 use DateInterval;
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use App\Service\Reports\BookingMonthSliceMetricsService;
 
 /**
  * Aggregates "Month Summary" metrics in ONE pass for the dashboard cards.
@@ -20,7 +21,10 @@ use Doctrine\DBAL\Connection;
  */
 class DashboardMonthSummaryService
 {
-    public function __construct(private Connection $db) {}
+    public function __construct(
+        private Connection $db,
+        private BookingMonthSliceMetricsService $bmsMetrics,
+    ) {}
 
     /**
      * Build a compact payload for the dashboard:
@@ -185,29 +189,27 @@ class DashboardMonthSummaryService
             ['from' => $from, 'to' => $to]
         );
 
-        // Commissions (booking_month_slice is already month-sliced)
-        $commissions = (float)$this->db->fetchOne(
-            "SELECT COALESCE(SUM(o2_commission_in_month),0)
-             FROM `booking_month_slice`
-             WHERE `year_month` = :ym",
-            ['ym' => $ym]
-        );
+        // Commissions (delegate booking_month_slice aggregation to the shared metrics service)
+        $sliceMetrics = $this->bmsMetrics->getMetrics($ym);
 
-        $commissionsPlaya = (float)$this->db->fetchOne(
-            "SELECT COALESCE(SUM(o2_commission_in_month),0)
-             FROM `booking_month_slice`
-             WHERE `year_month` = :ym
-               AND `city` = 'Playa del Carmen'",
-            ['ym' => $ym]
-        );
+        $commissions = 0.0;
+        $commissionsPlaya = 0.0;
+        $commissionsTulum = 0.0;
 
-        $commissionsTulum = (float)$this->db->fetchOne(
-            "SELECT COALESCE(SUM(o2_commission_in_month),0)
-             FROM `booking_month_slice`
-             WHERE `year_month` = :ym
-               AND `city` = 'Tulum'",
-            ['ym' => $ym]
-        );
+        $commissionByCity = $sliceMetrics['commissionByCity'] ?? [];
+        if (is_array($commissionByCity)) {
+            foreach ($commissionByCity as $row) {
+                $city = (string)($row['city'] ?? '');
+                $val  = (float)($row['o2_commission'] ?? 0);
+                $commissions += $val;
+
+                if ($city === 'Playa del Carmen') {
+                    $commissionsPlaya = $val;
+                } elseif ($city === 'Tulum') {
+                    $commissionsTulum = $val;
+                }
+            }
+        }
 
         // Gross earnings for Owners2-managed units (sum of payout_in_month)
         $grossEarnings = (float)$this->db->fetchOne(
@@ -458,28 +460,31 @@ class DashboardMonthSummaryService
         );
 
         $ymEnd = $untilMonthInclusive->format('Y-m');
-        $commissions = (float)$this->db->fetchOne(
-            "SELECT COALESCE(SUM(o2_commission_in_month),0)
+
+        // YTD commissions (range sum) with city breakdown
+        $ytdCommissionRows = $this->db->fetchAllAssociative(
+            "SELECT city, COALESCE(SUM(o2_commission_in_month),0) AS o2_commission
              FROM `booking_month_slice`
-             WHERE `year_month` >= :startYm AND `year_month` <= :endYm",
+             WHERE `year_month` >= :startYm AND `year_month` <= :endYm
+             GROUP BY city",
             ['startYm' => $startYm, 'endYm' => $ymEnd]
         );
 
-        $commissionsPlaya = (float)$this->db->fetchOne(
-            "SELECT COALESCE(SUM(o2_commission_in_month),0)
-             FROM `booking_month_slice`
-             WHERE `year_month` >= :startYm AND `year_month` <= :endYm
-               AND `city` = 'Playa del Carmen'",
-            ['startYm' => $startYm, 'endYm' => $ymEnd]
-        );
+        $commissions = 0.0;
+        $commissionsPlaya = 0.0;
+        $commissionsTulum = 0.0;
 
-        $commissionsTulum = (float)$this->db->fetchOne(
-            "SELECT COALESCE(SUM(o2_commission_in_month),0)
-             FROM `booking_month_slice`
-             WHERE `year_month` >= :startYm AND `year_month` <= :endYm
-               AND `city` = 'Tulum'",
-            ['startYm' => $startYm, 'endYm' => $ymEnd]
-        );
+        foreach ($ytdCommissionRows as $row) {
+            $city = (string)($row['city'] ?? '');
+            $val  = (float)($row['o2_commission'] ?? 0);
+            $commissions += $val;
+
+            if ($city === 'Playa del Carmen') {
+                $commissionsPlaya = $val;
+            } elseif ($city === 'Tulum') {
+                $commissionsTulum = $val;
+            }
+        }
 
         $grossEarnings = (float)$this->db->fetchOne(
             "SELECT COALESCE(SUM(b.payout_in_month),0)
