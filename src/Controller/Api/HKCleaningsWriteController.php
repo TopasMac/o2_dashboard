@@ -3,6 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Entity\HKCleanings;
+use App\Entity\Unit;
 use App\Entity\Employee;
 use App\Service\HKCleaningManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -72,6 +73,298 @@ class HKCleaningsWriteController extends AbstractController
             }
         }
         return null;
+    }
+
+    /**
+     * Create a new hk_cleanings entry.
+     *
+     * POST /api/hk-cleanings
+     * Body JSON (snake_case):
+     *  {
+     *    unit_id: number|string,
+     *    checkout_date: 'YYYY-MM-DD',
+     *    cleaning_type: string,
+     *    o2_collected_fee?: number|string|null,
+     *    bill_to?: string|null,
+     *    cost_centre?: string|null, // HK_Playa | HK_Tulum | HK_General
+     *    status?: 'pending'|'done'|'cancelled',
+     *    source?: string|null,
+     *    booking_id?: number|null,
+     *    reservation_code?: string|null,
+     *    city?: string|null,
+     *    report_status?: 'pending'|'reported'|'needs_review'|null
+     *  }
+     */
+    #[Route('/api/hk-cleanings', name: 'api_hk_cleanings_create', methods: ['POST'])]
+    public function createCleaning(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent() ?: '[]', true) ?: [];
+
+        // Required
+        $unitIdRaw = $data['unit_id'] ?? $data['unitId'] ?? null;
+        $dateRaw   = $data['checkout_date'] ?? $data['checkoutDate'] ?? null;
+        $typeRaw   = $data['cleaning_type'] ?? $data['cleaningType'] ?? null;
+
+        if ($unitIdRaw === null || $unitIdRaw === '' || !$dateRaw || !$typeRaw) {
+            return $this->json([
+                'ok' => false,
+                'error' => 'unit_id, checkout_date, and cleaning_type are required',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $unitId = (int) $unitIdRaw;
+        if ($unitId <= 0) {
+            return $this->json(['ok' => false, 'error' => 'unit_id must be a positive integer'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $checkoutDate = new \DateTimeImmutable((string) $dateRaw);
+        } catch (\Throwable $e) {
+            return $this->json(['ok' => false, 'error' => 'Invalid checkout_date; expected YYYY-MM-DD'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $cleaningType = strtolower(trim((string) $typeRaw));
+        if ($cleaningType === '') {
+            return $this->json(['ok' => false, 'error' => 'cleaning_type is required'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Optional fields
+        $statusRaw = strtolower(trim((string)($data['status'] ?? 'pending')));
+        $billTo    = $data['bill_to'] ?? $data['billTo'] ?? null;
+        $source    = $data['source'] ?? null;
+
+        $costCentre = $data['cost_centre'] ?? $data['costCentre'] ?? null;
+        if (is_string($costCentre)) {
+            $costCentre = trim($costCentre);
+            if ($costCentre === '') { $costCentre = null; }
+        } else {
+            $costCentre = null;
+        }
+
+        $o2FeeRaw  = $data['o2_collected_fee'] ?? $data['o2CollectedFee'] ?? 0;
+        if ($o2FeeRaw === '' || $o2FeeRaw === null) { $o2FeeRaw = 0; }
+        $o2Fee = (float) $o2FeeRaw;
+
+        $bookingId = $data['booking_id'] ?? $data['bookingId'] ?? null;
+        if ($bookingId === '') { $bookingId = null; }
+        if ($bookingId !== null) { $bookingId = (int) $bookingId; }
+
+        $reservationCode = $data['reservation_code'] ?? $data['reservationCode'] ?? null;
+        if (is_string($reservationCode)) {
+            $reservationCode = trim($reservationCode);
+            if ($reservationCode === '') { $reservationCode = null; }
+        }
+
+        // Resolve city from payload or unit
+        $city = $data['city'] ?? null;
+        if (is_string($city)) {
+            $city = trim($city);
+            if ($city === '') { $city = null; }
+        } else {
+            $city = null;
+        }
+
+        $unit = $this->em->getRepository(Unit::class)->find($unitId);
+        if (!$unit) {
+            return $this->json(['ok' => false, 'error' => 'Unit not found'], Response::HTTP_BAD_REQUEST);
+        }
+        if ($city === null && method_exists($unit, 'getCity')) {
+            $maybeCity = $unit->getCity();
+            $maybeCity = is_string($maybeCity) ? trim($maybeCity) : null;
+            $city = $maybeCity ?: null;
+        }
+
+        // Enforce city-based rules:
+        // - Playa del Carmen + status=done => report_status=reported
+        // - Tulum => status forced to pending; report_status=pending
+        $cityLc = strtolower(trim((string)($city ?? '')));
+        $isPlaya = ($cityLc === 'playa del carmen' || str_contains($cityLc, 'playa'));
+        $isTulum = ($cityLc === 'tulum' || str_contains($cityLc, 'tulum'));
+
+        if ($isTulum) {
+            $statusRaw = 'pending';
+        }
+
+        $allowedStatus = ['pending', 'done', 'cancelled'];
+        if (!in_array($statusRaw, $allowedStatus, true)) {
+            $statusRaw = 'pending';
+        }
+
+        $reportStatus = 'pending';
+        if ($isPlaya && $statusRaw === 'done') {
+            $reportStatus = 'reported';
+        }
+        if ($isTulum) {
+            $reportStatus = 'pending';
+        }
+
+        // Default/validate cost_centre (internal accounting destination)
+        // Canonical values: HK_Playa | HK_Tulum | HK_General
+        // Backward-compatible inputs: housekeepers_playa | housekeepers_tulum | general
+        $allowedCanonical = [
+            HKCleanings::COST_CENTRE_HK_PLAYA,
+            HKCleanings::COST_CENTRE_HK_TULUM,
+            HKCleanings::COST_CENTRE_GENERAL,
+        ];
+
+        if ($costCentre !== null) {
+            $rawCc = trim((string) $costCentre);
+            if ($rawCc === '') {
+                $costCentre = null;
+            } else {
+                // Normalize legacy lowercase inputs
+                $lc = strtolower($rawCc);
+                if ($lc === 'housekeepers_playa') {
+                    $costCentre = HKCleanings::COST_CENTRE_HK_PLAYA;
+                } elseif ($lc === 'housekeepers_tulum') {
+                    $costCentre = HKCleanings::COST_CENTRE_HK_TULUM;
+                } elseif ($lc === 'general') {
+                    $costCentre = HKCleanings::COST_CENTRE_GENERAL;
+                } else {
+                    // Accept canonical values (case-sensitive)
+                    $costCentre = $rawCc;
+                }
+
+                if (!in_array($costCentre, $allowedCanonical, true)) {
+                    $costCentre = null;
+                }
+            }
+        }
+
+        if ($costCentre === null) {
+            if ($isPlaya) {
+                $costCentre = HKCleanings::COST_CENTRE_HK_PLAYA;
+            } elseif ($isTulum) {
+                $costCentre = HKCleanings::COST_CENTRE_HK_TULUM;
+            } else {
+                $costCentre = HKCleanings::COST_CENTRE_GENERAL;
+            }
+        }
+
+        // Default bill_to/source if missing
+        // Rule: cleaning_type=owner => bill_to defaults to CLIENT
+        if ($billTo === null || $billTo === '') {
+            if ($cleaningType === strtolower((string)HKCleanings::TYPE_OWNER)) {
+                $billTo = 'CLIENT';
+            } else {
+                $billTo = 'OWNERS2';
+            }
+        }
+        if ($source === null || $source === '') {
+            $source = 'Housekeepers';
+        }
+
+        $hk = new HKCleanings();
+
+        // Set unit relation/id
+        if (method_exists($hk, 'setUnit')) {
+            $hk->setUnit($unit);
+        }
+        if (method_exists($hk, 'setUnitId')) {
+            $hk->setUnitId($unitId);
+        }
+
+        if (method_exists($hk, 'setCity')) {
+            $hk->setCity($city);
+        }
+        if (method_exists($hk, 'setCheckoutDate')) {
+            $hk->setCheckoutDate($checkoutDate);
+        }
+        if (method_exists($hk, 'setCleaningType')) {
+            $hk->setCleaningType($cleaningType);
+        }
+        if (method_exists($hk, 'setO2CollectedFee')) {
+            $hk->setO2CollectedFee($o2Fee);
+        }
+        if (method_exists($hk, 'setBillTo')) {
+            $hk->setBillTo($billTo);
+        }
+        if (method_exists($hk, 'setCostCentre')) {
+            $hk->setCostCentre($costCentre);
+        }
+        if (method_exists($hk, 'setSource')) {
+            $hk->setSource($source);
+        }
+
+        // Explicit nullables (accept null)
+        if (method_exists($hk, 'setBookingId')) {
+            $hk->setBookingId($bookingId);
+        }
+        if (method_exists($hk, 'setReservationCode')) {
+            $hk->setReservationCode($reservationCode);
+        }
+        if (method_exists($hk, 'setAssignedToId')) {
+            $hk->setAssignedToId(null);
+        }
+        if (method_exists($hk, 'setAssignNotes')) {
+            $hk->setAssignNotes(null);
+        }
+        if (method_exists($hk, 'setCleaningCost')) {
+            $hk->setCleaningCost(null);
+        }
+        if (method_exists($hk, 'setLaundryCost')) {
+            $hk->setLaundryCost(null);
+        }
+        if (method_exists($hk, 'setDoneByEmployeeId')) {
+            $hk->setDoneByEmployeeId(null);
+        }
+        if (method_exists($hk, 'setDoneAt')) {
+            $hk->setDoneAt(null);
+        }
+
+        // Set status
+        if (method_exists($hk, 'setStatus')) {
+            if ($statusRaw === 'pending' && \defined(HKCleanings::class.'::STATUS_PENDING')) {
+                $hk->setStatus(HKCleanings::STATUS_PENDING);
+            } elseif ($statusRaw === 'done' && \defined(HKCleanings::class.'::STATUS_DONE')) {
+                $hk->setStatus(HKCleanings::STATUS_DONE);
+            } elseif ($statusRaw === 'cancelled' && \defined(HKCleanings::class.'::STATUS_CANCELLED')) {
+                $hk->setStatus(HKCleanings::STATUS_CANCELLED);
+            } else {
+                $hk->setStatus($statusRaw);
+            }
+        }
+
+        // Set report_status
+        if (method_exists($hk, 'setReportStatus')) {
+            $hk->setReportStatus($reportStatus);
+        }
+
+        $this->em->persist($hk);
+        $this->em->flush();
+
+        // If created as done (Playa only per rules), create/reuse transaction idempotently.
+        $txResult = null;
+        $createdStatus = method_exists($hk, 'getStatus') ? strtolower((string)$hk->getStatus()) : $statusRaw;
+        if ($createdStatus === 'done') {
+            try {
+                if (method_exists($this->hkCleaningManager, 'markDoneAndCreateTransaction')) {
+                    $txResult = $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
+                }
+            } catch (\Throwable $e) {
+                // Do not fail create if tx creation fails
+                return $this->json([
+                    'ok' => true,
+                    'warning' => 'Cleaning created, but transaction could not be created',
+                    'error' => $e->getMessage(),
+                    'data' => [
+                        'id' => $hk->getId(),
+                        'status' => method_exists($hk, 'getStatus') ? $hk->getStatus() : $statusRaw,
+                    ],
+                ], Response::HTTP_OK);
+            }
+        }
+
+        return $this->json([
+            'ok' => true,
+            'data' => [
+                'id' => $hk->getId(),
+                'status' => method_exists($hk, 'getStatus') ? $hk->getStatus() : $statusRaw,
+                'report_status' => method_exists($hk, 'getReportStatus') ? $hk->getReportStatus() : $reportStatus,
+                'transactionId' => is_array($txResult) && array_key_exists('id', $txResult) ? $txResult['id'] : null,
+                'transactionCode' => is_array($txResult) && array_key_exists('transactionCode', $txResult) ? $txResult['transactionCode'] : null,
+            ],
+        ], Response::HTTP_CREATED);
     }
 
     /**
@@ -227,15 +520,31 @@ SQL;
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
         }
 
+        $dirty = false;
+
         // Update status to done if not already
         if (method_exists($hk, 'getStatus') && method_exists($hk, 'setStatus')) {
             if ($hk->getStatus() !== HKCleanings::STATUS_DONE) {
                 $hk->setStatus(HKCleanings::STATUS_DONE);
+                $dirty = true;
             }
         }
 
-        // Persist status change first
-        $this->em->flush();
+        // Auto-set reportStatus for Playa when marking done
+        if (method_exists($hk, 'getCity') && method_exists($hk, 'getReportStatus') && method_exists($hk, 'setReportStatus')) {
+            $city = strtolower(trim((string) $hk->getCity()));
+            $rs   = $hk->getReportStatus();
+            $rs   = $rs === '' ? null : $rs;
+            if ($city === 'playa del carmen' && ($rs === null || $rs === '')) {
+                $hk->setReportStatus('reported');
+                $dirty = true;
+            }
+        }
+
+        // Persist changes first
+        if ($dirty) {
+            $this->em->flush();
+        }
 
         // Delegate transaction creation to the manager (idempotent inside the service)
         $txResult = null;
@@ -346,13 +655,28 @@ public function markDoneBy(Request $request): JsonResponse
         return $this->json(['ok' => false, 'error' => 'Cleaning entry not found'], Response::HTTP_NOT_FOUND);
     }
 
+    $dirty = false;
+
     // Set status to done (only if not already)
     if (method_exists($hk, 'getStatus') && method_exists($hk, 'setStatus')) {
         if ($hk->getStatus() !== HKCleanings::STATUS_DONE) {
             $hk->setStatus(HKCleanings::STATUS_DONE);
-            $this->em->flush();
+            $dirty = true;
         }
-    } else {
+    }
+
+    // Auto-set reportStatus for Playa when marking done
+    if (method_exists($hk, 'getCity') && method_exists($hk, 'getReportStatus') && method_exists($hk, 'setReportStatus')) {
+        $city = strtolower(trim((string) $hk->getCity()));
+        $rs   = $hk->getReportStatus();
+        $rs   = $rs === '' ? null : $rs;
+        if ($city === 'playa del carmen' && ($rs === null || $rs === '')) {
+            $hk->setReportStatus('reported');
+            $dirty = true;
+        }
+    }
+
+    if ($dirty) {
         $this->em->flush();
     }
 
@@ -389,7 +713,7 @@ public function markDoneBy(Request $request): JsonResponse
      * Update an existing hk_cleanings entry.
      *
      * PUT /api/hk-cleanings/{id}
-     * Body JSON: { checkoutDate?: 'YYYY-MM-DD', status?: 'pending'|'done'|'cancelled', cleaningCost?: number|null, o2CollectedFee?: number|null, notes?: string|null }
+     * Body JSON: { checkoutDate?: 'YYYY-MM-DD', status?: 'pending'|'done'|'cancelled', reportStatus?: 'pending'|'reported'|'needs_review', cleaningType?: string, billTo?: string|null, cleaningCost?: number|null, o2CollectedFee?: number|null, notes?: string|null }
      */
     #[Route('/api/hk-cleanings/{id<\d+>}', name: 'api_hk_cleanings_update', methods: ['PUT'])]
     public function updateCleaning(int $id, Request $request): JsonResponse
@@ -404,6 +728,10 @@ public function markDoneBy(Request $request): JsonResponse
         $data = json_decode($request->getContent() ?: '[]', true) ?: [];
 
         $transitionToDone = false;
+        $didTouchCleaningType = false;
+        $incomingCleaningType = null;
+        $didTouchBillTo = false;
+        $incomingBillTo = null;
 
         // checkoutDate
         if (array_key_exists('checkoutDate', $data) && $data['checkoutDate']) {
@@ -414,6 +742,19 @@ public function markDoneBy(Request $request): JsonResponse
                 }
             } catch (\Throwable $e) {
                 return $this->json(['ok' => false, 'error' => 'Invalid checkoutDate; expected YYYY-MM-DD'], Response::HTTP_BAD_REQUEST);
+            }
+        }
+
+        // cleaningType / cleaning_type
+        if (array_key_exists('cleaningType', $data) || array_key_exists('cleaning_type', $data)) {
+            $raw = array_key_exists('cleaningType', $data) ? $data['cleaningType'] : $data['cleaning_type'];
+            $val = is_string($raw) ? strtolower(trim($raw)) : '';
+            if ($val !== '') {
+                $incomingCleaningType = $val;
+                $didTouchCleaningType = true;
+                if (method_exists($hk, 'setCleaningType')) {
+                    $hk->setCleaningType($val);
+                }
             }
         }
 
@@ -442,6 +783,29 @@ public function markDoneBy(Request $request): JsonResponse
             }
         }
 
+        // reportStatus / report_status (manual report state)
+        if (array_key_exists('reportStatus', $data) || array_key_exists('report_status', $data)) {
+            $raw = array_key_exists('reportStatus', $data) ? $data['reportStatus'] : $data['report_status'];
+            $val = $raw;
+
+            if ($val === '' || $val === null) {
+                $val = null;
+            }
+
+            if ($val !== null) {
+                $val = strtolower(trim((string) $val));
+                $allowed = ['pending', 'reported', 'needs_review'];
+                if (!in_array($val, $allowed, true)) {
+                    return $this->json(['ok' => false, 'error' => 'Invalid reportStatus value'], Response::HTTP_BAD_REQUEST);
+                }
+            }
+
+            // Only set if the entity supports it (keeps controller compatible if entity not updated yet)
+            if (method_exists($hk, 'setReportStatus')) {
+                $hk->setReportStatus($val);
+            }
+        }
+
         // cleaningCost
         if (array_key_exists('cleaningCost', $data)) {
             $val = $data['cleaningCost'];
@@ -464,6 +828,20 @@ public function markDoneBy(Request $request): JsonResponse
             }
         }
 
+        // billTo / bill_to
+        if (array_key_exists('billTo', $data) || array_key_exists('bill_to', $data)) {
+            $raw = array_key_exists('billTo', $data) ? $data['billTo'] : $data['bill_to'];
+            if ($raw === '' || $raw === null) {
+                $incomingBillTo = null;
+            } else {
+                $incomingBillTo = (string) $raw;
+            }
+            $didTouchBillTo = true;
+            if (method_exists($hk, 'setBillTo')) {
+                $hk->setBillTo($incomingBillTo);
+            }
+        }
+
         // assign_notes (legacy payload key: notes)
         if (array_key_exists('notes', $data)) {
             $val = $data['notes'];
@@ -475,6 +853,35 @@ public function markDoneBy(Request $request): JsonResponse
 
         $newStatus = method_exists($hk, 'getStatus') ? strtolower((string)$hk->getStatus()) : null;
         $transitionToDone = ($oldStatus !== 'done' && $newStatus === 'done');
+
+        // Enforce bill_to defaulting rule on update:
+        // If cleaning_type is owner AND bill_to is empty AND user did not explicitly set bill_to,
+        // default bill_to to CLIENT.
+        try {
+            $ct = null;
+            if ($didTouchCleaningType && $incomingCleaningType) {
+                $ct = $incomingCleaningType;
+            } elseif (method_exists($hk, 'getCleaningType')) {
+                $ct = strtolower(trim((string) $hk->getCleaningType()));
+            }
+
+            $bt = null;
+            if ($didTouchBillTo) {
+                $bt = $incomingBillTo;
+            } elseif (method_exists($hk, 'getBillTo')) {
+                $bt = $hk->getBillTo();
+            }
+
+            $btEmpty = ($bt === null || (is_string($bt) && trim($bt) === ''));
+
+            if ($ct === strtolower((string)HKCleanings::TYPE_OWNER) && $btEmpty && !$didTouchBillTo) {
+                if (method_exists($hk, 'setBillTo')) {
+                    $hk->setBillTo('CLIENT');
+                }
+            }
+        } catch (\Throwable $e) {
+            // non-fatal
+        }
 
         $this->em->flush();
 

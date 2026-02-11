@@ -145,35 +145,29 @@ class HKTransactionsController extends AbstractController
 
         $this->mapDataToTransaction($transaction, $data, $em);
 
-        // Validate by allocation target
-        $target = $transaction->getAllocationTarget() ?? 'Unit';
+        // Validate
         $unit = $transaction->getUnit();
+        if ($unit === null) {
+            return $this->json([
+                'error' => 'Unit must be set.'
+            ], 400);
+        }
+
         $isHousekeepersUnit = $unit && method_exists($unit, 'getUnitName') && $unit->getUnitName() === 'Housekeepers';
 
-        if ($target === 'Unit') {
-            if ($unit === null) {
-                return $this->json([
-                    'error' => 'Unit must be set when allocationTarget is Unit.'
-                ], 400);
-            }
-            // Ensure city mirrors unit city (except for Housekeepers unit, where city comes from payload)
-            if (!$isHousekeepersUnit && method_exists($unit, 'getCity')) {
-                $transaction->setCity($unit->getCity());
-            }
-        } elseif (in_array($target, ['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'], true)) {
-            // For Housekeepers allocations, require the selected unit to be the Housekeepers unit
-            if (!$isHousekeepersUnit) {
-                return $this->json([
-                    'error' => 'When allocationTarget is a Housekeepers option, the selected unit must be the Housekeepers unit.'
-                ], 400);
-            }
+        // For the Housekeepers unit, city is required and must be one of the allowed values.
+        // For normal units, city mirrors the unit city.
+        if ($isHousekeepersUnit) {
             $city = $transaction->getCity();
             if ($city === null || !in_array($city, self::ALLOWED_CITIES, true)) {
                 return $this->json([
-                    'error' => 'City is required when allocationTarget is Housekeepers_* and must be one of: Playa del Carmen, Tulum, General.'
+                    'error' => 'City is required for Housekeepers unit and must be one of: Playa del Carmen, Tulum, General.'
                 ], 400);
             }
-            // City is taken from the payload; do not override.
+        } else {
+            if (method_exists($unit, 'getCity')) {
+                $transaction->setCity($unit->getCity());
+            }
         }
 
         $em->persist($transaction);
@@ -251,35 +245,29 @@ class HKTransactionsController extends AbstractController
 
         $this->mapDataToTransaction($transaction, $data, $em);
 
-        // Validate by allocation target
-        $target = $transaction->getAllocationTarget() ?? 'Unit';
+        // Validate
         $unit = $transaction->getUnit();
+        if ($unit === null) {
+            return $this->json([
+                'error' => 'Unit must be set.'
+            ], 400);
+        }
+
         $isHousekeepersUnit = $unit && method_exists($unit, 'getUnitName') && $unit->getUnitName() === 'Housekeepers';
 
-        if ($target === 'Unit') {
-            if ($unit === null) {
-                return $this->json([
-                    'error' => 'Unit must be set when allocationTarget is Unit.'
-                ], 400);
-            }
-            // Ensure city mirrors unit city (except for Housekeepers unit, where city comes from payload)
-            if (!$isHousekeepersUnit && method_exists($unit, 'getCity')) {
-                $transaction->setCity($unit->getCity());
-            }
-        } elseif (in_array($target, ['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'], true)) {
-            // For Housekeepers allocations, require the selected unit to be the Housekeepers unit
-            if (!$isHousekeepersUnit) {
-                return $this->json([
-                    'error' => 'When allocationTarget is a Housekeepers option, the selected unit must be the Housekeepers unit.'
-                ], 400);
-            }
+        // For the Housekeepers unit, city is required and must be one of the allowed values.
+        // For normal units, city mirrors the unit city.
+        if ($isHousekeepersUnit) {
             $city = $transaction->getCity();
             if ($city === null || !in_array($city, self::ALLOWED_CITIES, true)) {
                 return $this->json([
-                    'error' => 'City is required when allocationTarget is Housekeepers_* and must be one of: Playa del Carmen, Tulum, General.'
+                    'error' => 'City is required for Housekeepers unit and must be one of: Playa del Carmen, Tulum, General.'
                 ], 400);
             }
-            // City is taken from the payload; do not override.
+        } else {
+            if (method_exists($unit, 'getCity')) {
+                $transaction->setCity($unit->getCity());
+            }
         }
 
         $em->flush();
@@ -346,15 +334,29 @@ class HKTransactionsController extends AbstractController
             }
         }
 
-        // Allocation Target (optional in payload; defaults to entity default 'Unit')
+        // Allocation Target (who we charge): Client | Owners2 | Guest | Housekeepers
+        // Backward compatibility:
+        //  - 'Unit' => 'Client'
+        //  - 'Housekeepers_Playa'/'Housekeepers_Tulum'/'Housekeepers_General'/'Housekeepers_Both' => 'Housekeepers'
         if (array_key_exists('allocationTarget', $data)) {
             $target = $data['allocationTarget'];
             if ($target === 'Housekeepers_Both') {
-                $target = 'Housekeepers_General';
+                $target = 'Housekeepers';
             }
-            if (in_array($target, ['Unit', 'Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'], true)) {
+            if (in_array($target, ['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'], true)) {
+                $target = 'Housekeepers';
+            }
+            if ($target === 'Unit') {
+                $target = 'Client';
+            }
+            if (in_array($target, ['Client', 'Owners2', 'Guest', 'Housekeepers'], true)) {
                 $transaction->setAllocationTarget($target);
             }
+        }
+
+        // If no allocationTarget was provided, map legacy default 'Unit' to 'Client'
+        if ($transaction->getAllocationTarget() === 'Unit') {
+            $transaction->setAllocationTarget('Client');
         }
 
         // Unit & City mapping
@@ -395,52 +397,24 @@ class HKTransactionsController extends AbstractController
             } // else leave existing city as-is (useful for PUT when not changing city)
         }
 
-        // Enforce allocationTarget for Housekeepers unit: never leave it as 'Unit'
-        $unit = $transaction->getUnit();
-        $isHousekeepersUnit = $unit && method_exists($unit, 'getUnitName') && $unit->getUnitName() === 'Housekeepers';
-        if ($isHousekeepersUnit) {
-            $currentTarget = $transaction->getAllocationTarget();
-            if ($currentTarget === 'Housekeepers_Both') {
-                $currentTarget = 'Housekeepers_General';
-                $transaction->setAllocationTarget('Housekeepers_General');
-            }
-            $hkTargets = ['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'];
-            if (!in_array($currentTarget, $hkTargets, true)) {
-                $cityForHK = $transaction->getCity();
-                if ($cityForHK === 'Playa del Carmen') {
-                    $transaction->setAllocationTarget('Housekeepers_Playa');
-                } elseif ($cityForHK === 'Tulum') {
-                    $transaction->setAllocationTarget('Housekeepers_Tulum');
-                } else {
-                    // Default to General when city is General or missing
-                    $transaction->setAllocationTarget('Housekeepers_General');
-                }
-            }
+        // (allocationTarget enforcement for Housekeepers unit removed per new model)
+
+        // Enforce costCentre (internal bucket) based on city
+        // Requested mapping:
+        //  - Tulum => HK_Tulum
+        //  - Playa del Carmen => HK_Playa
+        //  - General/other => HK_General
+        // Note: City has already been finalized above (normal units mirror Unit.city; Housekeepers unit uses payload city).
+        $cityForCostCentre = $transaction->getCity();
+        if ($cityForCostCentre === 'Playa del Carmen') {
+            $transaction->setCostCentre('HK_Playa');
+        } elseif ($cityForCostCentre === 'Tulum') {
+            $transaction->setCostCentre('HK_Tulum');
+        } else {
+            $transaction->setCostCentre('HK_General');
         }
 
-        // Enforce costCentre for Housekeepers unit based on city
-        $unit = $transaction->getUnit();
-        $isHousekeepersUnit = $unit && method_exists($unit, 'getUnitName') && $unit->getUnitName() === 'Housekeepers';
-        if ($isHousekeepersUnit) {
-            $cityForHK = $transaction->getCity();
-            if ($cityForHK === 'Playa del Carmen') {
-                $transaction->setCostCentre('Housekeepers_Playa');
-            } elseif ($cityForHK === 'Tulum') {
-                $transaction->setCostCentre('Housekeepers_Tulum');
-            } else {
-                // Default to General when city is General or missing
-                $transaction->setCostCentre('Housekeepers_General');
-            }
-        }
-
-        // Final guard: if target is Unit and unit is set, force city from unit
-        if ($transaction->getAllocationTarget() === 'Unit' && $transaction->getUnit()) {
-            $unit = $transaction->getUnit();
-            $isHousekeepersUnit = method_exists($unit, 'getUnitName') && $unit->getUnitName() === 'Housekeepers';
-            if (!$isHousekeepersUnit && method_exists($unit, 'getCity')) {
-                $transaction->setCity($unit->getCity());
-            }
-        }
+        // (Final guard for allocationTarget === 'Unit' removed per new model)
     }
 
     #[Route('/{id}', name: 'delete', methods: ['DELETE'])]

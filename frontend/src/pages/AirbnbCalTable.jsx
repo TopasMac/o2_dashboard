@@ -75,6 +75,12 @@ function SummaryBar({ data, lastSync, onLastSyncClick }) {
 
 export default function AirbnbCalTable() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const currentYearMonth = useMemo(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+  }, []);
   const minYearMonth = useMemo(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1); // previous month
@@ -89,8 +95,8 @@ export default function AirbnbCalTable() {
   const [backPath, setBackPath] = useState('');
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
   const [unit, setUnit] = useState('');
-  // Year-month filter in the form 'YYYY-MM'; empty string means no month selected
-  const [yearMonth, setYearMonth] = useState('');
+  // Year-month filter in the form 'YYYY-MM'; default to current month so backend requests include from/to
+  const [yearMonth, setYearMonth] = useState(currentYearMonth);
   const [dry, setDry] = useState(false);
   const [hideAck, setHideAck] = useState(true);
   const [onlyConflicts, setOnlyConflicts] = useState(true);
@@ -130,10 +136,31 @@ export default function AirbnbCalTable() {
       setLoading(true);
       setError('');
 
+      // If a month is selected, restrict the backend reconcile window to that month
+      let from = undefined;
+      let to = undefined;
+      if (yearMonth) {
+        const m = String(yearMonth).match(/^(\d{4})-(\d{2})$/);
+        if (m) {
+          const yyyy = Number(m[1]);
+          const mm = Number(m[2]); // 1-12
+          if (yyyy && mm >= 1 && mm <= 12) {
+            const mmStr = String(mm).padStart(2, '0');
+            // First day of month
+            from = `${yyyy}-${mmStr}-01`;
+            // Last day of month: day 0 of next month
+            const lastDay = new Date(yyyy, mm, 0).getDate();
+            to = `${yyyy}-${mmStr}-${String(lastDay).padStart(2, '0')}`;
+          }
+        }
+      }
+
       const json = await fetchIcalReconcile({
         unit: unit || undefined,
-        dry,
+        dry: 1,
         hideAck: hideAck ? 1 : 0,
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
       });
       setResp(json?.data || null);
       setMeta(json?.meta || null);
@@ -142,7 +169,7 @@ export default function AirbnbCalTable() {
     } finally {
       setLoading(false);
     }
-  }, [unit, dry, hideAck]);
+  }, [unit, hideAck, yearMonth]);
 
   // --- Robust drawer transition and scroll/refresh fixes ---
   const prevDrawerOpenRef = React.useRef(false);

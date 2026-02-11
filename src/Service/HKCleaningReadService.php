@@ -99,7 +99,13 @@ class HKCleaningReadService
         $sql[] = "SELECT hc.id, hc.unit_id, COALESCE(u.unit_name, CONCAT('Unit #', hc.unit_id)) AS unit_name, ";
         $sql[] = '       u.id AS unit_table_id, u.status AS unit_status, u.cleaning_fee AS unit_cleaning_fee,';
         $sql[] = '       hc.city, u.city AS unit_city, hc.checkout_date, hc.cleaning_type, hc.status,';
-        $sql[] = '       hc.cleaning_cost, hc.o2_collected_fee, hc.booking_id, hc.reservation_code,';
+        $sql[] = '       hc.cleaning_cost, hc.laundry_cost, hc.o2_collected_fee, hc.bill_to, hc.source, hc.report_status, hc.booking_id, hc.reservation_code,';
+        $sql[] = "       CASE\n".
+                 "         WHEN hcr.real_cleaning_cost IS NOT NULL THEN hcr.real_cleaning_cost\n".
+                 "         WHEN LOWER(hc.city) = 'tulum' THEN (COALESCE(hc.cleaning_cost,0) + COALESCE(hc.laundry_cost,0))\n".
+                 "         WHEN LOWER(hc.city) = 'playa del carmen' THEN 0\n".
+                 "         ELSE NULL\n".
+                 "       END AS real_cleaning_cost,";
         $sql[] = '       r.amount AS unit_rate_amount,';
         $sql[] = '       hc.assign_notes AS notes, hc.created_at,';
         $sql[] = '       cc.id AS checklist_id, cc.cleaning_id AS checklist_cleaning_id,';
@@ -108,12 +114,18 @@ class HKCleaningReadService
         $sql[] = '       cc.cleaning_notes AS checklist_cleaning_notes';
         $sql[] = 'FROM hk_cleanings hc';
         $sql[] = 'LEFT JOIN unit u ON u.id = hc.unit_id';
+        $sql[] = 'LEFT JOIN hk_cleanings_reconcile hcr ON hcr.hk_cleaning_id = hc.id';
         // Join the active HKUnitCleaningRate for this unit/city on the checkout date (latest effective_from before date, within effective_to)
-        $sql[] = 'LEFT JOIN hk_unit_cleaning_rate r ON r.unit_id = hc.unit_id AND r.effective_from = ('
-                . 'SELECT MAX(r2.effective_from) FROM hk_unit_cleaning_rate r2 '
-                . 'WHERE r2.unit_id = hc.unit_id '
-                . 'AND r2.effective_from <= hc.checkout_date '
-                . 'AND (r2.effective_to IS NULL OR r2.effective_to >= hc.checkout_date)'
+        $sql[] = 'LEFT JOIN hk_unit_cleaning_rate r '
+                . 'ON r.unit_id = hc.unit_id '
+                . 'AND r.city = hc.city '
+                . 'AND r.effective_from = ('
+                . '  SELECT MAX(r2.effective_from) '
+                . '  FROM hk_unit_cleaning_rate r2 '
+                . '  WHERE r2.unit_id = hc.unit_id '
+                . '    AND r2.city = hc.city '
+                . '    AND r2.effective_from <= hc.checkout_date '
+                . '    AND (r2.effective_to IS NULL OR r2.effective_to >= hc.checkout_date)'
                 . ')';
         // Join latest checklist row per cleaning (highest id)
         $sql[] = 'LEFT JOIN hk_cleaning_checklist cc ON cc.id = ('
@@ -135,6 +147,13 @@ class HKCleaningReadService
             // Cast numeric fields
             $r['cleaning_cost'] = isset($r['cleaning_cost']) ? (float)$r['cleaning_cost'] : null;
             $r['o2_collected_fee'] = isset($r['o2_collected_fee']) ? (float)$r['o2_collected_fee'] : null;
+            $r['laundry_cost'] = array_key_exists('laundry_cost', $r) && $r['laundry_cost'] !== null ? (float)$r['laundry_cost'] : null;
+            $r['bill_to'] = array_key_exists('bill_to', $r) && $r['bill_to'] !== null ? (string)$r['bill_to'] : null;
+            $r['source'] = array_key_exists('source', $r) && $r['source'] !== null ? (string)$r['source'] : null;
+            $r['report_status'] = array_key_exists('report_status', $r) && $r['report_status'] !== null ? (string)$r['report_status'] : null;
+            $r['real_cleaning_cost'] = array_key_exists('real_cleaning_cost', $r) && $r['real_cleaning_cost'] !== null
+                ? (float)$r['real_cleaning_cost']
+                : null;
             if (array_key_exists('unit_rate_amount', $r)) {
                 $r['unit_rate_amount'] = $r['unit_rate_amount'] !== null ? (float)$r['unit_rate_amount'] : null;
             }
@@ -176,14 +195,19 @@ class HKCleaningReadService
               SELECT r.amount
               FROM hk_unit_cleaning_rate r
               WHERE r.unit_id = u.id
+                AND r.city = u.city
+                AND (r.effective_to IS NULL OR r.effective_to >= CURDATE())
                 AND r.effective_from = (
                   SELECT MAX(r2.effective_from)
                   FROM hk_unit_cleaning_rate r2
                   WHERE r2.unit_id = u.id
+                    AND r2.city = u.city
+                    AND (r2.effective_to IS NULL OR r2.effective_to >= CURDATE())
                 )
+              LIMIT 1
             ) AS unit_rate_amount
           FROM unit u
-          WHERE u.status = 'Active'
+          WHERE u.status IN ('Active','Onboarding')
           ORDER BY u.unit_name ASC";
         $units = $this->conn->fetchAllAssociative($unitsSql);
         foreach ($units as &$u) {

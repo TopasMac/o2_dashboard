@@ -363,7 +363,7 @@
   {# ---- Precompute CLIENT private total for Summary ---- #}
   {% set _isClient = (_payMode|upper == 'CLIENT') %}
   {% set _bookingsCandidate = reservas|default(bookings|default([])) %}
-  {% set bookingsAll = _bookingsCandidate.rows|default(_bookingsCandidate|default([])) %}
+  {% set bookingsAll = (_bookingsCandidate.rows is defined) ? _bookingsCandidate.rows : _bookingsCandidate %}
   {% set _rows_private = [] %}
   {% if bookingsAll %}
     {% for _r in bookingsAll %}
@@ -562,7 +562,7 @@
 
   {# ===== Bookings (card) ===== #}
   {% set _bookingsCandidate = reservas|default(bookings|default([])) %}
-  {% set bookings = _bookingsCandidate.rows|default(_bookingsCandidate|default([])) %}
+  {% set bookings = (_bookingsCandidate.rows is defined) ? _bookingsCandidate.rows : _bookingsCandidate %}
   {# Scaffolding for CLIENT layout mirroring legacy template #}
   {% set _isClient = (_payMode|upper == 'CLIENT') %}
   {% set rows_airbnb = [] %}

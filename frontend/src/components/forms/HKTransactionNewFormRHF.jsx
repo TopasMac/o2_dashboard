@@ -42,6 +42,21 @@ export default function HKTransactionNewFormRHF({
   const effectiveInitial = defaultValues && Object.keys(defaultValues).length
     ? { ...initialValues, ...defaultValues }
     : initialValues;
+
+  // Compute costCentre and allocationTarget default values according to new backend semantics
+  const initCity = effectiveInitial.city || '';
+  const initCityKey = (initCity ?? '').toString().trim().toLowerCase();
+  const initCostCentre = (initCityKey === 'tulum')
+    ? 'HK_Tulum'
+    : ((initCityKey === 'playa del carmen' || initCityKey === 'playa') ? 'HK_Playa' : 'HK_General');
+
+  // Normalize incoming allocationTarget (backward compatible)
+  let initAllocationTarget = effectiveInitial.allocationTarget || effectiveInitial.allocation_target || 'Client';
+  if (initAllocationTarget === 'Unit') initAllocationTarget = 'Client';
+  if (initAllocationTarget === 'Housekeepers_Both') initAllocationTarget = 'Housekeepers';
+  if (['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'].includes(initAllocationTarget)) initAllocationTarget = 'Housekeepers';
+  if (!['Client', 'Owners2', 'Guest', 'Housekeepers'].includes(initAllocationTarget)) initAllocationTarget = 'Client';
+
   const methods = useForm({
     defaultValues: {
       date: effectiveInitial.date || new Date().toISOString().slice(0,10),
@@ -56,7 +71,8 @@ export default function HKTransactionNewFormRHF({
       doc2: effectiveInitial.doc2 || null,
       mirrorToO2: effectiveInitial.mirrorToO2 ?? false,
       city: effectiveInitial.city || '',
-      costCentre: effectiveInitial.costCentre || '',
+      costCentre: initCostCentre,
+      allocationTarget: initAllocationTarget,
     },
     mode: 'onChange',
   });
@@ -65,7 +81,8 @@ export default function HKTransactionNewFormRHF({
   const [units, setUnits] = React.useState(unitOptions || []);
   const [categories, setCategories] = React.useState(categoryOptions || []);
   const [cityOptions, setCityOptions] = React.useState(['Playa del Carmen', 'Tulum', 'General']);
-  const [costCentreOptions, setCostCentreOptions] = React.useState(['Client', 'Owners2']);
+  const [costCentreOptions, setCostCentreOptions] = React.useState(['HK_General']);
+  const [allocationTargetOptions] = React.useState(['Client', 'Owners2', 'Guest', 'Housekeepers']);
   const [hkEmployeeOptions, setHkEmployeeOptions] = React.useState([]);
   const norm = (s) => (s ?? '').toString().trim().toLowerCase();
 
@@ -123,25 +140,17 @@ export default function HKTransactionNewFormRHF({
 
   const cityVal = watch('city');
   React.useEffect(() => {
-    const u = units.find(x => String(x.id) === String(selectedUnitId));
     const current = watch('costCentre');
-    if (u && norm(u.unitName) === 'housekeepers') {
-      // Build by city: Playa del Carmen -> Housekeepers_Playa, Tulum -> Housekeepers_Tulum, General/other -> Housekeepers_General
-      let cc = 'Housekeepers_General';
-      if (norm(cityVal) === 'tulum') cc = 'Housekeepers_Tulum';
-      else if (norm(cityVal) === 'playa del carmen' || norm(cityVal) === 'playa') cc = 'Housekeepers_Playa';
-      setCostCentreOptions([cc]);
-      if (current !== cc) {
-        setValue('costCentre', cc, { shouldValidate: true, shouldDirty: true });
-      }
-    } else {
-      // Other units: dropdown Client / Owners2, default Client
-      setCostCentreOptions(['Client', 'Owners2']);
-      if (!current || !['Client', 'Owners2'].includes(current)) {
-        setValue('costCentre', 'Client', { shouldValidate: true, shouldDirty: true });
-      }
+    let cc = 'HK_General';
+    const c = norm(cityVal);
+    if (c === 'tulum') cc = 'HK_Tulum';
+    else if (c === 'playa del carmen' || c === 'playa') cc = 'HK_Playa';
+
+    setCostCentreOptions([cc]);
+    if (current !== cc) {
+      setValue('costCentre', cc, { shouldValidate: true, shouldDirty: true });
     }
-  }, [selectedUnitId, cityVal, units, setValue, watch]);
+  }, [cityVal, setValue, watch]);
 
   const [categoryType, setCategoryType] = React.useState(null); // 'Gasto' | 'Ingreso' | 'Both' | null
 
@@ -223,7 +232,7 @@ export default function HKTransactionNewFormRHF({
   }, [isNomina]);
 
   const paidVal = watch('paid');
-  const costCentreVal = watch('costCentre');
+  const allocationTargetVal = watch('allocationTarget');
 
   // When this form is opened from EmployeeCash allocation (sourceType = 'employeeCash')
   // and we already have a Paid value but no Charged, call the markup API once to prefill Charged.
@@ -258,7 +267,7 @@ export default function HKTransactionNewFormRHF({
   React.useEffect(() => {
     // Guard conditions
     const cat = categories.find(c => String(c.id) === String(catId));
-    const shouldCalc = cat && inMarkupCategories(cat.name) && costCentreVal === 'Client';
+    const shouldCalc = cat && inMarkupCategories(cat.name) && allocationTargetVal === 'Client';
     const amountNum = paidVal === '' || paidVal == null ? NaN : Number(paidVal);
     if (!shouldCalc || !isFinite(amountNum) || amountNum <= 0) return;
     if (userEditedChargedRef.current) return; // user already typed charged, don't overwrite
@@ -279,30 +288,23 @@ export default function HKTransactionNewFormRHF({
     })();
 
     return () => { cancelled = true; };
-  }, [paidVal, costCentreVal, catId, categories, setValue]);
+  }, [paidVal, allocationTargetVal, catId, categories, setValue]);
 
   const onSubmit = (values) => {
-    // Derive allocationTarget for Housekeepers (unitId 29); else default to 'Unit'
-    let allocationTarget = 'Unit';
-    try {
-      if (String(values.unitId) === '29') {
-        const c = norm(values.city);
-        if (c === 'tulum') allocationTarget = 'Housekeepers_Tulum';
-        else if (c === 'playa del carmen' || c === 'playa') allocationTarget = 'Housekeepers_Playa';
-        else allocationTarget = 'Housekeepers_General';
-      }
-    } catch (e) {
-      // fall back to 'Unit' if anything goes wrong
-      allocationTarget = 'Unit';
+    // Normalize allocationTarget to new model
+    let allocationTarget = values.allocationTarget || initAllocationTarget || 'Client';
+    if (allocationTarget === 'Unit') allocationTarget = 'Client';
+    if (allocationTarget === 'Housekeepers_Both') allocationTarget = 'Housekeepers';
+    if (['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'].includes(allocationTarget)) {
+      allocationTarget = 'Housekeepers';
+    }
+    if (!['Client', 'Owners2', 'Guest', 'Housekeepers'].includes(allocationTarget)) {
+      allocationTarget = 'Client';
     }
 
-    // Ensure costCentre mirrors HK target when HK unit selected
-    let costCentreOut = values.costCentre || effectiveInitial.costCentre;
-    if (String(values.unitId) === '29') {
-      costCentreOut = allocationTarget;
-    }
+    // costCentre is HK_* derived from city (also enforced by backend)
+    const costCentreOut = values.costCentre || initCostCentre || 'HK_General';
 
-    // Normalize: ensure monetary fields are numbers (RHFTextField with isMoney already normalizes decimals)
     const payload = {
       date: values.date,
       allocationTarget,
@@ -383,13 +385,24 @@ export default function HKTransactionNewFormRHF({
       </div>
       <div style={widthMap.full}>
         <RHFSelect
+          name="allocationTarget"
+          label="Allocation Target"
+          options={allocationTargetOptions}
+          getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
+          getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
+          widthVariant="full"
+        />
+      </div>
+
+      <div style={widthMap.full}>
+        <RHFSelect
           name="costCentre"
           label="Cost Centre"
           options={costCentreOptions}
           getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
           getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
           widthVariant="full"
-          disabled={Array.isArray(costCentreOptions) && costCentreOptions.length === 1}
+          disabled
         />
       </div>
       {isNomina ? (

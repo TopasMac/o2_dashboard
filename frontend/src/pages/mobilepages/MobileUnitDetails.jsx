@@ -88,7 +88,12 @@ export default function MobileUnitDetails() {
     (async () => {
       try {
         setLoading(true);
-        const resp = await api.get('/api/units', { params: { pagination: false } });
+        const resp = await api.get('/api/units', {
+          params: {
+            pagination: false,
+            lifecycle: 'active,onboarding',
+          },
+        });
         const data = resp?.data ?? {};
         const list = Array.isArray(data?.['hydra:member'])
           ? data['hydra:member']

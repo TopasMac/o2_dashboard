@@ -13,7 +13,8 @@ class HKCleanings
 {
     public const TYPE_CHECKOUT = 'checkout';
     public const TYPE_MIDSTAY  = 'midstay';
-    public const TYPE_DEEP     = 'deep';
+    public const TYPE_REFRESH  = 'refresh';
+    public const TYPE_INITIAL  = 'initial';
     public const TYPE_OWNER    = 'owner';
     public const TYPE_REDO     = 'redo';
 
@@ -21,11 +22,20 @@ class HKCleanings
     public const BILL_TO_CLIENT  = 'CLIENT';
     public const BILL_TO_GUEST   = 'GUEST';
 
+    public const COST_CENTRE_HK_PLAYA = 'HK_Playa';
+    public const COST_CENTRE_HK_TULUM = 'HK_Tulum';
+    public const COST_CENTRE_GENERAL  = 'HK_General';
+
     public const STATUS_SCHEDULED = 'scheduled';
     public const STATUS_DONE      = 'done';
     public const STATUS_PAID      = 'paid';
     public const STATUS_PENDING   = 'pending';
     public const STATUS_CANCELLED = 'cancelled';
+
+    // Housekeeper report workflow (separate from cleaning workflow status)
+    public const REPORT_STATUS_PENDING      = 'pending';
+    public const REPORT_STATUS_REPORTED     = 'reported';
+    public const REPORT_STATUS_NEEDS_REVIEW = 'needs_review';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -70,6 +80,21 @@ class HKCleanings
         return $this;
     }
 
+    // Internal accounting destination (where the cost/revenue is recorded)
+    #[ORM\Column(name: 'cost_centre', type: 'string', length: 32, nullable: true)]
+    private ?string $costCentre = null;
+
+    public function getCostCentre(): ?string
+    {
+        return $this->costCentre;
+    }
+
+    public function setCostCentre(?string $costCentre): self
+    {
+        $this->costCentre = $costCentre;
+        return $this;
+    }
+
     // Fee actually collected by O2 (optional, may differ)
     #[ORM\Column(name: 'o2_collected_fee', type: 'decimal', precision: 10, scale: 2, nullable: true)]
     private ?string $o2CollectedFee = null;
@@ -88,6 +113,21 @@ class HKCleanings
     // Workflow status
     #[ORM\Column(type: 'string', length: 16)]
     private string $status = self::STATUS_PENDING;
+
+    // Housekeeper report status (manual amounts entered / review state)
+    #[ORM\Column(name: 'report_status', type: 'string', length: 16, nullable: true)]
+    private ?string $reportStatus = null;
+
+    public function getReportStatus(): ?string
+    {
+        return $this->reportStatus;
+    }
+
+    public function setReportStatus(?string $reportStatus): self
+    {
+        $this->reportStatus = $reportStatus;
+        return $this;
+    }
 
     // Optional worker reference by id (keep simple for now)
     #[ORM\Column(name: 'assigned_to_id', type: 'integer', nullable: true)]
@@ -315,11 +355,44 @@ class HKCleanings
                 $this->billTo = self::BILL_TO_CLIENT;
             }
         }
+
+        // Default cost_centre based on city (can be overridden later)
+        if ($this->costCentre === null) {
+            $city = strtolower(trim((string)($this->city ?? '')));
+            if ($city === strtolower('Playa del Carmen')) {
+                $this->costCentre = self::COST_CENTRE_HK_PLAYA;
+            } elseif ($city === strtolower('Tulum')) {
+                $this->costCentre = self::COST_CENTRE_HK_TULUM;
+            } else {
+                $this->costCentre = self::COST_CENTRE_GENERAL;
+            }
+        }
+
+        // Default report_status:
+        // - Playa del Carmen: if the cleaning is already DONE at creation time, assume it's reported
+        // - Tulum (and others): default pending
+        if ($this->reportStatus === null) {
+            $city = strtolower(trim((string)($this->city ?? '')));
+            if ($city === strtolower('Playa del Carmen') && $this->status === self::STATUS_DONE) {
+                $this->reportStatus = self::REPORT_STATUS_REPORTED;
+            } else {
+                $this->reportStatus = self::REPORT_STATUS_PENDING;
+            }
+        }
     }
 
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable('now');
+
+        // Playa del Carmen convenience: when a cleaning becomes DONE,
+        // auto-mark report_status as REPORTED unless it was explicitly set to NEEDS_REVIEW.
+        if ($this->reportStatus === null || $this->reportStatus === self::REPORT_STATUS_PENDING) {
+            $city = strtolower(trim((string)($this->city ?? '')));
+            if ($city === strtolower('Playa del Carmen') && $this->status === self::STATUS_DONE) {
+                $this->reportStatus = self::REPORT_STATUS_REPORTED;
+            }
+        }
     }
 }

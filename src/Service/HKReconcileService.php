@@ -2,7 +2,7 @@
 
 namespace App\Service;
 
-use App\Entity\HKCleaningsReconcile;
+use App\Entity\HKCleanings;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -38,66 +38,99 @@ class HKReconcileService
 
         $expectedByUnitId = $this->loadExpectedCostsByUnitId($city, $asOf);
 
-        /** @var HKCleaningsReconcile[] $reconRows */
-        $reconRows = $this->em->createQueryBuilder()
-            ->select('r', 'u')
-            ->from(HKCleaningsReconcile::class, 'r')
-            ->leftJoin('r.unit', 'u')
-            ->where('r.reportMonth = :m')
-            ->andWhere('r.city = :c')
-            ->setParameter('m', $month)
+        // Load DONE hk_cleanings rows for this month + city.
+        // NOTE: Reconciliation is now a view/editor over hk_cleanings (single source of truth).
+        $start = $asOf->format('Y-m-01');
+        $end   = $asOf->format('Y-m-t');
+
+        /** @var HKCleanings[] $cleanings */
+        $cleanings = $this->em->createQueryBuilder()
+            ->select('hc', 'u')
+            ->from(HKCleanings::class, 'hc')
+            ->leftJoin('hc.unit', 'u')
+            // city may be stored on hk_cleanings or unit; prefer unit when present
+            ->andWhere('COALESCE(u.city, hc.city) = :c')
+            ->andWhere('hc.checkoutDate BETWEEN :d1 AND :d2')
+            ->andWhere('LOWER(COALESCE(hc.status, \'\')) = \'done\'')
             ->setParameter('c', $city)
-            ->orderBy('r.serviceDate', 'ASC')
+            ->setParameter('d1', new \DateTimeImmutable($start))
+            ->setParameter('d2', new \DateTimeImmutable($end))
+            ->orderBy('hc.checkoutDate', 'ASC')
             ->addOrderBy('u.unitName', 'ASC')
             ->getQuery()
             ->getResult();
 
-        $sumExpected = 0.0;
-        $sumCharged  = 0.0;
+        $sumCharged = 0.0;
+        $sumCost = 0.0;
 
         $rows = [];
-        foreach ($reconRows as $r) {
-            $unitId = $r->getUnit()?->getId();
+        foreach ($cleanings as $hc) {
+            $unitId = $hc->getUnit()?->getId();
+
             $expected = ($unitId && array_key_exists($unitId, $expectedByUnitId))
                 ? $expectedByUnitId[$unitId]
                 : null;
 
-            $charged = $this->toFloat($r->getTotalCost());
-            $expectedF = $expected !== null ? $this->toFloat($expected) : null;
-
-            $diff = ($expectedF !== null) ? ($charged - $expectedF) : null;
-
-            if ($expectedF !== null) {
-                $sumExpected += $expectedF;
+            // Charged cost for reconciliation = o2CollectedFee if present, else unit cleaning fee, else 0
+            if (method_exists($hc, 'getO2CollectedFee') && $hc->getO2CollectedFee() !== null && $hc->getO2CollectedFee() !== '') {
+                $chargedF = $this->toFloat($hc->getO2CollectedFee());
+            } elseif ($hc->getUnit() !== null && method_exists($hc->getUnit(), 'getCleaningFee')) {
+                $chargedF = $this->toFloat($hc->getUnit()->getCleaningFee());
+            } else {
+                $chargedF = 0.0;
             }
-            $sumCharged += $charged;
+
+            // Total cost = cleaning_cost + laundry_cost
+            $cleaningCostF = $this->toFloat(method_exists($hc, 'getCleaningCost') ? $hc->getCleaningCost() : null);
+            $laundryCostF  = $this->toFloat(method_exists($hc, 'getLaundryCost') ? $hc->getLaundryCost() : null);
+            $totalCostF    = $cleaningCostF + $laundryCostF;
+
+            $diff = $chargedF - $totalCostF;
+
+            $sumCharged += $chargedF;
+            $sumCost += $totalCostF;
+
+            $serviceDate = $hc->getCheckoutDate();
 
             $rows[] = [
-                // original fields
-                'id'            => $r->getId(),
+                // hk_cleanings identifiers
+                'id'            => $hc->getId(),
+                'hk_cleaning_id'=> $hc->getId(),
+                'booking_id'    => method_exists($hc, 'getBookingId') ? $hc->getBookingId() : null,
+
+                // core display fields
                 'unit_id'       => $unitId,
-                'unit_name'     => $r->getUnit()?->getUnitName(),
-                'service_date'  => $r->getServiceDate()->format('Y-m-d'),
-                'cleaning_cost' => $r->getCleaningCost(),
-                'laundry_cost'  => $r->getLaundryCost(),
-                'total_cost'    => $r->getTotalCost(),
-                'notes'         => $r->getNotes(),
+                'unit_name'     => $hc->getUnit()?->getUnitName(),
+                'service_date'  => $serviceDate?->format('Y-m-d'),
+                'cleaning_type' => method_exists($hc, 'getCleaningType') ? $hc->getCleaningType() : null,
+
+                // costs (as stored)
+                'cleaning_cost' => method_exists($hc, 'getCleaningCost') ? $hc->getCleaningCost() : null,
+                'laundry_cost'  => method_exists($hc, 'getLaundryCost') ? $hc->getLaundryCost() : null,
+                'total_cost'    => $this->fmt2($totalCostF),
+
+                // reconciliation meta
+                'bill_to'       => method_exists($hc, 'getBillTo') ? $hc->getBillTo() : null,
+                'source'        => method_exists($hc, 'getSource') ? $hc->getSource() : null,
+                'report_status' => method_exists($hc, 'getReportStatus') ? $hc->getReportStatus() : null,
+
+                'notes'         => method_exists($hc, 'getNotes') ? $hc->getNotes() : null,
 
                 // computed fields for reconciliation
-                'expected_cost' => $expected, // string decimal or null
-                'charged_cost'  => $this->fmt2($charged), // string decimal
-                'diff'          => $diff !== null ? $this->fmt2($diff) : null,
+                'expected_cost' => $expected,
+                'charged_cost'  => $this->fmt2($chargedF),
+                'diff'          => $this->fmt2($diff),
             ];
         }
 
-        $sumDiff = $sumCharged - $sumExpected;
+        $sumDiff = $sumCharged - $sumCost;
 
         return [
             'month' => $month,
             'city' => $city,
             'rows' => $rows,
             'totals' => [
-                'expected' => $this->fmt2($sumExpected),
+                'expected' => $this->fmt2(0.0),
                 'charged'  => $this->fmt2($sumCharged),
                 'diff'     => $this->fmt2($sumDiff),
             ],

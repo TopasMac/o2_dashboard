@@ -18,6 +18,7 @@ class ReportV2Controller extends AbstractController
     ) {
     }
 
+
     /**
      * V2 Unit Report preview (HTML or PDF).
      *
@@ -159,7 +160,18 @@ class ReportV2Controller extends AbstractController
             'footer-line'   => false,
 
             'no-outline'    => true,
-            'quiet'         => true,
+            // Allow debug via ?wkdebug=1 (prints wkhtml errors/warnings instead of swallowing them)
+            'quiet'         => $request->query->getBoolean('wkdebug') ? false : true,
+
+            // Be resilient to slow/missing external assets; prevents long hangs on broken URLs
+            'load-error-handling'       => 'ignore',
+            'load-media-error-handling' => 'ignore',
+
+            // We don't rely on JS for PDF rendering; disabling avoids slow scripts/timeouts
+            'disable-javascript'        => true,
+
+            // Ensure local file URLs work for header/assets
+            'enable-local-file-access'  => true,
 
             // One source of truth for top spacing; wkhtml reserves space for the native header
             'margin-top'    => 24,    // increased to match service defaults; prevents header/logo clipping (mm)

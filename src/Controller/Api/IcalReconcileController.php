@@ -18,7 +18,43 @@ class IcalReconcileController extends AbstractController
         $unit = $request->query->get('unit');
         $from = $this->parseDate($request->query->get('from'));
         $to   = $this->parseDate($request->query->get('to'));
-        $dry  = filter_var($request->query->get('dry', false), FILTER_VALIDATE_BOOL);
+        // Default to dry=true for GET reconcile (compute-only). Persisting changes should be explicit.
+        $dry  = filter_var($request->query->get('dry', true), FILTER_VALIDATE_BOOL);
+
+        // Enforce a safe reconcile window.
+        // If no window is provided, default to the current month (America/Cancun).
+        // If only one side is provided, expand to that month.
+        // Always normalize to inclusive day boundaries.
+        $tz = new \DateTimeZone('America/Cancun');
+
+        if ($from === null && $to === null) {
+            $from = (new \DateTimeImmutable('first day of this month', $tz))->setTime(0, 0, 0);
+            $to   = (new \DateTimeImmutable('last day of this month', $tz))->setTime(23, 59, 59);
+        } elseif ($from !== null && $to === null) {
+            $from = $from->setTimezone($tz)->setTime(0, 0, 0);
+            $to   = $from->modify('last day of this month')->setTime(23, 59, 59);
+        } elseif ($from === null && $to !== null) {
+            $to   = $to->setTimezone($tz)->setTime(23, 59, 59);
+            $from = $to->modify('first day of this month')->setTime(0, 0, 0);
+        } else {
+            // Both provided: normalize boundaries
+            $from = $from->setTimezone($tz)->setTime(0, 0, 0);
+            $to   = $to->setTimezone($tz)->setTime(23, 59, 59);
+        }
+
+        // Safety guard: do not allow overly large ranges (prevents accidental full-table scans)
+        $days = $from->diff($to)->days ?? 0;
+        if ($days > 93) { // ~3 months
+            return new JsonResponse([
+                'ok' => false,
+                'error' => 'invalid_range',
+                'message' => 'Please request a smaller date window (max 93 days).',
+                'params' => [
+                    'from' => $from->format('Y-m-d'),
+                    'to' => $to->format('Y-m-d'),
+                ],
+            ], 400);
+        }
 
         $result = $service->reconcile(
             $unit !== null && $unit !== '' ? (int)$unit : null,
@@ -32,23 +68,52 @@ class IcalReconcileController extends AbstractController
         $items = (isset($result['items']) && is_array($result['items'])) ? $result['items'] : [];
 
         if ($hideAck && isset($result['items']) && is_array($result['items'])) {
-            $items = array_values(array_filter($result['items'], static function ($row) use ($em) {
-                // We only consider rows that have a booking id and a fingerprint to compare
+            // Build a list of booking ids present in the result that also have fingerprints
+            $ids = [];
+            foreach ($result['items'] as $row) {
+                $bookingId = $row['bookingId'] ?? null;
+                $fp        = $row['fingerprint'] ?? null;
+                if ($bookingId && is_string($fp) && $fp !== '') {
+                    $ids[(int)$bookingId] = true;
+                }
+            }
+
+            // Bulk fetch ack signatures without hydrating entities (avoid UnitOfWork / N+1)
+            $ackById = [];
+            if (!empty($ids)) {
+                $idList = array_keys($ids);
+                $qb = $em->createQueryBuilder();
+                $rows = $qb
+                    ->select('ab.id AS id, ab.icalAckSignature AS sig')
+                    ->from(AllBookings::class, 'ab')
+                    ->where($qb->expr()->in('ab.id', ':ids'))
+                    ->setParameter('ids', $idList)
+                    ->getQuery()
+                    ->getArrayResult();
+
+                foreach ($rows as $r) {
+                    $bid = isset($r['id']) ? (int)$r['id'] : null;
+                    if ($bid) {
+                        $ackById[$bid] = $r['sig'] ?? null;
+                    }
+                }
+            }
+
+            $items = array_values(array_filter($result['items'], static function ($row) use ($ackById) {
                 $bookingId = $row['bookingId'] ?? null;
                 $fp        = $row['fingerprint'] ?? null;
 
-                if ($bookingId && is_string($fp) && $fp !== '') {
-                    /** @var AllBookings|null $ab */
-                    $ab = $em->getRepository(AllBookings::class)->find($bookingId);
-                    if ($ab && method_exists($ab, 'getIcalAckSignature')) {
-                        $ackSig = $ab->getIcalAckSignature();
-                        if ($ackSig && hash_equals($ackSig, $fp)) {
-                            // acknowledged → hide this row (regardless of status: conflict or suspected_cancelled)
-                            return false;
-                        }
-                    }
+                if (!$bookingId || !is_string($fp) || $fp === '') {
+                    return true;
                 }
-                // keep if not acknowledged
+
+                $bid = (int)$bookingId;
+                $ackSig = $ackById[$bid] ?? null;
+                if ($ackSig && hash_equals($ackSig, $fp)) {
+                    // acknowledged → hide this row (regardless of status: conflict or suspected_cancelled)
+                    return false;
+                }
+
                 return true;
             }));
 

@@ -91,6 +91,119 @@ class BookingIcalReconcileService
             $bookings = $this->findCandidateBookings($unitId, $from, $to);
         }
 
+        // Prefetch all relevant iCal events once (avoid N+1 queries inside the loop)
+        $unitIdsForIcal = [];
+        if ($unitId !== null) {
+            $unitIdsForIcal = [(int) $unitId];
+        } else {
+            foreach ($bookings as $b) {
+                $u = $this->getUnitId($b);
+                if ($u) {
+                    $unitIdsForIcal[(int) $u] = true;
+                }
+            }
+            $unitIdsForIcal = array_keys($unitIdsForIcal);
+        }
+
+        // Build indexes:
+        //  - $icalByUnitCode[unitId][reservationCode] => IcalEvent
+        //  - $blockEventsByUnit[unitId] => IcalEvent[] (block/private-like)
+        //  - $reservationEventsByUnit[unitId] => IcalEvent[] (Airbnb reservations)
+        $icalByUnitCode = [];
+        $blockEventsByUnit = [];
+        $reservationEventsByUnit = [];
+
+        if (!empty($unitIdsForIcal)) {
+            try {
+                $eqb = $this->icalRepo->createQueryBuilder('e')
+                    ->andWhere('IDENTITY(e.unit) IN (:us)')
+                    ->setParameter('us', $unitIdsForIcal);
+
+                // Overlap window: dtstart <= to AND dtend >= from
+                if ($from !== null) {
+                    $eqb->andWhere('e.dtend >= :from')->setParameter('from', $from);
+                }
+                if ($to !== null) {
+                    $eqb->andWhere('e.dtstart <= :to')->setParameter('to', $to);
+                }
+
+                // Keep deterministic ordering
+                $eqb->addOrderBy('e.dtstart', 'DESC');
+
+                $allEvents = $eqb->getQuery()->getResult();
+
+                foreach ($allEvents as $ev) {
+                    if (!($ev instanceof IcalEvent)) {
+                        continue;
+                    }
+
+                    $evUnit = null;
+                    try {
+                        $u = method_exists($ev, 'getUnit') ? $ev->getUnit() : null;
+                        if ($u && method_exists($u, 'getId')) {
+                            $evUnit = (int) $u->getId();
+                        }
+                    } catch (\Throwable $t) {
+                        $evUnit = null;
+                    }
+
+                    if (!$evUnit) {
+                        continue;
+                    }
+
+                    $rc = null;
+                    try {
+                        $rc = method_exists($ev, 'getReservationCode') ? $ev->getReservationCode() : null;
+                    } catch (\Throwable $t) {
+                        $rc = null;
+                    }
+                    if (is_string($rc) && $rc !== '') {
+                        $icalByUnitCode[$evUnit][$rc] = $ev;
+                    }
+
+                    // Classify event types for fast in-memory overlap checks
+                    $etRaw = null;
+                    $et = null;
+                    try {
+                        $etRaw = method_exists($ev, 'getEventType') ? $ev->getEventType() : null;
+                        $et = is_string($etRaw) ? strtolower($etRaw) : null;
+                    } catch (\Throwable $t) {
+                        $et = null;
+                    }
+
+                    $isBlockFlag = false;
+                    try {
+                        $isBlockFlag = method_exists($ev, 'isBlock') ? (bool) $ev->isBlock() : (method_exists($ev, 'getIsBlock') ? (bool) $ev->getIsBlock() : false);
+                    } catch (\Throwable $t) {
+                        $isBlockFlag = false;
+                    }
+
+                    $uid = null;
+                    try {
+                        $uid = method_exists($ev, 'getUid') ? $ev->getUid() : null;
+                    } catch (\Throwable $t) {
+                        $uid = null;
+                    }
+
+                    $isBlockyType = in_array($et, ['block','blocked','owner_block','owner-block','maintenance','busy','o2_private','o2-private'], true);
+                    $looksO2 = (is_string($rc) && str_starts_with($rc, 'O2')) || (is_string($uid) && str_starts_with($uid, 'o2-'));
+
+                    if ($isBlockFlag || $isBlockyType || $looksO2) {
+                        $blockEventsByUnit[$evUnit][] = $ev;
+                    }
+
+                    if ($et === 'reservation') {
+                        $reservationEventsByUnit[$evUnit][] = $ev;
+                    }
+                }
+            } catch (\Throwable $t) {
+                // Fail-safe: if prefetch fails, fall back to existing per-booking queries
+                $icalByUnitCode = [];
+                $blockEventsByUnit = [];
+                $reservationEventsByUnit = [];
+            }
+        }
+
         $items = [];
         $matched = 0;
         $conflicts = 0;
@@ -179,7 +292,11 @@ class BookingIcalReconcileService
 
             // 1) Try to match by canonical HM (reservation_code or HM-like confirmation_code)
             if ($canonicalHm && !$event) {
-                $event = $this->findEventByReservationCode($unitIdVal, $canonicalHm);
+                // Prefer preloaded index; fall back to DB query if index missing
+                $event = $icalByUnitCode[$unitIdVal][$canonicalHm] ?? null;
+                if (!$event) {
+                    $event = $this->findEventByReservationCode($unitIdVal, $canonicalHm);
+                }
             }
 
             // 2) Fallback: overlap by date range (with heuristics)
@@ -189,30 +306,31 @@ class BookingIcalReconcileService
             if (!$event) {
                 $allowOverlap = !$this->looksLikeHm($canonicalHm); // only private/O2 can overlap-match
                 if ($allowOverlap) {
-                    $qb = $this->icalRepo->createQueryBuilder('e')
-                        ->andWhere('IDENTITY(e.unit) = :u')->setParameter('u', $unitIdVal);
+                    // Use preloaded block/private events for this unit when available (avoid per-booking query)
+                    $over = $blockEventsByUnit[$unitIdVal] ?? null;
+                    if ($over === null) {
+                        // Fallback to DB query if prefetch index not available
+                        $qb = $this->icalRepo->createQueryBuilder('e')
+                            ->andWhere('IDENTITY(e.unit) = :u')->setParameter('u', $unitIdVal);
 
-                    // Overlap window: any event that intersects the booking range
-                    // e.dtstart <= :to AND e.dtend >= :from
-                    $qb->andWhere('e.dtstart <= :to')
-                        ->andWhere('e.dtend >= :from')
-                        ->setParameter('from', $checkIn)
-                        ->setParameter('to', $checkOut);
+                        $qb->andWhere('e.dtstart <= :to')
+                            ->andWhere('e.dtend >= :from')
+                            ->setParameter('from', $checkIn)
+                            ->setParameter('to', $checkOut);
 
-                    $over = $qb->getQuery()->getResult();
+                        $over = $qb->getQuery()->getResult();
+                    }
 
-                    // Only consider Owners2/private style blocks for overlap matching
-                    $over = array_values(array_filter($over, function ($ev) {
-                        $etRaw = method_exists($ev, 'getEventType') ? $ev->getEventType() : null;
-                        $et = is_string($etRaw) ? strtolower($etRaw) : null;
-                        $isBlockFlag = method_exists($ev, 'isBlock') ? (bool) $ev->isBlock() : (method_exists($ev, 'getIsBlock') ? (bool) $ev->getIsBlock() : false);
-                        $rc = method_exists($ev, 'getReservationCode') ? $ev->getReservationCode() : null;
-                        $uid = method_exists($ev, 'getUid') ? $ev->getUid() : null;
-
-                        $isBlockyType = in_array($et, ['block','blocked','owner_block','owner-block','maintenance','busy','o2_private','o2-private'], true);
-                        $looksO2     = (is_string($rc) && str_starts_with($rc, 'O2')) || (is_string($uid) && str_starts_with($uid, 'o2-'));
-
-                        return $isBlockFlag || $isBlockyType || $looksO2;
+                    // Narrow candidates to actual overlaps with this booking (in-memory)
+                    $over = array_values(array_filter((array) $over, function ($ev) use ($checkIn, $checkOut) {
+                        if (!($ev instanceof IcalEvent)) {
+                            return false;
+                        }
+                        try {
+                            return ($ev->getDtstart() < $checkOut) && ($ev->getDtend() > $checkIn);
+                        } catch (\Throwable $t) {
+                            return false;
+                        }
                     }));
 
                     // Diagnostics: capture overlap candidates
@@ -441,15 +559,32 @@ class BookingIcalReconcileService
             // Private booking vs Airbnb reservation overlap detection (calendar double-booking)
             if ($source === 'Private') {
                 try {
-                    $aqb = $this->icalRepo->createQueryBuilder('ae')
-                        ->andWhere('IDENTITY(ae.unit) = :u')->setParameter('u', $unitIdVal)
-                        ->andWhere('LOWER(ae.eventType) = :et')->setParameter('et', 'reservation')
-                        ->andWhere('ae.dtstart < :co')
-                        ->andWhere('ae.dtend > :ci')
-                        ->setParameter('ci', $checkIn)
-                        ->setParameter('co', $checkOut);
+                    // Use preloaded Airbnb reservation events for this unit when available (avoid per-booking query)
+                    $airbnbOver = $reservationEventsByUnit[$unitIdVal] ?? null;
+                    if ($airbnbOver === null) {
+                        // Fallback to DB query if prefetch index not available
+                        $aqb = $this->icalRepo->createQueryBuilder('ae')
+                            ->andWhere('IDENTITY(ae.unit) = :u')->setParameter('u', $unitIdVal)
+                            ->andWhere('LOWER(ae.eventType) = :et')->setParameter('et', 'reservation')
+                            ->andWhere('ae.dtstart < :co')
+                            ->andWhere('ae.dtend > :ci')
+                            ->setParameter('ci', $checkIn)
+                            ->setParameter('co', $checkOut);
 
-                    $airbnbOver = $aqb->getQuery()->getResult();
+                        $airbnbOver = $aqb->getQuery()->getResult();
+                    }
+
+                    // Narrow candidates to actual overlaps with this booking (in-memory)
+                    $airbnbOver = array_values(array_filter((array) $airbnbOver, function ($ev) use ($checkIn, $checkOut) {
+                        if (!($ev instanceof IcalEvent)) {
+                            return false;
+                        }
+                        try {
+                            return ($ev->getDtstart() < $checkOut) && ($ev->getDtend() > $checkIn);
+                        } catch (\Throwable $t) {
+                            return false;
+                        }
+                    }));
 
                     // Filter to Airbnb-like HM codes and drop any already-linked event
                     $airbnbOver = array_values(array_filter($airbnbOver, function ($ev) use ($event) {
@@ -818,46 +953,81 @@ class BookingIcalReconcileService
     /** @return AllBookings[] */
     private function findCandidateBookings(?int $unitId, ?\DateTimeInterface $from, ?\DateTimeInterface $to): array
     {
-        // Generic DQL to avoid coupling to a custom repository for now
-        $qb = $this->em->createQueryBuilder()
-            ->select('b')
-            ->from(AllBookings::class, 'b');
+        // Prefer DB-side filtering to avoid loading the entire all_bookings table.
+        // Assumes common mapped fields: unitId, checkIn/checkOut, status.
+        try {
+            $qb = $this->em->createQueryBuilder()
+                ->select('b')
+                ->from(AllBookings::class, 'b');
 
-        if ($unitId !== null) {
-            $qb->andWhere('b.unitId = :u')->setParameter('u', $unitId);
-        }
+            if ($unitId !== null) {
+                $qb->andWhere('b.unitId = :u')->setParameter('u', $unitId);
+            }
 
-        // Try common field names for dates. We keep broader set for flexibility.
-        // Expect at least methods on the entity to retrieve them.
-        // We’ll filter by date in PHP since field names may vary.
+            // Window overlap: booking intersects [from, to]
+            // out >= from AND in <= to
+            if ($from !== null) {
+                // use property name checkOut (maps to check_out)
+                $qb->andWhere('b.checkOut >= :from')->setParameter('from', $from);
+            }
+            if ($to !== null) {
+                // use property name checkIn (maps to check_in)
+                $qb->andWhere('b.checkIn <= :to')->setParameter('to', $to);
+            }
 
-        $result = $qb->getQuery()->getResult();
+            // Exclude cancelled/expired at DB level
+            $qb->andWhere('LOWER(b.status) NOT IN (:bad)')
+               ->setParameter('bad', ['cancelled', 'expired']);
 
-        // PHP-side date filtering to stay schema-agnostic
-        if ($from || $to) {
-            $result = array_filter($result, function (AllBookings $b) use ($from, $to) {
+            // Order newest first (helps with determinism)
+            $qb->addOrderBy('b.checkIn', 'DESC');
+
+            $result = $qb->getQuery()->getResult();
+
+            // Defensive: still ensure dates exist
+            $result = array_filter($result, function (AllBookings $b) {
                 $in  = $this->getBookingCheckIn($b);
                 $out = $this->getBookingCheckOut($b);
-                if (!$in || !$out) return false;
-                if ($from && $out < $from) return false;   // ends before window
-                if ($to && $in > $to) return false;        // starts after window
+                return ($in !== null && $out !== null);
+            });
+
+            return array_values($result);
+        } catch (\Throwable $e) {
+            // Fallback: previous behavior (schema-agnostic but potentially slow)
+            $qb = $this->em->createQueryBuilder()
+                ->select('b')
+                ->from(AllBookings::class, 'b');
+
+            if ($unitId !== null) {
+                $qb->andWhere('b.unitId = :u')->setParameter('u', $unitId);
+            }
+
+            $result = $qb->getQuery()->getResult();
+
+            if ($from || $to) {
+                $result = array_filter($result, function (AllBookings $b) use ($from, $to) {
+                    $in  = $this->getBookingCheckIn($b);
+                    $out = $this->getBookingCheckOut($b);
+                    if (!$in || !$out) return false;
+                    if ($from && $out < $from) return false;
+                    if ($to && $in > $to) return false;
+                    return true;
+                });
+            }
+
+            $result = array_filter($result, function (AllBookings $b) {
+                if (method_exists($b, 'getStatus')) {
+                    $status = $b->getStatus();
+                    $s = $status ? strtolower((string) $status) : '';
+                    if ($s === 'cancelled' || $s === 'expired') {
+                        return false;
+                    }
+                }
                 return true;
             });
+
+            return array_values($result);
         }
-
-        // Exclude cancelled / expired bookings
-        $result = array_filter($result, function (AllBookings $b) {
-            if (method_exists($b, 'getStatus')) {
-                $status = $b->getStatus();
-                $s = $status ? strtolower((string) $status) : '';
-                if ($s === 'cancelled' || $s === 'expired') {
-                    return false;
-                }
-            }
-            return true;
-        });
-
-        return array_values($result);
     }
 
     private function getBookingCheckIn(AllBookings $b): ?\DateTimeInterface

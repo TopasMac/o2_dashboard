@@ -1,19 +1,33 @@
-import React, { useState } from 'react';
-import FormLayoutInline from '../../layouts/FormLayoutInline';
-import { TextField, Stack, Button, MenuItem } from '@mui/material';
+import React, { useMemo, useState } from 'react';
+import { Stack, Button } from '@mui/material';
 import api from '../../../api';
 
-/** EditHKCleaningsForm — edit an existing hk_cleanings entry */
+// RHF field components (they require a react-hook-form context)
+import { FormProvider, useForm } from 'react-hook-form';
+import RHFTextField from '../rhf/RHFTextField';
+import RHFSelect from '../rhf/RHFSelect';
+
+/**
+ * EditHKCleaningsForm — edit an existing hk_cleanings entry
+ *
+ * Notes:
+ * - Uses RHFForm + RHF field components for consistency.
+ * - Keeps payload compatible with existing API: checkoutDate, status, cleaningCost, o2CollectedFee, notes.
+ */
 export default function EditHKCleaningsForm({ cleaning, onSuccess, onCancel }) {
-  const [form, setForm] = useState(() => {
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const defaultValues = useMemo(() => {
     const c = cleaning || {};
     const co = c.checkout_date || c.checkoutDate || '';
     const coYmd = typeof co === 'string' ? co.slice(0, 10) : '';
+
     return {
       id: c.id ?? null,
       reservation_code: c.reservation_code ?? c.reservationCode ?? '',
       checkout_date: coYmd,
-      status: (c.status ?? '').toString(),
+      status: (c.status ?? '').toString() || 'pending',
       unit_id: c.unit_id ?? c.unitId ?? null,
       unit_name: c.unit_name ?? c.unitName ?? '',
       city: c.city ?? '',
@@ -22,149 +36,148 @@ export default function EditHKCleaningsForm({ cleaning, onSuccess, onCancel }) {
       o2_collected_fee: c.o2_collected_fee ?? c.o2CollectedFee ?? '',
       notes: c.notes ?? '',
     };
+  }, [cleaning]);
+
+  const canSave = Boolean(defaultValues.id && defaultValues.checkout_date);
+
+  const methods = useForm({
+    defaultValues,
+    mode: 'onSubmit',
   });
 
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState(null);
+  React.useEffect(() => {
+    methods.reset(defaultValues);
+  }, [defaultValues, methods]);
 
-  const handleChange = (field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }));
-  };
-
-  const handleDateChange = (e) => {
-    const val = e.target.value; // yyyy-mm-dd
-    setForm((prev) => ({ ...prev, checkout_date: val }));
-  };
-
-  const canSave = Boolean(form.id && form.checkout_date);
-
-  const handleSubmit = async (e) => {
-    e?.preventDefault?.();
+  const onSubmit = async (values) => {
     if (!canSave || saving) return;
     setSaving(true);
     setErr(null);
 
     try {
-      const id = form.id;
+      const id = values.id;
       if (!id) throw new Error('Missing cleaning ID');
+
       const payload = {
-        checkoutDate: form.checkout_date,
-        status: form.status,
-        cleaningCost: form.cleaning_cost !== '' ? Number(form.cleaning_cost) : null,
-        o2CollectedFee: form.o2_collected_fee !== '' ? Number(form.o2_collected_fee) : null,
-        notes: form.notes || null,
+        checkoutDate: values.checkout_date,
+        status: values.status,
+        cleaningCost: values.cleaning_cost !== '' && values.cleaning_cost !== null ? Number(values.cleaning_cost) : null,
+        o2CollectedFee: values.o2_collected_fee !== '' && values.o2_collected_fee !== null ? Number(values.o2_collected_fee) : null,
+        notes: values.notes ? String(values.notes) : null,
       };
 
       const res = await api.put(`/api/hk-cleanings/${id}`, payload, {
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       });
+
       const json = res?.data ?? res;
       if (json?.ok === false) {
         throw new Error(json?.detail || json?.message || 'Failed to update cleaning');
       }
+
       onSuccess && onSuccess(json);
     } catch (e) {
-      setErr(e.message || String(e));
+      setErr(e?.message || String(e));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <FormLayoutInline title="Edit Cleaning" onSubmit={handleSubmit}>
-      <Stack direction="column" spacing={3} sx={{ mb: 1 }}>
-        <TextField
+    <FormProvider {...methods}>
+      <form onSubmit={methods.handleSubmit(onSubmit)}>
+        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Edit Cleaning</div>
+        <Stack direction="column" spacing={3} sx={{ mb: 1 }}>
+        <RHFTextField
+          name="checkout_date"
           label="Date"
           type="date"
           size="small"
-          InputLabelProps={{ shrink: true }}
-          value={form.checkout_date}
-          onChange={handleDateChange}
-          placeholder="YYYY-MM-DD"
           required
+          InputLabelProps={{ shrink: true }}
+          placeholder="YYYY-MM-DD"
+          control={methods.control}
         />
 
-        <TextField
+        <RHFTextField
+          name="unit_name"
           label="Unit"
           size="small"
-          value={form.unit_name}
           disabled
+          control={methods.control}
         />
 
-        <TextField
+        <RHFSelect
+          name="status"
+          control={methods.control}
           label="Status"
-          select
           size="small"
-          value={form.status}
-          onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
-        >
-          {form.status === 'pending' && (
-            <MenuItem value="pending" disabled>
-              Pending
-            </MenuItem>
-          )}
-          <MenuItem value="done">Done</MenuItem>
-          <MenuItem value="cancelled">Cancelled</MenuItem>
-        </TextField>
+          options={[
+            { value: 'pending', label: 'Pending' },
+            { value: 'done', label: 'Done' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
+        />
 
-        <TextField
+        <RHFTextField
+          name="city"
           label="City"
           size="small"
-          value={form.city}
-          onChange={handleChange('city')}
           disabled
+          control={methods.control}
         />
 
-        <TextField
+        <RHFTextField
+          name="cleaning_cost"
           label="Cleaning Cost"
           size="small"
           type="number"
           inputProps={{ step: '0.01' }}
-          value={form.cleaning_cost}
-          onChange={handleChange('cleaning_cost')}
+          control={methods.control}
         />
 
-        <TextField
+        <RHFTextField
+          name="o2_collected_fee"
           label="O2 Collected"
           size="small"
           type="number"
           inputProps={{ step: '0.01' }}
-          value={form.o2_collected_fee}
-          onChange={handleChange('o2_collected_fee')}
+          control={methods.control}
         />
 
-        <TextField
+        <RHFTextField
+          name="notes"
           label="Notes"
           size="small"
-          value={form.notes}
-          onChange={handleChange('notes')}
           sx={{ minWidth: 260 }}
+          control={methods.control}
         />
       </Stack>
 
-      {err && (
-        <div style={{ color: 'crimson', fontSize: 13, marginBottom: 8 }}>{err}</div>
-      )}
+        {err && (
+          <div style={{ color: 'crimson', fontSize: 13, marginBottom: 8 }}>{err}</div>
+        )}
 
-      <Stack direction="row" spacing={1}>
-        <Button
-          variant="outlined"
-          color="success"
-          disabled={!canSave || saving}
-          onClick={handleSubmit}
-          sx={{ fontWeight: 700 }}
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
-        <Button
-          variant="outlined"
-          color="error"
-          onClick={onCancel}
-          disabled={saving}
-        >
-          Cancel
-        </Button>
-      </Stack>
-    </FormLayoutInline>
+        <Stack direction="row" spacing={1}>
+          <Button
+            type="submit"
+            variant="outlined"
+            color="success"
+            disabled={!canSave || saving}
+            sx={{ fontWeight: 700 }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={onCancel}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+        </Stack>
+      </form>
+    </FormProvider>
   );
 }

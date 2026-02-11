@@ -38,7 +38,7 @@ class HKCleaningsReconcile
      * This is the stable anchor for reconciliation (1 reconcile row per cleaning).
      */
     #[ORM\ManyToOne(targetEntity: HKCleanings::class)]
-    #[ORM\JoinColumn(name: 'hk_cleaning_id', referencedColumnName: 'id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'hk_cleaning_id', referencedColumnName: 'id', nullable: false, unique: true, onDelete: 'CASCADE')]
     private ?HKCleanings $hkCleaning = null;
 
     /**

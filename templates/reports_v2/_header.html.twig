@@ -40,7 +40,8 @@
     <table class="hdr">
       <tr>
         <td class="td left">
-          {% set _logo = absolute_url(asset(o2_logo_path|default('img/company-logo.png'))) %}
+          {# Use local file path for wkhtmltopdf to avoid HTTP hangs #}
+          {% set _logo = 'file://' ~ (o2_project_dir|default('/home/ubuntu/owners2_main')) ~ '/public/' ~ (o2_logo_path|default('img/company-logo.png')) %}
           <img class="logo" src="{{ _logo }}" alt="Logo">
         </td>
         <td class="td right">

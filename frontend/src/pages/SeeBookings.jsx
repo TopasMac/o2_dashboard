@@ -353,10 +353,10 @@ const SeeBookings = () => {
     fetchBookings();
   }, [fetchBookings]);
 
-  useEffect(() => {
+    useEffect(() => {
     const loadBlockUnits = async () => {
       try {
-        const { data } = await api.get('/api/units?pagination=false');
+        const { data } = await api.get('/api/units?pagination=false&lifecycle=active,onboarding');
         const opts = (data || []).map(u => ({
           value: u.id,
           label: u.unitName || u.name || `Unit #${u.id}`,
@@ -369,7 +369,7 @@ const SeeBookings = () => {
     loadBlockUnits();
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     const loadSoft = async () => {
       console.log('[SoftEdit] effect fired', { drawerOpen, id: selectedBooking?.id, isSoft: isSoftBooking(selectedBooking) });
       try {
@@ -393,7 +393,7 @@ const SeeBookings = () => {
         let unitOpts = [];
         console.log('[SoftEdit] fetching units...');
         try {
-          const { data: units } = await api.get('/api/units?pagination=false', { headers: buildAuthHeaders() });
+          const { data: units } = await api.get('/api/units?pagination=false&lifecycle=active,onboarding', { headers: buildAuthHeaders() });
           unitOpts = (units || []).map(u => ({ value: u.id, label: u.unitName || u.name }));
         } catch (e) {
           console.warn('[SoftEdit] units fetch failed, using table rows', e);

@@ -6,4 +6,4 @@ knp_snappy:
       enable-local-file-access: true
       print-media-type: true
       lowquality: false
-      quiet: true
+      quiet: false

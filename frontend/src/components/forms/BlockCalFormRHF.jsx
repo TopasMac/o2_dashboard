@@ -101,7 +101,7 @@ export default function BlockCalFormRHF({
   // Load units for autocomplete
   const loadUnits = useCallback(async () => {
     try {
-      const res = await fetch('/api/units?pagination=false', {
+      const res = await fetch('/api/units?pagination=false&lifecycle=active,onboarding', {
         headers: { 'Content-Type': 'application/json', ...buildAuthHeaders() },
         credentials: 'include',
       });

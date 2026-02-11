@@ -86,21 +86,56 @@ class UnitListService
             }
         }
 
-        $lc = strtolower($lifecycle);
-        if ($lc !== '' && $lc !== 'all') {
-            if ($lc === 'active') {
-                $qb->andWhere('u.dateEnded IS NULL')
-                   ->andWhere('(u.status IS NULL OR (LOWER(u.status) <> :st_inactive AND LOWER(u.status) <> :st_onboarding AND LOWER(u.status) <> :st_alor AND LOWER(u.status) <> :st_internal))')
+        // Lifecycle filtering (preferred over free-form status)
+        // Supports CSV values, e.g. lifecycle=active,onboarding
+        $lcs = array_values(array_filter(array_map('trim', explode(',', strtolower($lifecycle)))));
+
+        if (!empty($lcs) && !in_array('all', $lcs, true)) {
+            // Special-case: if multiple lifecycles are requested, OR them together
+            if (count($lcs) > 1) {
+                $orX = $qb->expr()->orX();
+
+                // Active: dateEnded is NULL and status not Inactive/Onboarding/Alor/Internal
+                if (in_array('active', $lcs, true)) {
+                    $orX->add(
+                        '(u.dateEnded IS NULL AND (u.status IS NULL OR (LOWER(u.status) <> :st_inactive AND LOWER(u.status) <> :st_onboarding AND LOWER(u.status) <> :st_alor AND LOWER(u.status) <> :st_internal)))'
+                    );
+                }
+
+                // Inactive: dateEnded is NOT NULL OR status is Inactive
+                if (in_array('inactive', $lcs, true)) {
+                    $orX->add('(u.dateEnded IS NOT NULL OR LOWER(u.status) = :st_inactive2)');
+                }
+
+                // Onboarding: status is Onboarding
+                if (in_array('onboarding', $lcs, true)) {
+                    $orX->add('LOWER(u.status) = :st_onboarding2');
+                }
+
+                $qb->andWhere($orX)
                    ->setParameter('st_inactive', 'inactive')
                    ->setParameter('st_onboarding', 'onboarding')
                    ->setParameter('st_alor', 'alor')
-                   ->setParameter('st_internal', 'internal');
-            } elseif ($lc === 'inactive') {
-                $qb->andWhere('(u.dateEnded IS NOT NULL OR LOWER(u.status) = :st_inactive2)')
-                   ->setParameter('st_inactive2', 'inactive');
-            } elseif ($lc === 'onboarding') {
-                $qb->andWhere('LOWER(u.status) = :st_onboarding2')
+                   ->setParameter('st_internal', 'internal')
+                   ->setParameter('st_inactive2', 'inactive')
                    ->setParameter('st_onboarding2', 'onboarding');
+            } else {
+                // Single lifecycle value (existing behavior)
+                $lc = $lcs[0];
+                if ($lc === 'active') {
+                    $qb->andWhere('u.dateEnded IS NULL')
+                       ->andWhere('(u.status IS NULL OR (LOWER(u.status) <> :st_inactive AND LOWER(u.status) <> :st_onboarding AND LOWER(u.status) <> :st_alor AND LOWER(u.status) <> :st_internal))')
+                       ->setParameter('st_inactive', 'inactive')
+                       ->setParameter('st_onboarding', 'onboarding')
+                       ->setParameter('st_alor', 'alor')
+                       ->setParameter('st_internal', 'internal');
+                } elseif ($lc === 'inactive') {
+                    $qb->andWhere('(u.dateEnded IS NOT NULL OR LOWER(u.status) = :st_inactive2)')
+                       ->setParameter('st_inactive2', 'inactive');
+                } elseif ($lc === 'onboarding') {
+                    $qb->andWhere('LOWER(u.status) = :st_onboarding2')
+                       ->setParameter('st_onboarding2', 'onboarding');
+                }
             }
         }
 

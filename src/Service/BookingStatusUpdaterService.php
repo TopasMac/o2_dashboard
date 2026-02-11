@@ -5,15 +5,18 @@ namespace App\Service;
 use App\Entity\AllBookings;
 use App\Entity\HKCleanings;
 use App\Entity\Unit;
+use App\Service\HKCleaningManager;
 use Doctrine\ORM\EntityManagerInterface;
 
 class BookingStatusUpdaterService
 {
     private EntityManagerInterface $entityManager;
+    private HKCleaningManager $hkCleaningManager;
 
-    public function __construct(EntityManagerInterface $entityManager)
+    public function __construct(EntityManagerInterface $entityManager, HKCleaningManager $hkCleaningManager)
     {
         $this->entityManager = $entityManager;
+        $this->hkCleaningManager = $hkCleaningManager;
     }
 
     public function updateStatuses(iterable $bookings, bool $flush = false): void
@@ -58,10 +61,10 @@ class BookingStatusUpdaterService
             $checkIn = $booking->getCheckIn();
             $checkOut = $booking->getCheckOut();
 
-            // Tulum-only rule (for now): if a non-cancelled reservation has checked out, mark the HK cleaning as done.
+            // If a non-cancelled reservation has checked out, mark the HK cleaning as done (Playa + Tulum).
             $nowCancun = new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun'));
             if ($checkOut instanceof \DateTimeInterface && $checkOut < $nowCancun) {
-                $this->syncHousekeepingDoneForTulum($booking);
+                $this->syncHousekeepingDoneForPlayaOrTulum($booking);
             }
 
             $status = $booking->getStatus();
@@ -94,9 +97,14 @@ class BookingStatusUpdaterService
         }
         $dateImmutable = \DateTimeImmutable::createFromInterface($date);
 
-        $hk = null;
+        // 1) Best match: booking_id
+        $bookingId = (int)($booking->getId() ?? 0);
+        if ($bookingId > 0) {
+            $hk = $repo->findOneBy(['bookingId' => $bookingId]);
+        }
+
         $resCode = method_exists($booking, 'getConfirmationCode') ? $booking->getConfirmationCode() : null;
-        if ($resCode) {
+        if (!$hk && $resCode) {
             $hk = $repo->findOneBy([
                 'reservationCode' => $resCode,
                 'checkoutDate' => $dateImmutable,
@@ -120,21 +128,28 @@ class BookingStatusUpdaterService
         }
 
         if ($hk && method_exists($hk, 'setStatus')) {
+            $doneConst = \defined(HKCleanings::class . '::STATUS_DONE') ? HKCleanings::STATUS_DONE : 'done';
             $cancelConst = \defined(HKCleanings::class . '::STATUS_CANCELLED') ? HKCleanings::STATUS_CANCELLED : 'cancelled';
+
             if (method_exists($hk, 'getStatus')) {
-                if ($hk->getStatus() === $cancelConst) {
+                $cur = (string)$hk->getStatus();
+                if ($cur === $cancelConst) {
                     return; // already cancelled; nothing to do
                 }
+                if ($cur === $doneConst) {
+                    return; // do not override done
+                }
             }
+
             $hk->setStatus($cancelConst);
             $this->entityManager->persist($hk);
             // Do not flush here; defer to caller's $flush flag in updateStatuses()
         }
     }
 
-    private function syncHousekeepingDoneForTulum(AllBookings $booking): void
+    private function syncHousekeepingDoneForPlayaOrTulum(AllBookings $booking): void
     {
-        // Only apply to city: Tulum
+        // Only apply to city: Tulum or Playa del Carmen
         $city = null;
 
         if (method_exists($booking, 'getCity')) {
@@ -159,7 +174,8 @@ class BookingStatusUpdaterService
             }
         }
 
-        if (strtolower((string)$city) !== 'tulum') {
+        $cityLower = strtolower((string)$city);
+        if (!in_array($cityLower, ['tulum', 'playa del carmen'], true)) {
             return;
         }
 
@@ -172,8 +188,15 @@ class BookingStatusUpdaterService
         $dateImmutable = \DateTimeImmutable::createFromInterface($date);
 
         $hk = null;
+
+        // 1) Best match: booking_id
+        $bookingId = (int)($booking->getId() ?? 0);
+        if ($bookingId > 0) {
+            $hk = $repo->findOneBy(['bookingId' => $bookingId]);
+        }
+
         $resCode = method_exists($booking, 'getConfirmationCode') ? $booking->getConfirmationCode() : null;
-        if ($resCode) {
+        if (!$hk && $resCode) {
             $hk = $repo->findOneBy([
                 'reservationCode' => $resCode,
                 'checkoutDate' => $dateImmutable,
@@ -211,8 +234,8 @@ class BookingStatusUpdaterService
                 }
             }
 
-            $hk->setStatus($doneConst);
-            $this->entityManager->persist($hk);
+            // Delegate to manager to mark done + create hktransactions row (idempotent)
+            $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
             // Do not flush here; defer to caller's $flush flag in updateStatuses()
         }
     }

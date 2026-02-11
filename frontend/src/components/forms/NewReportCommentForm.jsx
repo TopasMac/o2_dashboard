@@ -52,6 +52,7 @@ export default function NewReportCommentForm({
         const res = await api.get('/api/units', {
           params: {
             pagination: false,
+            lifecycle: 'active,onboarding',
             fields: 'id,unit_name,unitName,name',
           },
         });

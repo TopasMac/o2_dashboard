@@ -1097,8 +1097,8 @@ const TableLite = forwardRef(function TableLite(
                               || 'bottom' in rendered
                             )
                           ) {
-                            const primary = rendered.primary ?? rendered.bottom ?? '';
-                            const meta = rendered.meta ?? rendered.top ?? '';
+                            const primary = rendered.primary ?? rendered.top ?? '';
+                            const meta = rendered.meta ?? rendered.bottom ?? '';
 
                             const variantClass = col.twoLineClassName ? ` ${col.twoLineClassName}` : '';
 

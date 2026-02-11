@@ -103,12 +103,25 @@ class BookingAggregatorService
     }
 
     /**
-     * Create (idempotently) an HKCleanings row for Owner private reservations.
+     * Create (idempotently) an HKCleanings row for bookings that require a cleaning.
+     * Skips guest_type Hold/Block.
      * Unique key in HKCleanings: (unit_id, checkout_date, cleaning_type)
      */
-    private function ensureOwnerHKCleaning(AllBookings $booking, Unit $unit): void
+    private function ensureAutoHKCleaning(AllBookings $booking, Unit $unit): void
     {
         try {
+            $gt = strtolower(trim((string)($booking->getGuestType() ?? '')));
+            if (in_array($gt, ['hold', 'block'], true)) {
+                return;
+            }
+
+            $cleaningType = HKCleanings::TYPE_CHECKOUT;
+            $billTo = HKCleanings::BILL_TO_OWNERS2;
+            if ($gt === 'owner') {
+                $cleaningType = HKCleanings::TYPE_OWNER;
+                $billTo = HKCleanings::BILL_TO_CLIENT;
+            }
+
             $co = $booking->getCheckOut();
             if (!$co instanceof \DateTimeInterface) {
                 return;
@@ -123,7 +136,7 @@ class BookingAggregatorService
                 $existing = $repo->findOneBy([
                     'unit' => $unit,
                     'checkoutDate' => $checkoutDate,
-                    'cleaningType' => HKCleanings::TYPE_OWNER,
+                    'cleaningType' => $cleaningType,
                 ]);
             } catch (\Throwable $e) {
                 $existing = null;
@@ -141,6 +154,11 @@ class BookingAggregatorService
                         $existing->setReservationCode((string) $booking->getReservationCode());
                     }
                 }
+                if (method_exists($existing, 'getBillTo') && method_exists($existing, 'setBillTo')) {
+                    if (!$existing->getBillTo()) {
+                        $existing->setBillTo($billTo);
+                    }
+                }
                 // Do not overwrite assignments/status/cost if it already exists.
                 return;
             }
@@ -148,6 +166,16 @@ class BookingAggregatorService
             $cleaning = new HKCleanings();
             $cleaning->setUnit($unit);
             $cleaning->setCity((string) ($unit->getCity() ?? ''));
+            if (method_exists($cleaning, 'setCostCentre')) {
+                $cityNorm = strtolower(trim((string) ($unit->getCity() ?? '')));
+                if (str_contains($cityNorm, 'tulum')) {
+                    $cleaning->setCostCentre(HKCleanings::COST_CENTRE_HK_TULUM);
+                } elseif (str_contains($cityNorm, 'playa')) {
+                    $cleaning->setCostCentre(HKCleanings::COST_CENTRE_HK_PLAYA);
+                } else {
+                    $cleaning->setCostCentre(HKCleanings::COST_CENTRE_GENERAL);
+                }
+            }
 
             if (method_exists($cleaning, 'setBookingId') && $booking->getId()) {
                 $cleaning->setBookingId((int) $booking->getId());
@@ -156,22 +184,62 @@ class BookingAggregatorService
                 $cleaning->setReservationCode((string) ($booking->getReservationCode() ?? $booking->getConfirmationCode() ?? ''));
             }
             $cleaning->setCheckoutDate($checkoutDate);
-            $cleaning->setCleaningType(HKCleanings::TYPE_OWNER);
+            $cleaning->setCleaningType($cleaningType);
             $cleaning->setStatus(HKCleanings::STATUS_PENDING);
-
-            // O2 collected fee for owner stays: use unit cleaning_fee (booking cleaning fee is 0)
-            if (method_exists($cleaning, 'setO2CollectedFee')) {
-                $cleaning->setO2CollectedFee((float) ($unit->getCleaningFee() ?? 0));
+            if (method_exists($cleaning, 'setBillTo')) {
+                $cleaning->setBillTo($billTo);
+            }
+            if (method_exists($cleaning, 'setSource')) {
+                $cleaning->setSource('Automated');
             }
 
-            // cleaning_cost: use hk_unit_cleaning_rate.amount if present, else 0
+            // O2 collected fee (charged): snapshot what Owners2 should charge/collect.
+            // Rule: checkout + owner cleanings always use the unit cleaning_fee (even if booking cleaning_fee is null).
+            // Other cleaning types may use booking cleaning_fee when available, falling back to unit cleaning_fee.
+            if (method_exists($cleaning, 'setO2CollectedFee')) {
+                $unitFee = (float) ($unit->getCleaningFee() ?? 0);
+
+                $fee = $unitFee;
+                // Only non-checkout/non-owner types are allowed to use booking cleaning fee.
+                if (!in_array($cleaningType, [HKCleanings::TYPE_CHECKOUT, HKCleanings::TYPE_OWNER], true)) {
+                    $bf = null;
+                    if (method_exists($booking, 'getCleaningFee')) {
+                        $bf = $booking->getCleaningFee();
+                    }
+                    $fee = (float) ($bf ?? $unitFee);
+                }
+
+                $cleaning->setO2CollectedFee($fee);
+            }
+
+            // cleaning_cost: snapshot expected cost using hk_unit_cleaning_rate for the checkout date window
             $rate = 0.0;
             try {
                 $conn = $this->entityManager->getConnection();
-                $val = $conn->fetchOne(
-                    'SELECT amount FROM hk_unit_cleaning_rate WHERE unit_id = :uid LIMIT 1',
-                    ['uid' => (int) $unit->getId()]
-                );
+
+                $cityNorm = strtolower(trim((string) ($unit->getCity() ?? '')));
+                $cityKey = str_contains($cityNorm, 'tulum') ? 'tulum' : (str_contains($cityNorm, 'playa') ? 'playa del carmen' : null);
+
+                $params = [
+                    'uid' => (int) $unit->getId(),
+                    'd'   => $checkoutDate->format('Y-m-d'),
+                ];
+
+                $sql = 'SELECT amount
+                        FROM hk_unit_cleaning_rate
+                        WHERE unit_id = :uid
+                          AND effective_from <= :d
+                          AND (effective_to IS NULL OR effective_to >= :d)';
+
+                if ($cityKey) {
+                    $sql .= ' AND LOWER(city) = :city';
+                    $params['city'] = $cityKey;
+                }
+
+                $sql .= ' ORDER BY effective_from DESC, id DESC LIMIT 1';
+
+                $val = $conn->fetchOne($sql, $params);
+
                 if ($val !== false && $val !== null && $val !== '') {
                     $rate = (float) $val;
                 }
@@ -183,10 +251,10 @@ class BookingAggregatorService
             }
 
             $this->entityManager->persist($cleaning);
-            $this->entityManager->flush();
+            // Do NOT flush here; caller controls flush to avoid side-effects and improve batching.
         } catch (\Throwable $e) {
             // Never block booking creation due to cleaning row side-effect
-            $this->logger->error('[Aggregator] ensureOwnerHKCleaning failed: ' . $e->getMessage());
+            $this->logger->error('[Aggregator] ensureAutoHKCleaning failed: ' . $e->getMessage());
         }
     }
 
@@ -377,10 +445,10 @@ class BookingAggregatorService
         $this->entityManager->flush();
         $this->logger->debug('[Aggregator] flushed booking persisted', ['id' => (int)$booking->getId()]);
 
-        // Side-effect: for Owner private reservations, create a pending HK cleaning row
-        if (is_string($reservation->getGuestType()) && strtolower($reservation->getGuestType()) === 'owner') {
-            $this->ensureOwnerHKCleaning($booking, $unit);
-        }
+        // Side-effect: ensure a pending HK cleaning row for bookings that require a cleaning.
+        // NOTE: ensureAutoHKCleaning() only persists; it does NOT flush (by design).
+        $this->ensureAutoHKCleaning($booking, $unit);
+        $this->entityManager->flush();
 
         return $booking;
     }
@@ -503,6 +571,11 @@ class BookingAggregatorService
         $this->entityManager->persist($booking);
         $this->entityManager->flush();
         $this->logger->debug('[Aggregator] flushed booking persisted', ['id' => (int)$booking->getId()]);
+
+        // Side-effect: ensure a pending HK cleaning row for bookings that require a cleaning.
+        // NOTE: ensureAutoHKCleaning() only persists; it does NOT flush (by design).
+        $this->ensureAutoHKCleaning($booking, $unit);
+        $this->entityManager->flush();
 
         return $booking;
     }

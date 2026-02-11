@@ -408,14 +408,14 @@ SQL;
             'totals' => $expensesTotals,
         ];
 
-        // --- Housekeeping Transactions (HK) ---
+        // --- Housekeeping Transactions (HK) --- (client-billed only: allocation_target = 'Client')
         $sqlHK = <<<SQL
 SELECT
   hk.id,
   hk.unit_id,
   hk.date,
   hk.category_id,
-  hk.cost_centre,
+  hk.allocation_target,
   hk.description,
   hk.notes,
   hk.charged,
@@ -426,7 +426,7 @@ SELECT
 FROM hktransactions hk
 LEFT JOIN transaction_category tc ON tc.id = hk.category_id
 WHERE hk.unit_id = :unit
-  AND hk.cost_centre = 'Client'
+  AND hk.allocation_target = 'Client'
   AND DATE_FORMAT(hk.date, '%Y-%m') = :ym
 ORDER BY hk.date ASC, hk.id ASC
 SQL;
@@ -451,7 +451,7 @@ SQL;
                 'categoryName' => $hr['category_name'] ?? null,
                 'categoryAllowUnit' => isset($hr['category_allow_unit']) ? (bool) $hr['category_allow_unit'] : null,
                 'categoryAllowHk'   => isset($hr['category_allow_hk']) ? (bool) $hr['category_allow_hk'] : null,
-                'costCentre'  => $hr['cost_centre'] ?? null,
+                'allocationTarget' => $hr['allocation_target'] ?? null,
                 'description' => $hr['description'] ?? null,
                 'notes'       => $hr['notes'] ?? null,
                 'charged'     => isset($hr['charged']) ? (float) $hr['charged'] : 0.0,

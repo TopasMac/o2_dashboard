@@ -13,12 +13,14 @@ use App\Service\HKCleaningRateResolver;
 use DateTimeZone;
 use App\Service\Document\DocumentUploadService;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\DBAL\Connection;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 class HKCleaningManager
 {
     private EntityManagerInterface $em;
+    private Connection $conn;
     private HKCleaningRateResolver $rateResolver;
     private DocumentUploadService $documentUploadService;
 
@@ -28,6 +30,7 @@ class HKCleaningManager
         DocumentUploadService $documentUploadService
     ) {
         $this->em = $em;
+        $this->conn = $em->getConnection();
         $this->rateResolver = $rateResolver;
         $this->documentUploadService = $documentUploadService;
     }
@@ -45,6 +48,8 @@ class HKCleaningManager
         $created = 0;
         $skipped = 0;
         $ledgerCreated = 0;
+        /** @var HKCleanings[] $toFinalize */
+        $toFinalize = [];
 
         foreach ($items as $data) {
             if (empty($data['unitId']) || empty($data['checkoutDate'])) {
@@ -91,6 +96,10 @@ class HKCleaningManager
                 // Update status to requested value (e.g., done after checkbox)
                 if (method_exists($existing, 'setStatus')) {
                     $existing->setStatus($status);
+                    // If bulkCreate marks an existing row as DONE, also create the hktransactions ledger row.
+                    if (strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
+                        $toFinalize[] = $existing;
+                    }
                 }
                 // If cleaning_cost is empty, resolve it now
                 if (method_exists($existing, 'getCleaningCost') && method_exists($existing, 'setCleaningCost') && $existing->getCleaningCost() === null) {
@@ -103,6 +112,7 @@ class HKCleaningManager
                 if (!empty($data['o2CollectedFee']) && method_exists($existing, 'setO2CollectedFee')) {
                     $existing->setO2CollectedFee((string)$data['o2CollectedFee']);
                 }
+                $this->em->persist($existing);
                 $skipped++; // count updates under 'skipped' to preserve return shape
                 continue;
             }
@@ -161,11 +171,26 @@ class HKCleaningManager
                 }
             }
 
+            // If bulkCreate inserts a row already marked DONE, also create the hktransactions ledger row.
+            if (strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
+                $toFinalize[] = $hk;
+            }
             $this->em->persist($hk);
             $created++;
         }
 
         $this->em->flush();
+
+        // If any rows were created/updated as DONE during bulkCreate, ensure hktransactions rows exist.
+        // markDoneAndCreateTransaction() is idempotent, so this is safe to call.
+        foreach ($toFinalize as $hkDone) {
+            try {
+                $this->markDoneAndCreateTransaction($hkDone);
+            } catch (\Throwable $e) {
+                // Do not fail bulkCreate for a single ledger issue; keep creating remaining rows.
+                // (Logger not injected here; silent fail by design.)
+            }
+        }
 
         return [
             'created' => $created,
@@ -175,16 +200,25 @@ class HKCleaningManager
     }
 
     /**
-     * Mark a cleaning as done and (only when bill_to=CLIENT) create the matching hk_transactions row.
+     * Mark a cleaning as done and create (idempotently) the matching hk_transactions row.
      *
-     * Why: checkout cleanings are an internal HK record and should NOT create hk_transactions rows
-     * (they would double-count incomes). Only client-billed cleanings (e.g. owner stay / client-billed
-     * extra cleaning) should generate an HKTransactions row so they show up in the unit monthly report.
+     * Why: hk_transactions is the P&L / reporting ledger for cleanings. Every DONE cleaning must have
+     * exactly one hk_transactions row (even if paid/charged are 0), plus separate rows for laundry/salaries.
      *
      * Idempotent: if a transaction already exists linked to this cleaning, it will be returned.
      */
     public function markDoneAndCreateTransaction(HKCleanings $hk): array
     {
+        // 1) At the very beginning: ensure doneAt is set if missing
+        $now = new \DateTimeImmutable('now', new DateTimeZone('America/Cancun'));
+        if (
+            method_exists($hk, 'getDoneAt') &&
+            method_exists($hk, 'setDoneAt') &&
+            (empty($hk->getDoneAt()))
+        ) {
+            $hk->setDoneAt($now);
+        }
+
         // Ensure status is DONE (soft guard; controller already set it)
         if (method_exists($hk, 'getStatus') && method_exists($hk, 'setStatus')) {
             if ($hk->getStatus() !== HKCleanings::STATUS_DONE) {
@@ -192,39 +226,67 @@ class HKCleaningManager
             }
         }
 
+        // 7) Persist $hk after setting status/doneAt
+        $this->em->persist($hk);
+
+        // Ensure a reconcile row exists when a cleaning becomes DONE (idempotent).
+        // This supports historical cost snapshots (rate changes over time) without overwriting prior months.
+        try {
+            $this->ensureReconcileRowExistsForDoneCleaning($hk);
+        } catch (\Throwable $e) {
+            // Reconcile is best-effort; never block DONE/ledger creation.
+        }
+
         $unit = method_exists($hk, 'getUnit') ? $hk->getUnit() : null;
         if (!$unit instanceof Unit) {
             throw new \RuntimeException('HKCleaning has no Unit; cannot create transaction');
         }
 
+        // Snapshot o2_collected_fee when missing for checkout/owner.
+        // We want charged to always reflect what we charged the owner/guest for this cleaning.
+        // Rule: checkout + owner -> use Unit.cleaning_fee when hk.o2_collected_fee is NULL/empty.
+        try {
+            $cleaningTypeSnap = method_exists($hk, 'getCleaningType') ? (string)$hk->getCleaningType() : '';
+            $typeLowerSnap = strtolower(trim($cleaningTypeSnap));
+            $isOwnerSnap = ($typeLowerSnap === strtolower((string)HKCleanings::TYPE_OWNER));
+            $isCheckoutSnap = ($typeLowerSnap === strtolower((string)HKCleanings::TYPE_CHECKOUT));
+
+            if (($isOwnerSnap || $isCheckoutSnap)
+                && method_exists($hk, 'getO2CollectedFee')
+                && method_exists($hk, 'setO2CollectedFee')
+                && method_exists($unit, 'getCleaningFee')
+            ) {
+                $cur = $hk->getO2CollectedFee();
+                if ($cur === null || trim((string)$cur) === '') {
+                    $unitFee = $unit->getCleaningFee();
+                    if ($unitFee !== null && trim((string)$unitFee) !== '') {
+                        $hk->setO2CollectedFee((string)$unitFee);
+                        $this->em->persist($hk);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // best-effort; never block transaction creation
+        }
+
+        // 2) Use checkoutDate for tx date (reporting is by checkout day)
         $date = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
         if (!$date instanceof \DateTimeInterface) {
             throw new \RuntimeException('HKCleaning has no checkout date; cannot create transaction');
         }
-        // Ensure immutable for HKTransactions::setDate(\DateTimeImmutable)
-        $dateImmutable = $date instanceof \DateTimeImmutable ? $date : \DateTimeImmutable::createFromInterface($date);
 
-        // Only generate an HKTransactions row when this cleaning is billed to the Client.
+        // Normalize to DateTimeImmutable
+        $txDateImmutable = $date instanceof \DateTimeImmutable ? $date : \DateTimeImmutable::createFromInterface($date);
+
+        // Always create an HKTransactions row for every cleaning marked done.
         $billTo = '';
         if (method_exists($hk, 'getBillTo')) {
-            $billTo = strtoupper(trim((string) $hk->getBillTo()));
+            $billTo = $hk->getBillTo();
         }
 
-        // If bill_to is not CLIENT, do not create any transaction.
-        if ($billTo !== 'CLIENT') {
-            return [
-                'id' => null,
-                'transactionCode' => null,
-                'alreadyExisted' => false,
-                'skipped' => true,
-                'reason' => 'bill_to_not_client',
-            ];
-        }
-
-        // Idempotency: if a tx already links to this cleaning, return it (fast-path via cleaning -> transaction, then repo fallback)
+        // 5) Idempotency: always try to find tx by ['hkCleaning' => $hk] if not found by getHkTransaction
         $txRepo = $this->em->getRepository(HKTransactions::class);
         $existingTx = null;
-
         // Fast-path: check inverse/bidirectional relation if present on HKCleanings
         if (method_exists($hk, 'getHkTransaction')) {
             $maybeTx = $hk->getHkTransaction();
@@ -232,12 +294,10 @@ class HKCleaningManager
                 $existingTx = $maybeTx;
             }
         }
-
-        // Fallback: query by owning side if available
-        if (!$existingTx && method_exists(HKTransactions::class, 'setHkCleaning')) {
+        // Always try repo lookup by hkCleaning
+        if (!$existingTx) {
             $existingTx = $txRepo->findOneBy(['hkCleaning' => $hk]);
         }
-
         if ($existingTx) {
             return [
                 'id' => method_exists($existingTx, 'getId') ? $existingTx->getId() : null,
@@ -247,35 +307,61 @@ class HKCleaningManager
         }
 
         $city = method_exists($hk, 'getCity') ? (string)$hk->getCity() : (method_exists($unit, 'getCity') ? (string)$unit->getCity() : '');
-        $dateYmd = $dateImmutable->format('Y-m-d');
+        $dateYmd = $txDateImmutable->format('Y-m-d');
 
-        $isOwner = false;
-        if (method_exists($hk, 'getCleaningType')) {
-            $isOwner = strtolower((string)$hk->getCleaningType()) === HKCleanings::TYPE_OWNER;
+        $cleaningType = method_exists($hk, 'getCleaningType') ? (string)$hk->getCleaningType() : '';
+        $typeLower = strtolower(trim($cleaningType));
+
+        $isOwner = ($typeLower === strtolower((string)HKCleanings::TYPE_OWNER));
+        $isCheckout = ($typeLower === strtolower((string)HKCleanings::TYPE_CHECKOUT));
+        $isRedo = ($typeLower === 'redo') || (\defined(HKCleanings::class . '::TYPE_REDO') && $cleaningType === HKCleanings::TYPE_REDO);
+
+        // 3) Compute paid as cleaning_cost + laundry_cost (numeric, 2-decimal string)
+        $cleaningCost = 0.0;
+        if (method_exists($hk, 'getCleaningCost')) {
+            $ccost = $hk->getCleaningCost();
+            if ($ccost !== null && $ccost !== '') {
+                $cleaningCost = (float)$ccost;
+            } else {
+                $resolved = $this->rateResolver->resolveAmountForDateStr((int)$unit->getId(), $city, $dateYmd);
+                if ($resolved !== null && $resolved !== '') {
+                    $cleaningCost = (float)$resolved;
+                }
+            }
         }
+        $laundryCost = 0.0;
+        if (method_exists($hk, 'getLaundryCost')) {
+            $lc = $hk->getLaundryCost();
+            if ($lc !== null && $lc !== '') {
+                $laundryCost = (float)$lc;
+            }
+        }
+        $paidSum = $cleaningCost + $laundryCost;
+        $paidStr = number_format($paidSum, 2, '.', '');
 
-        // Resolve Paid via rate resolver (what we pay the HK)
-        $paid = $this->rateResolver->resolveAmountForDateStr((int)$unit->getId(), $city, $dateYmd);
-        $paidStr = $paid !== null ? (string)$paid : null;
-
-        // Resolve Charged (what we charge the owner/client)
-        $chargedStr = null;
+        // 4) Compute charged as o2_collected_fee (2-decimal string)
+        // (Snapshot rule above should have filled it for checkout/owner when possible.)
+        $chargedVal = null;
         if (method_exists($hk, 'getO2CollectedFee')) {
             $collected = $hk->getO2CollectedFee();
-            if ($collected !== null && $collected !== '') {
-                $chargedStr = (string) $collected;
+            if ($collected !== null && trim((string)$collected) !== '') {
+                $chargedVal = (float)$collected;
             }
         }
-        if (($chargedStr === null || $chargedStr === '') && method_exists($unit, 'getCleaningFee')) {
+        if ($chargedVal === null && method_exists($unit, 'getCleaningFee')) {
             $ufee = $unit->getCleaningFee();
-            if ($ufee !== null && $ufee !== '') {
-                $chargedStr = (string) $ufee;
+            if ($ufee !== null && trim((string)$ufee) !== '') {
+                $chargedVal = (float)$ufee;
             }
         }
+        if ($chargedVal === null) {
+            $chargedVal = 0.0;
+        }
+        $chargedStr = number_format((float)$chargedVal, 2, '.', '');
 
         $tx = new HKTransactions();
         if (method_exists($tx, 'setDate')) {
-            $tx->setDate($dateImmutable);
+            $tx->setDate($txDateImmutable);
         }
         if (method_exists($tx, 'setUnit')) {
             $tx->setUnit($unit);
@@ -285,8 +371,30 @@ class HKCleaningManager
         }
 
         $catRepo = $this->em->getRepository(TransactionCategory::class);
-        if ($isOwner) {
-            // Prefer id=8; fallback by name 'Limpieza_extra' (case-insensitive)
+
+        if ($isCheckout) {
+            // Prefer fixed category id=7 for checkout cleanings
+            $cat = $catRepo->find(7);
+            if (!$cat) {
+                $cat = $catRepo->findOneBy(['name' => 'Limpieza']);
+                if (!$cat) {
+                    $cat = $catRepo->createQueryBuilder('c')
+                        ->where('LOWER(c.name) = :n')
+                        ->setParameter('n', 'limpieza')
+                        ->setMaxResults(1)
+                        ->getQuery()
+                        ->getOneOrNullResult();
+                }
+            }
+            if (!$cat) {
+                $cat = new TransactionCategory();
+                if (method_exists($cat, 'setName')) {
+                    $cat->setName('Limpieza');
+                }
+                $this->em->persist($cat);
+            }
+        } else {
+            // Prefer fixed category id=8 for non-checkout cleanings
             $cat = $catRepo->find(8);
             if (!$cat) {
                 $cat = $catRepo->findOneBy(['name' => 'Limpieza_extra']);
@@ -301,46 +409,75 @@ class HKCleaningManager
             }
             if (!$cat) {
                 $cat = new TransactionCategory();
-                if (method_exists($cat, 'setName')) { $cat->setName('Limpieza_extra'); }
-                $this->em->persist($cat);
-            }
-        } else {
-            $cat = $catRepo->findOneBy(['name' => 'Limpieza']);
-            if (!$cat) {
-                $cat = $catRepo->createQueryBuilder('c')
-                    ->where('LOWER(c.name) = :n')
-                    ->setParameter('n', 'limpieza')
-                    ->setMaxResults(1)
-                    ->getQuery()
-                    ->getOneOrNullResult();
-            }
-            if (!$cat) {
-                $cat = new TransactionCategory();
-                if (method_exists($cat, 'setName')) { $cat->setName('Limpieza'); }
+                if (method_exists($cat, 'setName')) {
+                    $cat->setName('Limpieza_extra');
+                }
                 $this->em->persist($cat);
             }
         }
         if (method_exists($tx, 'setCategory')) { $tx->setCategory($cat); }
 
-        // cost_centre = who pays (Client/Owners2/Guest)
-        // allocation_target = internal division bucket (Housekeepers_Playa / Housekeepers_Tulum / Housekeepers_General)
-        if (method_exists($tx, 'setCostCentre')) {
-            $tx->setCostCentre('Client');
-        }
+        // allocation_target = who we charge (Client/Owners2/Guest/Housekeepers)
+        // cost_centre = internal accounting bucket (HK_Playa / HK_Tulum / HK_General)
 
+        // 1) Who we charge
         if (method_exists($tx, 'setAllocationTarget')) {
-            $cityNorm = strtolower(trim((string) $city));
-            if (str_contains($cityNorm, 'tulum')) {
-                $tx->setAllocationTarget(HKTransactions::ALLOC_HK_TULUM);
-            } elseif (str_contains($cityNorm, 'playa')) {
-                $tx->setAllocationTarget(HKTransactions::ALLOC_HK_PLAYA);
+            $billToNorm = strtoupper(trim((string) $billTo));
+            if ($billToNorm === '') {
+                $billToNorm = 'OWNERS2';
+            }
+            if ($billToNorm === 'CLIENT') {
+                $tx->setAllocationTarget('Client');
+            } elseif ($billToNorm === 'OWNERS2') {
+                $tx->setAllocationTarget('Owners2');
+            } elseif ($billToNorm === 'GUEST') {
+                $tx->setAllocationTarget('Guest');
+            } elseif ($billToNorm === 'HOUSEKEEPERS') {
+                $tx->setAllocationTarget('Housekeepers');
             } else {
-                $tx->setAllocationTarget('Housekeepers_General');
+                // Fallback: keep a readable value
+                $tx->setAllocationTarget($billToNorm !== '' ? $billToNorm : 'Client');
             }
         }
 
+        // 2) Where it is recorded internally
+        $cc = null;
+        if (method_exists($hk, 'getCostCentre')) {
+            $cc = $hk->getCostCentre();
+        }
+
+        // Canonical values: HK_Playa | HK_Tulum | HK_General
+        // Backward-compatible inputs: housekeepers_playa | housekeepers_tulum | general
+        $ccNorm = trim((string) ($cc ?? ''));
+        if ($ccNorm !== '') {
+            $lc = strtolower($ccNorm);
+            if ($lc === 'housekeepers_playa') {
+                $ccNorm = HKCleanings::COST_CENTRE_HK_PLAYA;
+            } elseif ($lc === 'housekeepers_tulum') {
+                $ccNorm = HKCleanings::COST_CENTRE_HK_TULUM;
+            } elseif ($lc === 'general') {
+                $ccNorm = HKCleanings::COST_CENTRE_GENERAL;
+            }
+        }
+
+        if ($ccNorm === '') {
+            $cityNorm = strtolower(trim((string) $city));
+            if (str_contains($cityNorm, 'tulum')) {
+                $ccNorm = HKCleanings::COST_CENTRE_HK_TULUM;
+            } elseif (str_contains($cityNorm, 'playa')) {
+                $ccNorm = HKCleanings::COST_CENTRE_HK_PLAYA;
+            } else {
+                $ccNorm = HKCleanings::COST_CENTRE_GENERAL;
+            }
+        }
+
+        if (method_exists($tx, 'setCostCentre')) {
+            $tx->setCostCentre($ccNorm);
+        }
+
         if (method_exists($tx, 'setDescription')) {
-            $tx->setDescription($isOwner ? 'Estadia propietario' : 'Limpieza extra');
+            // Keep it simple and auditable: description mirrors hk_cleanings.cleaning_type
+            $tx->setDescription($cleaningType);
         }
         if (method_exists($tx, 'setPaid')) {
             $tx->setPaid($paidStr);
@@ -348,12 +485,19 @@ class HKCleaningManager
         if (method_exists($tx, 'setCharged')) {
             $tx->setCharged($chargedStr);
         }
+        // 6) Set notes if available
+        if (method_exists($tx, 'setNotes')) {
+            $notesVal = null;
+            if (method_exists($hk, 'getNotes')) {
+                $notesVal = $hk->getNotes();
+            }
+            $tx->setNotes($notesVal);
+        }
         if (method_exists($tx, 'generateTransactionCode')) {
             $tx->generateTransactionCode();
         }
-        if (method_exists($tx, 'setHkCleaning')) {
-            $tx->setHkCleaning($hk);
-        }
+        // 5) Always setHkCleaning
+        $tx->setHkCleaning($hk);
 
         $this->em->persist($tx);
         $this->em->flush();
@@ -752,6 +896,124 @@ class HKCleaningManager
             'isNew'       => $isNewChecklist,
             'transaction' => $txInfo,
         ];
+    }
+
+    /**
+     * Create (idempotently) a hk_cleanings_reconcile row for a DONE cleaning.
+     *
+     * Current design:
+     * - We keep reconciliation rows for **Tulum only**.
+     * - One reconcile row per hk_cleanings row (unique by hk_cleaning_id).
+     * - This table is a historical snapshot store (rates can change over time).
+     */
+    private function ensureReconcileRowExistsForDoneCleaning(HKCleanings $hk): void
+    {
+        if (!method_exists($hk, 'getId')) {
+            return;
+        }
+        $hkId = (int)($hk->getId() ?? 0);
+        if ($hkId <= 0) {
+            return;
+        }
+
+        $unit = method_exists($hk, 'getUnit') ? $hk->getUnit() : null;
+        if (!$unit instanceof Unit) {
+            return;
+        }
+
+        $checkout = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
+        if (!$checkout instanceof \DateTimeInterface) {
+            return; // checkout_date required
+        }
+        $checkoutDt = $checkout instanceof \DateTimeImmutable ? $checkout : \DateTimeImmutable::createFromInterface($checkout);
+
+        $city = method_exists($hk, 'getCity') ? (string)($hk->getCity() ?? '') : '';
+        if ($city === '' && method_exists($unit, 'getCity')) {
+            $city = (string)($unit->getCity() ?? '');
+        }
+
+        // Tulum only
+        if (strtolower(trim($city)) !== 'tulum') {
+            return;
+        }
+
+        $reportMonth = $checkoutDt->format('Y-m');
+        $serviceDate = $checkoutDt->format('Y-m-d');
+
+        // Snapshot values
+        $cleaningCostStr = null;
+        if (method_exists($hk, 'getCleaningCost')) {
+            $cc = $hk->getCleaningCost();
+            if ($cc !== null && trim((string)$cc) !== '') {
+                $cleaningCostStr = number_format((float)$cc, 2, '.', '');
+            }
+        }
+        if (($cleaningCostStr === null || $cleaningCostStr === '') && method_exists($unit, 'getId')) {
+            try {
+                $resolved = $this->rateResolver->resolveAmountForDateStr((int)$unit->getId(), 'Tulum', $serviceDate);
+                if ($resolved !== null && trim((string)$resolved) !== '') {
+                    $cleaningCostStr = number_format((float)$resolved, 2, '.', '');
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+        if ($cleaningCostStr === null || $cleaningCostStr === '') {
+            $cleaningCostStr = '0.00';
+        }
+
+        $laundryCostStr = '0.00';
+        if (method_exists($hk, 'getLaundryCost')) {
+            $lc = $hk->getLaundryCost();
+            if ($lc !== null && trim((string)$lc) !== '') {
+                $laundryCostStr = number_format((float)$lc, 2, '.', '');
+            }
+        }
+
+        $realTotalStr = number_format(((float)$cleaningCostStr) + ((float)$laundryCostStr), 2, '.', '');
+
+        // Notes: keep notes ONLY in reconcile (do not store into hk_cleanings).
+        // Some schemas may not have hk_cleanings.notes; so we default to NULL.
+        $notes = null;
+
+        // Idempotency: if row already exists for this hk_cleaning_id, do nothing.
+        try {
+            $exists = $this->conn->fetchOne(
+                'SELECT 1 FROM hk_cleanings_reconcile WHERE hk_cleaning_id = :cid LIMIT 1',
+                ['cid' => $hkId]
+            );
+            if ($exists) {
+                return;
+            }
+        } catch (\Throwable) {
+            // If table doesn't exist or query fails, abort silently.
+            return;
+        }
+
+        // Insert a minimal reconcile row.
+        // IMPORTANT: We do NOT overwrite existing rows; this is a snapshot starter row.
+        try {
+            $this->conn->executeStatement(
+                'INSERT INTO hk_cleanings_reconcile
+                    (unit_id, city, report_month, service_date, cleaning_cost, real_cleaning_cost, laundry_cost, notes, created_at, updated_at, hk_cleaning_id)
+                 VALUES
+                    (:unit_id, :city, :report_month, :service_date, :cleaning_cost, :real_cleaning_cost, :laundry_cost, :notes, NOW(), NOW(), :hk_cleaning_id)',
+                [
+                    'unit_id' => (int)$unit->getId(),
+                    'city' => 'Tulum',
+                    'report_month' => $reportMonth,
+                    'service_date' => $serviceDate,
+                    'cleaning_cost' => (float)$cleaningCostStr,
+                    'real_cleaning_cost' => (float)$realTotalStr,
+                    'laundry_cost' => (float)$laundryCostStr,
+                    'notes' => ($notes !== null && trim((string)$notes) !== '' ? trim((string)$notes) : null),
+                    'hk_cleaning_id' => $hkId,
+                ]
+            );
+        } catch (\Throwable) {
+            // schema mismatch or missing columns: fail silently
+            return;
+        }
     }
 
     private function generateTxCode(): string

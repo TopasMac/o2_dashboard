@@ -21,18 +21,16 @@ use Symfony\Component\Serializer\Annotation\MaxDepth;
 #[ORM\Entity(repositoryClass: HKTransactionsRepository::class)]
 class HKTransactions
 {
-    public const ALLOC_UNIT = 'Unit';
-    public const ALLOC_HK_PLAYA = 'Housekeepers_Playa';
-    public const ALLOC_HK_TULUM = 'Housekeepers_Tulum';
-    public const ALLOC_HK_GENERAL = 'Housekeepers_General';
-    public const ALLOC_HK_BOTH = 'Housekeepers_Both';
+    public const ALLOC_CLIENT = 'Client';
+    public const ALLOC_OWNERS2 = 'Owners2';
+    public const ALLOC_GUEST = 'Guest';
+    public const ALLOC_HOUSEKEEPERS = 'Housekeepers';
 
     public const ALLOCATION_TARGETS = [
-        self::ALLOC_UNIT,
-        self::ALLOC_HK_PLAYA,
-        self::ALLOC_HK_TULUM,
-        self::ALLOC_HK_GENERAL,
-        self::ALLOC_HK_BOTH, // kept for backward compatibility
+        self::ALLOC_CLIENT,
+        self::ALLOC_OWNERS2,
+        self::ALLOC_GUEST,
+        self::ALLOC_HOUSEKEEPERS,
     ];
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -53,11 +51,11 @@ class HKTransactions
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
     private ?Unit $unit = null;
 
-    // allocationTarget: internal allocation/division (Unit vs Housekeepers_Playa/Tulum/General)
-    #[ORM\Column(type: 'string', length: 32, options: ["default" => "Unit"])]
+    // allocationTarget: who we charge (Client, Owners2, Guest, Housekeepers)
+    #[ORM\Column(type: 'string', length: 32, options: ["default" => "Client"])]
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
-    #[Assert\Choice(choices: HKTransactions::ALLOCATION_TARGETS, message: 'Invalid allocation target.')] 
-    private ?string $allocationTarget = self::ALLOC_UNIT;
+    #[Assert\Choice(choices: HKTransactions::ALLOCATION_TARGETS, message: 'Invalid allocation target.')]
+    private ?string $allocationTarget = self::ALLOC_CLIENT;
 
     #[ORM\Column(type: 'string', length: 50, nullable: true)]
     #[Groups(['hktransactions:read', 'hktransactions:write'])]
@@ -244,44 +242,17 @@ class HKTransactions
     #[Groups(['hktransactions:read'])]
     public function getAllocatedCities(): array
     {
-        switch ($this->allocationTarget) {
-            case self::ALLOC_HK_PLAYA:
-                return ['Playa del Carmen'];
-            case self::ALLOC_HK_TULUM:
-                return ['Tulum'];
-            case self::ALLOC_HK_GENERAL:
-            case self::ALLOC_HK_BOTH:
-                return ['Playa del Carmen', 'Tulum'];
-            case self::ALLOC_UNIT:
-            default:
-                $unitCity = $this->getUnit() ? $this->getUnit()->getCity() : null;
-                return $unitCity ? [$unitCity] : [];
-        }
+        $city = $this->getCity();
+        return $city ? [$city] : [];
     }
     /**
      * Returns the unit/division label for this transaction.
      * - If a Unit exists: return the unit name
-     * - If allocated to Housekeepers_* and no unit: return a human label per division
      */
     #[Groups(['hktransactions:read'])]
     public function getUnitLabel(): string
     {
-        if ($this->getUnit() !== null) {
-            return $this->getUnit()->getUnitName() ?: '';
-        }
-
-        switch ($this->allocationTarget) {
-            case self::ALLOC_HK_PLAYA:
-                return 'Housekeepers (Playa)';
-            case self::ALLOC_HK_TULUM:
-                return 'Housekeepers (Tulum)';
-            case self::ALLOC_HK_GENERAL:
-            case self::ALLOC_HK_BOTH:
-                return 'Housekeepers (General)';
-            case self::ALLOC_UNIT:
-            default:
-                return '';
-        }
+        return $this->getUnit() ? ($this->getUnit()->getUnitName() ?: '') : '';
     }
     /**
      * @return Collection<int, UnitDocument>

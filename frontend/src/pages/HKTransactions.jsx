@@ -321,19 +321,29 @@ const HKTransactions = () => {
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
       render: (value, row) => (
-        <div className="o2-cell-two-line">
-          <div className="o2-cell-sub">{formatDateDMY(row.date)}</div>
-          <a
-            href="#"
-            className="table-link o2-cell-main"
+        <div className="o2-cell-two-line o2-two-line-click">
+          <div className="o2-cell-primary">{formatDateDMY(row.date)}</div>
+          <div
+            className="o2-cell-meta"
+            role="button"
+            tabIndex={0}
             onClick={(e) => {
               e.preventDefault();
+              e.stopPropagation();
               setSelectedId(row.id);
               setDrawerOpen(true);
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                setSelectedId(row.id);
+                setDrawerOpen(true);
+              }
+            }}
           >
             {row.transactionCode}
-          </a>
+          </div>
         </div>
       ),
     },
@@ -343,12 +353,10 @@ const HKTransactions = () => {
       width: 200,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
-      render: (value, row) => (
-        <div className="o2-cell-two-line o2-two-line-standard">
-          <div className="o2-cell-main">{formatUnitLabel(value || '')}</div>
-          <div className="o2-cell-sub">{row.cityLabel || ''}</div>
-        </div>
-      ),
+      render: (value, row) => ({
+        primary: formatUnitLabel(value || ''),
+        meta: row?.cityLabel || '',
+      }),
       filter: {
         type: 'autocomplete',
         inline: true,
@@ -370,12 +378,24 @@ const HKTransactions = () => {
       headerStyle: { textAlign: 'left' },
       render: (value, row) => {
         const status = String(row?.unitStatus || '').toLowerCase();
-        if (status === 'alor') return 'Alor';
-        const v = row?.costCentre || '';
-        if (v === 'Housekeepers_Playa') return 'HK Playa';
-        if (v === 'Housekeepers_Tulum') return 'HK Tulum';
-        if (v === 'Housekeepers_General') return 'HK General';
-        return v;
+        const alloc = row?.allocationTarget || '';
+        const cost = row?.costCentre || '';
+
+        // Keep Alor override for cost centre label
+        const costLabel = (status === 'alor')
+          ? 'Alor'
+          : (cost === 'Housekeepers_Playa')
+            ? 'HK Playa'
+            : (cost === 'Housekeepers_Tulum')
+              ? 'HK Tulum'
+              : (cost === 'Housekeepers_General')
+                ? 'HK General'
+                : cost;
+
+        return {
+          primary: formatUnitLabel(alloc),
+          meta: costLabel,
+        };
       },
       filter: {
         type: 'select',
@@ -403,7 +423,6 @@ const HKTransactions = () => {
       width: 250,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
-      twoLineClassName: 'o2-two-line-standard',
       render: (value, row) => ({
         primary: value || '',
         meta: row?.notes || '',

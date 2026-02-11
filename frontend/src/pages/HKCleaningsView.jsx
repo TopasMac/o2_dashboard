@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, IconButton, CircularProgress, Link as MuiLink, Box, Autocomplete, Tabs, Tab, Typography, Divider } from '@mui/material';
+import { Button, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, IconButton, CircularProgress, Link as MuiLink, Box, Autocomplete, Typography } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import TableLite from '../components/layout/TableLite';
+import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
 import api from '../api';
 import AppDrawer from '../components/common/AppDrawer';
-import NewHKCleaningsForm from '../components/forms/HKCleaningsTablePage/NewHKCleaningsForm';
+import NewHKCleaningsFormRHF from '../components/forms/NewHKCleaningsFormRHF';
 import HKCleaningsRateForm from '../components/forms/HKCleaningsTablePage/HKCleaningsRateForm';
 import EditHKCleaningsForm from '../components/forms/HKCleaningsTablePage/EditHKCleaningsForm';
 import PageScaffold from '../components/layout/PageScaffold';
@@ -128,7 +129,6 @@ const HKCleaningsView = () => {
     year: currentYearCancun,
     search: '',
     unit_name: '',
-    completed_cleaner: '',
     page: 1,
     pageSize: 25,
     sort: 'checkout_date',
@@ -136,7 +136,6 @@ const HKCleaningsView = () => {
   });
   const [total, setTotal] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeView, setActiveView] = useState('completed'); // 'all' | 'completed'
 
   // On mount: default Month/Year to current Cancun month so the page loads with data
   useEffect(() => {
@@ -182,7 +181,14 @@ const HKCleaningsView = () => {
     setUnitFilterLoading(true);
     try {
       // Try a dedicated units endpoint first (if available)
-      const res = await api.get('/api/units', { params: { search: query, page: 1, pageSize: 20 } });
+      const res = await api.get('/api/units', {
+        params: {
+          search: query,
+          page: 1,
+          pageSize: 20,
+          lifecycle: 'active,onboarding',
+        },
+      });
       const items = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
       if (items.length) {
         const opts = items.map(u => ({ label: u.unit_name || u.unitName || u.name || String(u.id), value: u.unit_name || u.unitName || u.name || String(u.id) }));
@@ -332,6 +338,48 @@ const HKCleaningsView = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
 
+  // Unit filter should match both unit name and city (like HKTransactions)
+  const unitOrCityFilterOptions = useMemo(() => {
+    const out = [];
+
+    // 1) Units (prefer server suggestions if present; fallback to allRows)
+    const unitValues = new Set(
+      (Array.isArray(unitFilterOptions) ? unitFilterOptions : [])
+        .map(o => (o && typeof o === 'object' ? (o.value ?? o.label) : o))
+        .filter(Boolean)
+        .map(v => String(v).trim())
+        .filter(Boolean)
+    );
+
+    if (!unitValues.size) {
+      (Array.isArray(allRows) ? allRows : []).forEach(r => {
+        const n = String(r?.unit_name || r?.unitName || '').trim();
+        if (n) unitValues.add(n);
+      });
+    }
+
+    // 2) Cities (from current month slice)
+    const cityValues = new Set(
+      (Array.isArray(allRows) ? allRows : [])
+        .map(r => String(r?.unit_city || r?.unitCity || r?.city || '').trim())
+        .filter(Boolean)
+    );
+
+    // Render units first, then cities
+    Array.from(unitValues).sort((a, b) => a.localeCompare(b)).forEach(v => out.push({ label: v, value: v }));
+    Array.from(cityValues).sort((a, b) => a.localeCompare(b)).forEach(v => out.push({ label: v, value: v }));
+
+    // De-dupe by value
+    const seen = new Set();
+    return out.filter(o => {
+      const key = String(o?.value ?? '').trim();
+      if (!key) return false;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [allRows, unitFilterOptions]);
+
   // When user types into the unit autocomplete input, fetch suggestions (debounced)
   useEffect(() => {
     const t = setTimeout(() => {
@@ -356,59 +404,43 @@ const HKCleaningsView = () => {
 
 
 
-  // Compute the maximum ID length for padding
-  const maxIdLength = rows.length > 0 ? Math.max(...rows.map(r => String(r.id || '').length)) : 1;
 
 
   const columns = [
     {
-      header: 'ID',
-      accessor: 'id',
-      width: 75,
-      align: 'center',
-      cellStyle: { py: 0.75 },
-      render: (value, row) => (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', py: 0.75 }}>
-          <MuiLink
-            component="button"
-            type="button"
-            underline="hover"
-            sx={{
-              color: '#1E6F68',
-              fontWeight: 600,
-              lineHeight: 1.4,
-              '&:hover': { color: 'orange' }
-            }}
-            onClick={() => {
+      header: 'Reservation',
+      accessor: 'reservation_code',
+      width: 170,
+      cellStyle: { py: 1, px: 1.5 },
+      render: (_value, row) => {
+        const code = row?.reservation_code || row?.reservationCode || '';
+        const date = row?.checkout_date || row?.checkoutDate || '';
+        return (
+          <TableLiteTwoLineCell
+            main={fmtDateDMY(date)}
+            sub={code}
+            subAriaLabel={`Open cleaning ${code || ''}`}
+            onSubClick={() => {
               setEditingCleaning(row);
               setEditDrawerOpen(true);
             }}
-          >
-            {String(value).padStart(maxIdLength, '0')}
-          </MuiLink>
-        </Box>
-      ),
-    },
-    { header: 'Reservation',    accessor: 'reservation_code', width: 130, cellStyle: { py: 1, px: 1.5 } },
-    {
-      header: 'Date',
-      accessor: 'checkout_date',
-      width: 130,
-      cellStyle: { py: 1, px: 1.5 },
-      render: (value) => fmtDateDMY(value),
+          />
+        );
+      },
     },
     {
       header: 'Unit',
       accessor: 'unit_name',
       width: 200,
-      cellStyle: { py: 1, px: 1.5 },
+      cellStyle: { py: 1, px: 1.5, maxWidth: 200 },
       filterable: true,
       inlineFilter: true,
       filter: {
         type: 'autocomplete',
         inline: true,
-        options: unitFilterOptions,
-        placeholder: 'Unit',
+        options: unitOrCityFilterOptions,
+        placeholder: 'Unit / City',
+        valueAccessor: (row) => `${row?.unit_name || row?.unitName || ''} ${row?.unit_city || row?.unitCity || row?.city || ''}`,
         getOptionLabel: (o) => (o && typeof o === 'object' ? (o.label ?? String(o.value ?? '')) : String(o ?? '')),
         // Allow parent view to control loading and input change (for async suggestions)
         autocompleteProps: {
@@ -417,15 +449,14 @@ const HKCleaningsView = () => {
           onInputChange: (_e, v) => setUnitFilterInput(v),
         },
       },
-    },
-    {
-      header: 'City',
-      accessor: 'city',
-      width: 140,
-      cellStyle: { py: 1, px: 1.5 },
-      filterable: true,
-      filterType: 'select',
-      inlineFilter: true,
+      render: (_value, row) => {
+        const unitName = row?.unit_name || row?.unitName || '';
+        const city = row?.unit_city || row?.unitCity || row?.city || '';
+        return {
+          primary: unitName,
+          meta: city,
+        };
+      },
     },
     {
       header: 'Status',
@@ -468,15 +499,6 @@ const HKCleaningsView = () => {
       },
     },
     {
-      header: 'Paid',
-      accessor: 'unit_rate_amount',
-      format: 'money',
-      width: 90,
-      type: 'currency',
-      align: 'right',
-      cellStyle: { py: 1, px: 1.5, maxWidth: 90 },
-    },
-    {
       header: 'Charged',
       accessor: 'unit_cleaning_fee',
       format: 'money',
@@ -484,135 +506,83 @@ const HKCleaningsView = () => {
       type: 'currency',
       align: 'right',
       cellStyle: { py: 1, px: 1.5, maxWidth: 90 },
+      render: (value, row) => {
+        const v = formatCurrency(value);
+        const billToRaw = row?.bill_to ?? row?.billTo ?? '';
+        const billTo = billToRaw ? String(billToRaw).toUpperCase() : '';
+        const billToLabel =
+          billTo === 'OWNERS2' ? 'Owners2'
+          : billTo === 'CLIENT' ? 'Client'
+          : billTo === 'GUEST' ? 'Guest'
+          : billTo === 'HOUSEKEEPERS' ? 'Housekeepers'
+          : (billToRaw ? String(billToRaw) : '');
+
+        // Two-line cell (layout 2): primary amount + grey meta line (bill_to)
+        return {
+          primary: v,
+          meta: billToLabel,
+        };
+      },
     },
+    {
+      header: 'Cost',
+      accessor: 'unit_rate_amount',
+      format: 'money',
+      width: 90,
+      type: 'currency',
+      align: 'right',
+      cellStyle: { py: 1, px: 1.5, maxWidth: 90 },
+      render: (value, row) => {
+        const status = String(row?.status || '').toLowerCase();
+        if (status === 'cancelled') {
+          return '';
+        }
+        // Default behavior when not Done: show the existing cost value
+        if (status !== 'done') {
+          return formatCurrency(value);
+        }
+
+        const cityRaw = String(row?.unit_city || row?.unitCity || row?.city || '').toLowerCase();
+
+        // 1) Playa del Carmen units: Cost = null (render blank)
+        if (cityRaw.includes('playa')) {
+          return '';
+        }
+
+        // 2) Tulum units: Cost depends on report status
+        if (cityRaw.includes('tulum')) {
+          const reportStatusRaw = String(row?.report_status || row?.reportStatus || '').toLowerCase();
+
+          // Pending / Needs review -> cleaning_cost
+          if (
+            reportStatusRaw === 'pending' ||
+            reportStatusRaw === 'needs review' ||
+            reportStatusRaw === 'needs_review' ||
+            reportStatusRaw === 'needsreview'
+          ) {
+            const v = row?.cleaning_cost ?? row?.cleaningCost ?? value;
+            return <span style={{ color: 'orange' }}>{formatCurrency(v)}</span>;
+          }
+
+          // Reported -> real_cleaning_cost
+          if (reportStatusRaw === 'reported') {
+            const v = row?.real_cleaning_cost ?? row?.realCleaningCost ?? row?.real_cleaningCost ?? '';
+            return formatCurrency(v);
+          }
+
+          // Fallback (unknown report status)
+          const v = row?.cleaning_cost ?? row?.cleaningCost ?? value;
+          return formatCurrency(v);
+        }
+
+        // Unknown city: keep current value
+        return formatCurrency(value);
+      },
+    },
+    // Removed Laundry column
     { header: 'Notes', accessor: 'notes', width: 220, cellStyle: { py: 1, px: 1.5 } },
   ];
 
-  const completedCleanerOptions = useMemo(() => {
-    const base = (Array.isArray(allRows) ? allRows : [])
-      .map(r => (r?.checklist_cleaner_short_name || r?.checklistCleanerShortName || '').trim())
-      .filter(Boolean);
-    const uniq = Array.from(new Set(base)).sort((a, b) => a.localeCompare(b));
-    return [{ label: 'All', value: '' }, ...uniq.map(n => ({ label: n, value: n }))];
-  }, [allRows]);
-
-  const completedRows = useMemo(() => {
-    // Consider a cleaning "completed" if status is done OR there is a submitted checklist
-    return (Array.isArray(allRows) ? allRows : [])
-      .filter(r => {
-        const status = String(r?.status || '').toLowerCase();
-        return status === 'done' || !!r?.checklist_submitted_at;
-      })
-      .filter(r => {
-        const q = (filters.unit_name || '').trim().toLowerCase();
-        if (!q) return true;
-        const name = String(r?.unit_name || r?.unitName || '').toLowerCase();
-        return name.includes(q);
-      })
-      .filter(r => {
-        const sel = (filters.completed_cleaner || '').trim().toLowerCase();
-        if (!sel) return true;
-        const name = String(r?.checklist_cleaner_short_name || r?.checklistCleanerShortName || '').toLowerCase();
-        return name === sel;
-      })
-      .sort((a, b) => {
-        // Sort by last submitted checklist DESC (nulls last)
-        const ta = a?.checklist_submitted_at ? Date.parse(a.checklist_submitted_at.replace(' ', 'T')) : 0;
-        const tb = b?.checklist_submitted_at ? Date.parse(b.checklist_submitted_at.replace(' ', 'T')) : 0;
-        return tb - ta;
-      })
-      .map(r => ({
-        ...r,
-        completed_date: r.checkout_date || r.checkoutDate || '',
-        completed_unit: r.unit_name || r.unitName || '',
-        completed_cleaner: r.checklist_cleaner_short_name || r.checklistCleanerShortName || '',
-        completed_notes: r.checklist_cleaning_notes || r.cleaning_notes || r.notes || '',
-        completed_issues: r.checklist_issues || r.issues || '',
-      }));
-  }, [allRows, filters.unit_name, filters.completed_cleaner]);
-
-  const completedColumns = useMemo(() => ([
-    {
-      header: 'Date',
-      accessor: 'completed_date',
-      width: 170,
-      cellStyle: { py: 0.75, px: 1.5 },
-      render: (_value, row) => {
-        const submitted = row?.checklist_submitted_at;
-        const checkout = row?.checkout_date || row?.completed_date;
-        return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <Typography variant="caption" sx={{ color: '#111827', fontWeight: 700 }}>
-              {fmtTsDMY(submitted) || '—'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#6b7280' }}>
-              {`checkOut: ${fmtDateDMY(checkout) || '—'}`}
-            </Typography>
-          </Box>
-        );
-      },
-    },
-    {
-      header: 'Unit',
-      accessor: 'completed_unit',
-      width: 240,
-      cellStyle: { py: 0.75, px: 1.5 },
-      render: (_value, row) => {
-        const unit = row?.completed_unit || row?.unit_name || '';
-        const tRaw = String(row?.cleaning_type || row?.cleaningType || '').toLowerCase();
-        const typeLabel = tRaw === 'checkout' ? 'Normal' : (tRaw ? (tRaw.charAt(0).toUpperCase() + tRaw.slice(1)) : '');
-        return (
-          <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <Typography variant="caption" sx={{ color: '#111827', fontWeight: 700 }}>
-              {unit || '—'}
-            </Typography>
-            <Typography variant="caption" sx={{ color: '#6b7280' }}>
-              {typeLabel || '—'}
-            </Typography>
-          </Box>
-        );
-      },
-      filterable: true,
-      inlineFilter: true,
-      filter: {
-        type: 'autocomplete',
-        inline: true,
-        options: unitFilterOptions,
-        placeholder: 'Unit',
-        getOptionLabel: (o) =>
-          (o && typeof o === 'object'
-            ? (o.label ?? String(o.value ?? ''))
-            : String(o ?? '')),
-        autocompleteProps: {
-          freeSolo: true,
-          loading: unitFilterLoading,
-          onInputChange: (_e, v) => setUnitFilterInput(v),
-        },
-      },
-    },
-    {
-      header: 'Cleaner',
-      accessor: 'completed_cleaner',
-      width: 160,
-      cellStyle: { py: 1, px: 1.5 },
-      filterable: true,
-      inlineFilter: true,
-      filterType: 'select',
-      filterOptions: completedCleanerOptions,
-    },
-    {
-      header: 'Notes',
-      accessor: 'completed_notes',
-      width: 260,
-      cellStyle: { py: 1, px: 1.5 },
-    },
-    {
-      header: 'Issues',
-      accessor: 'completed_issues',
-      width: 220,
-      cellStyle: { py: 1, px: 1.5 },
-    },
-  ]), [unitFilterOptions, unitFilterLoading, completedCleanerOptions]);
 
   return (
     <PageScaffold
@@ -672,110 +642,20 @@ const HKCleaningsView = () => {
                 }}
               />
             </Box>
-
-            {/* Center: Tabs */}
-            <Tabs
-              value={activeView}
-              onChange={(_e, v) => {
-                if (!v) return;
-                setActiveView(v);
-              }}
-              variant="standard"
-              sx={{
-                minHeight: 34,
-                '& .MuiTabs-indicator': {
-                  backgroundColor: '#1E6F68',
-                  height: 2,
-                },
-              }}
-            >
-              <Tab
-                value="all"
-                label="ALL CLEANINGS"
-                disableRipple
-                sx={{
-                  minHeight: 34,
-                  textTransform: 'uppercase',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  fontSize: 12,
-                  color: '#6b7280',
-                  px: 1.75,
-                  position: 'relative',
-                  '&.Mui-selected': {
-                    color: '#1E6F68',
-                  },
-                  '&::after': {
-                    content: '"|"',
-                    position: 'absolute',
-                    right: -4,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#d1d5db',
-                    fontWeight: 400,
-                  },
-                }}
-              />
-              <Tab
-                value="completed"
-                label="COMPLETED"
-                disableRipple
-                sx={{
-                  minHeight: 34,
-                  textTransform: 'uppercase',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  fontSize: 12,
-                  color: '#6b7280',
-                  px: 1.75,
-                  '&.Mui-selected': {
-                    color: '#1E6F68',
-                  },
-                }}
-              />
-            </Tabs>
-
             {/* Right: Buttons */}
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
               <Button
                 variant="outlined"
                 color="success"
                 onClick={() => setDrawerOpen(true)}
-                disabled={activeView !== 'all'}
               >
                 + Add
               </Button>
               <Button
                 variant="outlined"
                 onClick={() => setUnitsDrawerOpen(true)}
-                disabled={activeView !== 'all'}
               >
                 Units & Fees
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={() => {
-                  setFilters({
-                    start: '',
-                    end: '',
-                    city: '',
-                    status: 'any',
-                    cleaning_type: '',
-                    search: '',
-                    unit_name: '',
-                    completed_cleaner: '',
-                    page: 1,
-                    pageSize: 25,
-                    sort: 'checkout_date',
-                    dir: 'asc',
-                    month: '',
-                    year: '',
-                  });
-                }}
-                disabled={activeView !== 'all'}
-              >
-                Reset filters
               </Button>
             </Stack>
           </Stack>
@@ -784,8 +664,8 @@ const HKCleaningsView = () => {
     >
 
         <AppDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Add Cleaning">
-          <NewHKCleaningsForm
-            onSuccess={() => {
+          <NewHKCleaningsFormRHF
+            onSaved={() => {
               setDrawerOpen(false);
               fetchData();
             }}
@@ -1031,69 +911,40 @@ const HKCleaningsView = () => {
           }}
         />
         {/* Table area in scaffold's scroll */}
-        {activeView === 'all' ? (
-          <Box sx={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 260px)' }}>
-            <TableLite
-              columns={columns}
-              rows={allRows}
-              loading={loading}
-              error={error}
-              useParentScroll={false}
-              height="100%"
-              defaultStringTransform={null}
-              enableFilters
-              filterValues={{
-                city: filters.city,
-                status: filters.status === 'any' ? '' : filters.status,
-                unit_name: filters.unit_name || '',
-                cleaning_type: filters.cleaning_type || '',
-              }}
-              onFilterChange={(key, value) => {
-                if (key === 'unit_name') {
-                  setFilters(prev => ({ ...prev, unit_name: value || '' }));
-                  return;
-                }
-                if (key === 'status') {
-                  setFilters(prev => ({ ...prev, status: value || 'any' }));
-                } else if (key === 'city') {
-                  setFilters(prev => ({ ...prev, city: value || '' }));
-                } else if (key === 'cleaning_type') {
-                  setFilters(prev => ({ ...prev, cleaning_type: value || '' }));
-                } else {
-                  setFilters(prev => ({ ...prev, [key]: value }));
-                }
-              }}
-              optionsSourceRows={allRows}
-            />
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 260px)' }}>
-            <TableLite
-              columns={completedColumns}
-              rows={completedRows}
-              loading={loading}
-              error={error}
-              useParentScroll={false}
-              height="100%"
-              defaultStringTransform={null}
-              enableFilters
-              filterValues={{
-                unit_name: filters.unit_name || '',
-                completed_unit: filters.unit_name || '',
-                completed_cleaner: filters.completed_cleaner || '',
-              }}
-              onFilterChange={(key, value) => {
-                if (key === 'unit_name' || key === 'completed_unit') {
-                  setFilters(prev => ({ ...prev, unit_name: value || '' }));
-                  return;
-                }
-                if (key === 'completed_cleaner') {
-                  setFilters(prev => ({ ...prev, completed_cleaner: value || '' }));
-                }
-              }}
-            />
-          </Box>
-        )}
+        <Box sx={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 260px)' }}>
+          <TableLite
+            columns={columns}
+            rows={allRows}
+            loading={loading}
+            error={error}
+            useParentScroll={false}
+            height="100%"
+            defaultStringTransform={null}
+            enableFilters
+            filterValues={{
+              city: filters.city,
+              status: filters.status === 'any' ? '' : filters.status,
+              unit_name: filters.unit_name || '',
+              cleaning_type: filters.cleaning_type || '',
+            }}
+            onFilterChange={(key, value) => {
+              if (key === 'unit_name') {
+                setFilters(prev => ({ ...prev, unit_name: value || '' }));
+                return;
+              }
+              if (key === 'status') {
+                setFilters(prev => ({ ...prev, status: value || 'any' }));
+              } else if (key === 'city') {
+                setFilters(prev => ({ ...prev, city: value || '' }));
+              } else if (key === 'cleaning_type') {
+                setFilters(prev => ({ ...prev, cleaning_type: value || '' }));
+              } else {
+                setFilters(prev => ({ ...prev, [key]: value }));
+              }
+            }}
+            optionsSourceRows={allRows}
+          />
+        </Box>
       </PageScaffold>
   );
 };
