@@ -420,7 +420,7 @@ const HKTransactions = () => {
     {
       header: 'Description',
       accessor: 'description',
-      width: 250,
+      width: 180,
       cellStyle: { py: 1, px: 1.5 },
       headerStyle: { textAlign: 'left' },
       render: (value, row) => ({

@@ -127,6 +127,17 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         // Always enforce allowO2 on the client, regardless of endpoint behavior
         list = list.filter((c) => c.allowO2 === true || c.allowO2 === 1);
 
+        // Remove "Shuttle" from the Category dropdown (kept only inside Servicios Externos description)
+        // Normalize and compare against common variants.
+        const normalizeName = (s) => (s || '').toString().trim().toLowerCase();
+        const blockedCategoryNames = new Set([
+          'shuttle',
+          'servicio shuttle',
+          'servicios shuttle',
+          'shuttles',
+        ]);
+        list = list.filter((c) => !blockedCategoryNames.has(normalizeName(c.name)));
+
         list.sort((a,b) => a.name.localeCompare(b.name));
         if (isMounted) setCategories(list);
       } catch (e) {
@@ -151,15 +162,19 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         const catId = d.category?.id ?? d.categoryId ?? (d.category && parseInt(String(d.category).split('/').pop(), 10)) ?? '';
         const amt = d.amount != null ? String(d.amount) : '';
         if (active) {
+          const isBothTx = d.paid != null || d.charged != null;
+          const loadedType = d.type || (isBothTx ? 'Abono' : 'Ingreso');
           setFormData({
             costCentre: d.costCentre || 'Owners2',
             date: d.date || '',
             category: catId ? String(catId) : '',
-            type: d.type || 'Ingreso',
+            // For Both-style transactions, legacy 'Ingreso' should be shown as 'Abono'
+            type: (isBothTx && loadedType === 'Ingreso') ? 'Abono' : loadedType,
             description: d.description || '',
             amount: amt,
-            paid: '',
-            charged: '',
+            // Preserve API values exactly; null -> '' so inputs can render
+            paid: d.paid != null ? String(d.paid) : '',
+            charged: d.charged != null ? String(d.charged) : '',
             comments: d.comments || '',
             createdBy: d.createdBy || '',
             private: !!d.private,
@@ -207,12 +222,35 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
   // Enforce type based on category.type
   useEffect(() => {
     if (!selectedCategory) return;
+    // Only enforce for single-direction categories. 'Both' is derived from Paid/Charged.
     if (selectedCategory.type === 'Ingreso' && formData.type !== 'Ingreso') {
       setFormData((p) => ({ ...p, type: 'Ingreso' }));
     } else if (selectedCategory.type === 'Gasto' && formData.type !== 'Gasto') {
       setFormData((p) => ({ ...p, type: 'Gasto' }));
     }
   }, [selectedCategory]);
+
+  // For "Both" categories, derive type from Paid vs Charged:
+  // - Paid > Charged  => Gasto
+  // - Paid < Charged  => Abono
+  useEffect(() => {
+    const isBothCategory = (selectedCategory?.type === 'Both');
+    // If categories haven't loaded yet but we already have paid/charged values (editing existing tx), treat it as Both.
+    const hasPaidChargedValues = String(formData.paid ?? '').trim() !== '' || String(formData.charged ?? '').trim() !== '';
+
+    if (!isBothCategory && !hasPaidChargedValues) return;
+
+    const paidNum = Number((formData.paid ?? '').toString().replace(',', '.').trim() || '0');
+    const chargedNum = Number((formData.charged ?? '').toString().replace(',', '.').trim() || '0');
+
+    let derived = formData.type;
+    if (paidNum > chargedNum) derived = 'Gasto';
+    else if (paidNum < chargedNum) derived = 'Abono';
+
+    if (derived !== formData.type) {
+      setFormData((p) => ({ ...p, type: derived }));
+    }
+  }, [selectedCategory, formData.paid, formData.charged]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -291,7 +329,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         if (paidNum > chargedNum) {
           resolvedType = 'Gasto';
         } else if (paidNum < chargedNum) {
-          resolvedType = 'Ingreso';
+          resolvedType = 'Abono';
         }
       }
 
@@ -322,7 +360,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         fd.append('category', 'O2 Transactions');
         if (formData.createdBy) fd.append('uploaded_by', String(formData.createdBy));
         if (formData.category) fd.append('category_id', String(formData.category));
-        if (formData.type) fd.append('tx_type', String(formData.type));
+        if (resolvedType) fd.append('tx_type', String(resolvedType));
         if (formData.date) fd.append('date', String(formData.date));
         if (formData.description) fd.append('description', String(formData.description));
         try {
@@ -400,8 +438,9 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         disabled={disabled}
         style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
       >
-        <option value="Ingreso">Ingreso</option>
+        <option value="Abono">Abono</option>
         <option value="Gasto">Gasto</option>
+        <option value="Ingreso">Ingreso</option>
       </select>
     );
   };
@@ -513,7 +552,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
       </div>
 
       {/* Monto / Paid & Charged */}
-      {selectedCategory?.type === 'Both' ? (
+      {(selectedCategory?.type === 'Both' || String(formData.paid ?? '').trim() !== '' || String(formData.charged ?? '').trim() !== '') ? (
         <>
           <div className="form-row" style={{ minWidth: 0 }}>
             <label>Paid</label>
