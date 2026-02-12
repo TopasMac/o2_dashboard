@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import PageScaffold from '../components/layout/PageScaffold';
 import AppDrawer from '../components/common/AppDrawer';
-import EditHKCleaningsForm from '../components/forms/HKCleaningsTablePage/EditHKCleaningsForm';
+import HKCleaningsEditFormRHF from '../components/forms/HKCleaningsEditFormRHF';
 import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
 import api from '../api';
 import {
+  Autocomplete,
   Box,
   Button,
   Divider,
@@ -68,14 +69,35 @@ export default function HKCleaningsRecon() {
   const [editingCleaning, setEditingCleaning] = useState(null);
   const [statusFilter, setStatusFilter] = useState(''); // '' = All
 
-  // Status header filter ('' = All)
+  const [unitFilter, setUnitFilter] = useState(null); // string unit_name or null
+
+
+  const unitOptions = useMemo(() => {
+    const set = new Set();
+    for (const r of rows) {
+      const name = (r.unit_name ?? '').toString().trim();
+      if (name) set.add(name);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [rows]);
+
   const rowsToRender = useMemo(() => {
-    if (!statusFilter) return rows;
-    return rows.filter((r) => {
-      const s = normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending';
-      return s === statusFilter;
-    });
-  }, [rows, statusFilter]);
+    let out = rows;
+
+    if (statusFilter) {
+      out = out.filter((r) => {
+        const s = normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending';
+        return s === statusFilter;
+      });
+    }
+
+    if (unitFilter) {
+      const needle = unitFilter.toString().trim().toLowerCase();
+      out = out.filter((r) => (r.unit_name ?? '').toString().toLowerCase() === needle);
+    }
+
+    return out;
+  }, [rows, statusFilter, unitFilter]);
 
   const canSave = useMemo(() => rows.length > 0, [rows.length]);
 
@@ -155,13 +177,19 @@ export default function HKCleaningsRecon() {
   };
 
   const saveRow = async (row) => {
+    const toMoneyStr = (v) => {
+      if (v === '' || v === null || v === undefined) return '0';
+      const s = String(v).trim();
+      if (s === '' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') return '0';
+      return s;
+    };
     const payload = {
       month,
       city,
       unit_id: Number(row.unit_id),
       service_date: row.service_date,
-      cleaning_cost: row.cleaning_cost === '' ? '0' : String(row.cleaning_cost),
-      laundry_cost: row.laundry_cost === '' ? '0' : String(row.laundry_cost),
+      cleaning_cost: toMoneyStr(row.cleaning_cost),
+      laundry_cost: toMoneyStr(row.laundry_cost),
       report_status: normalizeReportStatus(row.report_status ?? row.reportStatus) || null,
       notes: row.notes ?? null,
     };
@@ -305,7 +333,26 @@ export default function HKCleaningsRecon() {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700 }}>Cleaning</TableCell>
-                <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700 }}>Unit</TableCell>
+                <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700 }}>
+                  <Autocomplete
+                    size="small"
+                    options={unitOptions}
+                    value={unitFilter}
+                    onChange={(_e, v) => setUnitFilter(v)}
+                    clearOnEscape
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        variant="standard"
+                        placeholder="Unit"
+                        InputProps={{
+                          ...params.InputProps,
+                          style: { fontWeight: 700 },
+                        }}
+                      />
+                    )}
+                  />
+                </TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Type</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Expected</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Paid</TableCell>
@@ -557,9 +604,9 @@ export default function HKCleaningsRecon() {
         width={520}
       >
         {editingCleaning ? (
-          <EditHKCleaningsForm
+          <HKCleaningsEditFormRHF
             cleaning={editingCleaning}
-            onSaved={async () => {
+            onSuccess={async () => {
               setEditDrawerOpen(false);
               setEditingCleaning(null);
               await load();

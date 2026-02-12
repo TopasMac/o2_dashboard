@@ -386,9 +386,6 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                             <PanelLink to="/hk-transactions" label="HK Transactions" icon={ReceiptPercentIcon} active={location.pathname === '/hk-transactions'} onClick={() => {}} />
                           </li>
                         )}
-                        <li style={{ marginBottom: '8px' }}>
-                          <PanelLink to="/hk-results" label="HK Results" icon={PresentationChartLineIcon} active={location.pathname === '/hk-results'} onClick={() => {}} />
-                        </li>
                       </>
                     )}
 

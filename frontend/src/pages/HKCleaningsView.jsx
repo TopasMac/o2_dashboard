@@ -5,9 +5,9 @@ import TableLite from '../components/layout/TableLite';
 import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
 import api from '../api';
 import AppDrawer from '../components/common/AppDrawer';
-import NewHKCleaningsFormRHF from '../components/forms/NewHKCleaningsFormRHF';
+import HKCleaningsNewFormRHF from '../components/forms/HKCleaningsNewFormRHF';
 import HKCleaningsRateForm from '../components/forms/HKCleaningsTablePage/HKCleaningsRateForm';
-import EditHKCleaningsForm from '../components/forms/HKCleaningsTablePage/EditHKCleaningsForm';
+import HKCleaningsEditFormRHF from '../components/forms/HKCleaningsEditFormRHF';
 import PageScaffold from '../components/layout/PageScaffold';
 import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 
@@ -413,7 +413,8 @@ const HKCleaningsView = () => {
       width: 170,
       cellStyle: { py: 1, px: 1.5 },
       render: (_value, row) => {
-        const code = row?.reservation_code || row?.reservationCode || '';
+        const reservationCode = row?.reservation_code || row?.reservationCode || '';
+        const code = reservationCode ? reservationCode : (row?.id != null ? String(row.id) : '');
         const date = row?.checkout_date || row?.checkoutDate || '';
         return (
           <TableLiteTwoLineCell
@@ -500,14 +501,17 @@ const HKCleaningsView = () => {
     },
     {
       header: 'Charged',
-      accessor: 'unit_cleaning_fee',
+      // Single source of truth from backend: charged_fee = COALESCE(hc.o2_collected_fee, u.cleaning_fee, 0)
+      accessor: 'charged_fee',
       format: 'money',
       width: 90,
       type: 'currency',
       align: 'right',
       cellStyle: { py: 1, px: 1.5, maxWidth: 90 },
-      render: (value, row) => {
-        const v = formatCurrency(value);
+      render: (_value, row) => {
+        const charged = row?.charged_fee ?? row?.chargedFee ?? '';
+        const v = formatCurrency(charged);
+
         const billToRaw = row?.bill_to ?? row?.billTo ?? '';
         const billTo = billToRaw ? String(billToRaw).toUpperCase() : '';
         const billToLabel =
@@ -517,7 +521,6 @@ const HKCleaningsView = () => {
           : billTo === 'HOUSEKEEPERS' ? 'Housekeepers'
           : (billToRaw ? String(billToRaw) : '');
 
-        // Two-line cell (layout 2): primary amount + grey meta line (bill_to)
         return {
           primary: v,
           meta: billToLabel,
@@ -664,7 +667,7 @@ const HKCleaningsView = () => {
     >
 
         <AppDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} title="Add Cleaning">
-          <NewHKCleaningsFormRHF
+          <HKCleaningsNewFormRHF
             onSaved={() => {
               setDrawerOpen(false);
               fetchData();
@@ -890,7 +893,7 @@ const HKCleaningsView = () => {
 
         <AppDrawer open={editDrawerOpen} onClose={() => setEditDrawerOpen(false)} title="Edit Cleaning">
           {editingCleaning && (
-            <EditHKCleaningsForm
+            <HKCleaningsEditFormRHF
               cleaning={editingCleaning}
               onSuccess={() => {
                 setEditDrawerOpen(false);

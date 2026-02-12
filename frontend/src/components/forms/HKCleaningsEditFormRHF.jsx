@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Stack, Button } from '@mui/material';
-import api from '../../../api';
+import api from '../../api';
 
 // RHF field components (they require a react-hook-form context)
-import { FormProvider, useForm } from 'react-hook-form';
-import RHFTextField from '../rhf/RHFTextField';
-import RHFSelect from '../rhf/RHFSelect';
+import { useForm } from 'react-hook-form';
+import RHFForm, { RHFTextField, RHFSelect } from './rhf/RHFForm';
 
 /**
  * EditHKCleaningsForm — edit an existing hk_cleanings entry
@@ -84,10 +83,14 @@ export default function EditHKCleaningsForm({ cleaning, onSuccess, onCancel }) {
   };
 
   return (
-    <FormProvider {...methods}>
-      <form onSubmit={methods.handleSubmit(onSubmit)}>
-        <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Edit Cleaning</div>
-        <Stack direction="column" spacing={3} sx={{ mb: 1 }}>
+    <RHFForm
+      formId="hk-cleanings-edit-form"
+      methods={methods}
+      onSubmit={onSubmit}
+      useGrid={false}
+    >
+      <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 10 }}>Edit Cleaning</div>
+      <Stack direction="column" spacing={3} sx={{ mb: 1 }}>
         <RHFTextField
           name="checkout_date"
           label="Date"
@@ -154,30 +157,29 @@ export default function EditHKCleaningsForm({ cleaning, onSuccess, onCancel }) {
         />
       </Stack>
 
-        {err && (
-          <div style={{ color: 'crimson', fontSize: 13, marginBottom: 8 }}>{err}</div>
-        )}
+      {err && (
+        <div style={{ color: 'crimson', fontSize: 13, marginBottom: 8 }}>{err}</div>
+      )}
 
-        <Stack direction="row" spacing={1}>
-          <Button
-            type="submit"
-            variant="outlined"
-            color="success"
-            disabled={!canSave || saving}
-            sx={{ fontWeight: 700 }}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            onClick={onCancel}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-        </Stack>
-      </form>
-    </FormProvider>
+      <Stack direction="row" spacing={1}>
+        <Button
+          type="submit"
+          variant="outlined"
+          color="success"
+          disabled={!canSave || saving}
+          sx={{ fontWeight: 700 }}
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </Button>
+        <Button
+          variant="outlined"
+          color="error"
+          onClick={onCancel}
+          disabled={saving}
+        >
+          Cancel
+        </Button>
+      </Stack>
+    </RHFForm>
   );
 }

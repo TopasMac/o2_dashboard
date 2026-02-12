@@ -123,9 +123,25 @@ class HKCleaningsWriteController extends AbstractController
             return $this->json(['ok' => false, 'error' => 'Invalid checkout_date; expected YYYY-MM-DD'], Response::HTTP_BAD_REQUEST);
         }
 
-        $cleaningType = strtolower(trim((string) $typeRaw));
+        $cleaningType = trim((string) $typeRaw);
         if ($cleaningType === '') {
             return $this->json(['ok' => false, 'error' => 'cleaning_type is required'], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Normalize cleaning_type to capitalized canonical codes
+        $ctLc = strtolower($cleaningType);
+        $map = [
+            'initial'   => 'Initial',
+            'mid-stay'  => 'Mid-stay',
+            'midstay'   => 'Mid-stay',
+            'mid stay'  => 'Mid-stay',
+            'owner'     => 'Owner',
+            'redo'      => 'Redo',
+            'refresh'   => 'Refresh',
+        ];
+
+        if (array_key_exists($ctLc, $map)) {
+            $cleaningType = $map[$ctLc];
         }
 
         // Optional fields
@@ -141,9 +157,9 @@ class HKCleaningsWriteController extends AbstractController
             $costCentre = null;
         }
 
-        $o2FeeRaw  = $data['o2_collected_fee'] ?? $data['o2CollectedFee'] ?? 0;
-        if ($o2FeeRaw === '' || $o2FeeRaw === null) { $o2FeeRaw = 0; }
-        $o2Fee = (float) $o2FeeRaw;
+        $o2FeeRaw = $data['o2_collected_fee'] ?? $data['o2CollectedFee'] ?? null;
+        if ($o2FeeRaw === '' || $o2FeeRaw === null) { $o2FeeRaw = null; }
+        $o2Fee = ($o2FeeRaw === null) ? null : (float) $o2FeeRaw;
 
         $bookingId = $data['booking_id'] ?? $data['bookingId'] ?? null;
         if ($bookingId === '') { $bookingId = null; }
@@ -174,27 +190,25 @@ class HKCleaningsWriteController extends AbstractController
             $city = $maybeCity ?: null;
         }
 
-        // Enforce city-based rules:
-        // - Playa del Carmen + status=done => report_status=reported
-        // - Tulum => status forced to pending; report_status=pending
+        // City flags (used only for sensible defaults like cost_centre; do NOT override user-provided values)
         $cityLc = strtolower(trim((string)($city ?? '')));
         $isPlaya = ($cityLc === 'playa del carmen' || str_contains($cityLc, 'playa'));
         $isTulum = ($cityLc === 'tulum' || str_contains($cityLc, 'tulum'));
 
-        if ($isTulum) {
-            $statusRaw = 'pending';
-        }
-
+        // Validate status (respect incoming status; default to pending if missing/invalid)
         $allowedStatus = ['pending', 'done', 'cancelled'];
         if (!in_array($statusRaw, $allowedStatus, true)) {
             $statusRaw = 'pending';
         }
 
-        $reportStatus = 'pending';
-        if ($isPlaya && $statusRaw === 'done') {
-            $reportStatus = 'reported';
+        // Respect incoming report_status if provided; otherwise default to pending.
+        $reportStatus = $data['report_status'] ?? $data['reportStatus'] ?? 'pending';
+        if ($reportStatus === '' || $reportStatus === null) {
+            $reportStatus = 'pending';
         }
-        if ($isTulum) {
+        $reportStatus = strtolower(trim((string)$reportStatus));
+        $allowedReportStatus = ['pending', 'reported', 'needs_review'];
+        if (!in_array($reportStatus, $allowedReportStatus, true)) {
             $reportStatus = 'pending';
         }
 
@@ -244,7 +258,7 @@ class HKCleaningsWriteController extends AbstractController
         // Default bill_to/source if missing
         // Rule: cleaning_type=owner => bill_to defaults to CLIENT
         if ($billTo === null || $billTo === '') {
-            if ($cleaningType === strtolower((string)HKCleanings::TYPE_OWNER)) {
+            if (strtolower($cleaningType) === 'owner') {
                 $billTo = 'CLIENT';
             } else {
                 $billTo = 'OWNERS2';
@@ -733,10 +747,17 @@ public function markDoneBy(Request $request): JsonResponse
         $didTouchBillTo = false;
         $incomingBillTo = null;
 
-        // checkoutDate
+        // checkoutDate / checkout_date
+        $checkoutVal = null;
         if (array_key_exists('checkoutDate', $data) && $data['checkoutDate']) {
+            $checkoutVal = $data['checkoutDate'];
+        } elseif (array_key_exists('checkout_date', $data) && $data['checkout_date']) {
+            $checkoutVal = $data['checkout_date'];
+        }
+
+        if ($checkoutVal) {
             try {
-                $d = new \DateTimeImmutable((string)$data['checkoutDate']);
+                $d = new \DateTimeImmutable((string)$checkoutVal);
                 if (method_exists($hk, 'setCheckoutDate')) {
                     $hk->setCheckoutDate($d);
                 }
@@ -748,8 +769,23 @@ public function markDoneBy(Request $request): JsonResponse
         // cleaningType / cleaning_type
         if (array_key_exists('cleaningType', $data) || array_key_exists('cleaning_type', $data)) {
             $raw = array_key_exists('cleaningType', $data) ? $data['cleaningType'] : $data['cleaning_type'];
-            $val = is_string($raw) ? strtolower(trim($raw)) : '';
+            $val = is_string($raw) ? trim($raw) : '';
+
             if ($val !== '') {
+                // Normalize to same canonical codes as createCleaning()
+                $ctLc = strtolower($val);
+                $map = [
+                    'initial'   => 'Initial',
+                    'mid-stay'  => 'Mid-stay',
+                    'midstay'   => 'Mid-stay',
+                    'mid stay'  => 'Mid-stay',
+                    'owner'     => 'Owner',
+                    'redo'      => 'Redo',
+                    'refresh'   => 'Refresh',
+                ];
+
+                $val = array_key_exists($ctLc, $map) ? $map[$ctLc] : $val;
+
                 $incomingCleaningType = $val;
                 $didTouchCleaningType = true;
                 if (method_exists($hk, 'setCleaningType')) {
@@ -817,14 +853,20 @@ public function markDoneBy(Request $request): JsonResponse
             }
         }
 
-        // o2CollectedFee
+        // o2CollectedFee / o2_collected_fee
+        $o2Val = null;
         if (array_key_exists('o2CollectedFee', $data)) {
-            $val = $data['o2CollectedFee'];
-            if ($val === '' || $val === null) {
-                $val = null;
+            $o2Val = $data['o2CollectedFee'];
+        } elseif (array_key_exists('o2_collected_fee', $data)) {
+            $o2Val = $data['o2_collected_fee'];
+        }
+
+        if (array_key_exists('o2CollectedFee', $data) || array_key_exists('o2_collected_fee', $data)) {
+            if ($o2Val === '' || $o2Val === null) {
+                $o2Val = null;
             }
             if (method_exists($hk, 'setO2CollectedFee')) {
-                $hk->setO2CollectedFee($val);
+                $hk->setO2CollectedFee($o2Val);
             }
         }
 
@@ -860,7 +902,7 @@ public function markDoneBy(Request $request): JsonResponse
         try {
             $ct = null;
             if ($didTouchCleaningType && $incomingCleaningType) {
-                $ct = $incomingCleaningType;
+                $ct = strtolower(trim((string) $incomingCleaningType));
             } elseif (method_exists($hk, 'getCleaningType')) {
                 $ct = strtolower(trim((string) $hk->getCleaningType()));
             }
@@ -874,7 +916,7 @@ public function markDoneBy(Request $request): JsonResponse
 
             $btEmpty = ($bt === null || (is_string($bt) && trim($bt) === ''));
 
-            if ($ct === strtolower((string)HKCleanings::TYPE_OWNER) && $btEmpty && !$didTouchBillTo) {
+            if ($ct === 'owner' && $btEmpty && !$didTouchBillTo) {
                 if (method_exists($hk, 'setBillTo')) {
                     $hk->setBillTo('CLIENT');
                 }

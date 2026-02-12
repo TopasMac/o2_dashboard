@@ -94,7 +94,6 @@ import {
           roles: ['ROLE_ADMIN','ROLE_MANAGER'],
         },
         { label: 'Unit Inventory', icon: ClipboardDocumentListIcon, to: '/inventory/review' },
-        { label: 'HK Results', icon: PresentationChartLineIcon, to: '/hk-results' },
       ],
     },
   

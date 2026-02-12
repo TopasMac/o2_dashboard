@@ -124,14 +124,26 @@ class HKCleaningsReconcileController extends AbstractController
         $notes        = $payload['notes'] ?? null;
         $reportStatus = $payload['report_status'] ?? ($payload['reportStatus'] ?? null);
 
-        // Basic numeric validation (>= 0)
+        // Basic numeric validation (>= 0), accept 0, treat empty/whitespace as 0, accept comma decimals
         $validateMoney = static function ($v): ?string {
-            if ($v === null || $v === '') return null;
+            if ($v === null) return null;
+
+            // Normalize strings: trim and allow comma decimals
+            if (is_string($v)) {
+                $v = trim($v);
+                // Some UIs may send the literal strings "null"/"undefined"; treat them as empty.
+                $lv = strtolower($v);
+                if ($lv === 'null' || $lv === 'undefined') return null;
+                if ($v === '') return null;
+                $v = str_replace(',', '.', $v);
+            }
+
             if (is_numeric($v)) {
                 $n = (float)$v;
                 if ($n < 0) return '__NEGATIVE__';
                 return number_format($n, 2, '.', '');
             }
+
             return '__INVALID__';
         };
 

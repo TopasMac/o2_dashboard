@@ -49,7 +49,7 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
       date: todayISO(),
       unit_id: '',
       cleaning_type: 'midstay',
-      status: 'pending',
+      status: (todayISO() < todayISO() ? 'done' : 'pending'),
       o2_collected_fee: '',
       bill_to: 'OWNERS2',
     }),
@@ -60,6 +60,17 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
   // RHFForm in this codebase usually wraps FormProvider internally; if it does,
   // this still works because we pass `form` down.
   const form = useForm({ defaultValues });
+
+  // Auto-set status to 'done' when the selected date is before today
+  const selectedDate = form.watch('date');
+
+  useEffect(() => {
+    if (!selectedDate) return;
+    const today = todayISO();
+    if (selectedDate < today) {
+      form.setValue('status', 'done', { shouldDirty: true });
+    }
+  }, [selectedDate]);
 
   const unitOptions = useMemo(() => {
     return (Array.isArray(units) ? units : [])

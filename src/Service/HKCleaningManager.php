@@ -108,9 +108,20 @@ class HKCleaningManager
                         $existing->setCleaningCost((string)$resolved);
                     }
                 }
-                // Optionally set/refresh collected fee if provided in payload
-                if (!empty($data['o2CollectedFee']) && method_exists($existing, 'setO2CollectedFee')) {
-                    $existing->setO2CollectedFee((string)$data['o2CollectedFee']);
+                // Respect provided collected fee (accept snake_case and camelCase; 0 is a valid value)
+                $o2CollectedFeeRaw = $data['o2_collected_fee'] ?? $data['o2CollectedFee'] ?? null;
+                if ($o2CollectedFeeRaw !== null && $o2CollectedFeeRaw !== '') {
+                    if (method_exists($existing, 'setO2CollectedFee')) {
+                        $existing->setO2CollectedFee((string)$o2CollectedFeeRaw);
+                    }
+                }
+
+                // Respect provided bill_to (accept snake_case and camelCase)
+                $billToRaw = $data['bill_to'] ?? $data['billTo'] ?? null;
+                if ($billToRaw !== null && $billToRaw !== '') {
+                    if (method_exists($existing, 'setBillTo')) {
+                        $existing->setBillTo((string)$billToRaw);
+                    }
                 }
                 $this->em->persist($existing);
                 $skipped++; // count updates under 'skipped' to preserve return shape
@@ -125,6 +136,13 @@ class HKCleaningManager
             $hk->setCleaningType($cleaningType);
             $hk->setBookingId($data['bookingId'] ?? null);
             $hk->setReservationCode($data['reservationCode'] ?? null);
+            // Respect provided bill_to (accept snake_case and camelCase)
+            $billToRaw = $data['bill_to'] ?? $data['billTo'] ?? null;
+            if ($billToRaw !== null && $billToRaw !== '') {
+                if (method_exists($hk, 'setBillTo')) {
+                    $hk->setBillTo((string)$billToRaw);
+                }
+            }
             if (method_exists($hk, 'setStatus')) {
                 $hk->setStatus($status);
             }
@@ -149,9 +167,10 @@ class HKCleaningManager
                     $hk->setO2CollectedFee('0');
                 }
             } else {
-                // If caller provided a collected fee, it wins.
-                if (!empty($data['o2CollectedFee']) && method_exists($hk, 'setO2CollectedFee')) {
-                    $hk->setO2CollectedFee((string)$data['o2CollectedFee']);
+                // If caller provided a collected fee, it wins (accept snake_case and camelCase; 0 is valid).
+                $o2CollectedFeeRaw = $data['o2_collected_fee'] ?? $data['o2CollectedFee'] ?? null;
+                if ($o2CollectedFeeRaw !== null && $o2CollectedFeeRaw !== '' && method_exists($hk, 'setO2CollectedFee')) {
+                    $hk->setO2CollectedFee((string)$o2CollectedFeeRaw);
                 } else {
                     // For checkout/owner, default collected fee to Unit cleaning_fee if available.
                     if (($isOwner || $isCheckout) && method_exists($unit, 'getCleaningFee') && method_exists($hk, 'setO2CollectedFee')) {

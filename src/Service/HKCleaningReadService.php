@@ -99,7 +99,8 @@ class HKCleaningReadService
         $sql[] = "SELECT hc.id, hc.unit_id, COALESCE(u.unit_name, CONCAT('Unit #', hc.unit_id)) AS unit_name, ";
         $sql[] = '       u.id AS unit_table_id, u.status AS unit_status, u.cleaning_fee AS unit_cleaning_fee,';
         $sql[] = '       hc.city, u.city AS unit_city, hc.checkout_date, hc.cleaning_type, hc.status,';
-        $sql[] = '       hc.cleaning_cost, hc.laundry_cost, hc.o2_collected_fee, hc.bill_to, hc.source, hc.report_status, hc.booking_id, hc.reservation_code,';
+        $sql[] = '       hc.cleaning_cost, hc.laundry_cost, hc.o2_collected_fee,';
+        $sql[] = '       CAST(COALESCE(hc.o2_collected_fee, u.cleaning_fee, 0) AS DECIMAL(10,2)) AS charged_fee, hc.bill_to, hc.source, hc.report_status, hc.booking_id, hc.reservation_code,';
         $sql[] = "       CASE\n".
                  "         WHEN hcr.real_cleaning_cost IS NOT NULL THEN hcr.real_cleaning_cost\n".
                  "         WHEN LOWER(hc.city) = 'tulum' THEN (COALESCE(hc.cleaning_cost,0) + COALESCE(hc.laundry_cost,0))\n".
@@ -147,6 +148,7 @@ class HKCleaningReadService
             // Cast numeric fields
             $r['cleaning_cost'] = isset($r['cleaning_cost']) ? (float)$r['cleaning_cost'] : null;
             $r['o2_collected_fee'] = isset($r['o2_collected_fee']) ? (float)$r['o2_collected_fee'] : null;
+            $r['charged_fee'] = isset($r['charged_fee']) ? (float)$r['charged_fee'] : null;
             $r['laundry_cost'] = array_key_exists('laundry_cost', $r) && $r['laundry_cost'] !== null ? (float)$r['laundry_cost'] : null;
             $r['bill_to'] = array_key_exists('bill_to', $r) && $r['bill_to'] !== null ? (string)$r['bill_to'] : null;
             $r['source'] = array_key_exists('source', $r) && $r['source'] !== null ? (string)$r['source'] : null;
@@ -264,6 +266,7 @@ class HKCleaningReadService
             'city'            => 'hc.city',
             'cleaning_cost'   => 'hc.cleaning_cost',
             'o2_collected_fee'=> 'hc.o2_collected_fee',
+            'charged_fee'     => 'charged_fee',
             'created_at'      => 'hc.created_at',
             'id'              => 'hc.id',
         ];
