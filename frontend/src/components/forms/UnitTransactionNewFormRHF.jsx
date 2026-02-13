@@ -220,13 +220,25 @@ export default function UnitTransactionNewFormRHF({
   }, [isReimbursementCategory, setValue]);
   React.useEffect(() => {
     if (!categoryField) return;
+
     const meta = categoriesByIdRef.current.get(categoryField);
     if (!meta) return;
+
+    const labelLower = String(meta.label || meta.name || '').trim().toLowerCase();
+
     // If category has fixed type (Ingreso/Egreso), enforce it
-    const fixed = (meta.type || '').toLowerCase();
+    const fixed = String(meta.type || '').toLowerCase();
     if (fixed === 'ingreso') {
       setValue('type', 'Ingreso', { shouldDirty: true, shouldValidate: true });
-    } else if (fixed === 'egreso' || fixed === 'gasto') {
+      return;
+    }
+    if (fixed === 'egreso' || fixed === 'gasto') {
+      setValue('type', 'Gasto', { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+
+    // Default rule: Category "Otros" => Type defaults to "Gasto"
+    if (labelLower === 'otros' || labelLower.includes('otros')) {
       setValue('type', 'Gasto', { shouldDirty: true, shouldValidate: true });
     }
   }, [categoryField, setValue]);

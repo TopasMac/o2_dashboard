@@ -15,6 +15,8 @@ import HKTransactionEditFormRHF from '../components/forms/HKTransactionEditFormR
 import UnitLedgerNewFormRHF from '../components/forms/UnitLedgerNewFormRHF';
 import BookingEditFormRHF from '../components/forms/BookingEditFormRHF';
 import { PencilSquareIcon, XMarkIcon, DocumentTextIcon, CurrencyDollarIcon, EnvelopeIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import EmailSendDrawer from '../components/common/EmailSendDrawer';
 import O2ConfirmDialog from '../components/common/O2ConfirmDialog';
 import PageScaffold from '../components/layout/PageScaffold';
@@ -227,6 +229,8 @@ export default function UnitMonthlyReport() {
   const [unitResults, setUnitResults] = useState([]);
   const [selectedUnit, setSelectedUnit] = useState(null);
   const [loadingUnits, setLoadingUnits] = useState(false);
+  // Keep the last available unit list for prev/next navigation
+  const unitNavListRef = React.useRef([]);
 
   // Preview data (for later steps)
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -638,15 +642,27 @@ export default function UnitMonthlyReport() {
     setSelectedUnit(null); // typing resets selection
   };
 
+  // Prevent Autocomplete from reacting to unit nav chevron clicks
+  const stopUnitNav = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoadingUnits(true);
         const items = await service.listUnits();
-        if (!cancelled) setUnitResults(items);
+        if (!cancelled) {
+          setUnitResults(items);
+          unitNavListRef.current = Array.isArray(items) ? items : [];
+        }
       } catch (e) {
-        if (!cancelled) setUnitResults([]);
+        if (!cancelled) {
+          setUnitResults([]);
+          unitNavListRef.current = [];
+        }
       } finally {
         if (!cancelled) setLoadingUnits(false);
       }
@@ -663,9 +679,15 @@ export default function UnitMonthlyReport() {
         const items = (!unitQuery || unitQuery.trim().length < 2)
           ? await service.listUnits()
           : await service.searchUnits(unitQuery.trim());
-        if (!cancelled) setUnitResults(items);
+        if (!cancelled) {
+          setUnitResults(items);
+          unitNavListRef.current = Array.isArray(items) ? items : [];
+        }
       } catch (err) {
-        if (!cancelled) setUnitResults([]);
+        if (!cancelled) {
+          setUnitResults([]);
+          unitNavListRef.current = [];
+        }
       } finally {
         if (!cancelled) setLoadingUnits(false);
       }
@@ -885,6 +907,31 @@ export default function UnitMonthlyReport() {
     setSelectedUnit(null);
     setUnitQuery('');
     setUnitResults([]);
+  };
+
+  // --- Unit prev/next navigation (chevrons) ---
+  const unitNavIndex = useMemo(() => {
+    const list = unitNavListRef.current || [];
+    const id = Number(selectedUnit?.id);
+    if (!Number.isFinite(id)) return -1;
+    return list.findIndex(u => Number(u?.id) === id);
+  }, [selectedUnit?.id]);
+
+  const canPrevUnit = unitNavIndex > 0;
+  const canNextUnit = unitNavIndex >= 0 && unitNavIndex < ((unitNavListRef.current || []).length - 1);
+
+  const handlePrevUnit = () => {
+    if (!canPrevUnit) return;
+    const list = unitNavListRef.current || [];
+    const prev = list[unitNavIndex - 1];
+    if (prev) handleSelectUnit(prev);
+  };
+
+  const handleNextUnit = () => {
+    if (!canNextUnit) return;
+    const list = unitNavListRef.current || [];
+    const next = list[unitNavIndex + 1];
+    if (next) handleSelectUnit(next);
   };
 
   const openPreview = async () => {
@@ -1153,6 +1200,30 @@ export default function UnitMonthlyReport() {
               ...params.InputProps,
               endAdornment: (
                 <>
+                  {selectedUnit?.id ? (
+                    <>
+                      <IconButton
+                        size="small"
+                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handlePrevUnit(); }}
+                        disabled={!canPrevUnit}
+                        sx={{ p: 0.25 }}
+                        aria-label="Previous unit"
+                      >
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>&lt;</span>
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleNextUnit(); }}
+                        disabled={!canNextUnit}
+                        sx={{ p: 0.25 }}
+                        aria-label="Next unit"
+                      >
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>&gt;</span>
+                      </IconButton>
+                    </>
+                  ) : null}
                   {loadingUnits ? <CircularProgress size={16} /> : null}
                   {params.InputProps.endAdornment}
                 </>
@@ -1220,10 +1291,44 @@ export default function UnitMonthlyReport() {
                 InputProps={{
                   ...params.InputProps,
                   endAdornment: (
-                    <>
-                      {loadingUnits ? <CircularProgress size={16} /> : null}
+                    <Box sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                      {selectedUnit?.id ? (
+                        <>
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            tabIndex={-1}
+                            onMouseDown={stopUnitNav}
+                            onClick={(e) => {
+                              stopUnitNav(e);
+                              handlePrevUnit();
+                            }}
+                            disabled={!canPrevUnit}
+                            aria-label="Previous unit"
+                          >
+                            <ChevronLeftIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            tabIndex={-1}
+                            onMouseDown={stopUnitNav}
+                            onClick={(e) => {
+                              stopUnitNav(e);
+                              handleNextUnit();
+                            }}
+                            disabled={!canNextUnit}
+                            aria-label="Next unit"
+                          >
+                            <ChevronRightIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      ) : null}
+
+                      {/* {loadingUnits ? <CircularProgress size={16} /> : null} */}
+
                       {params.InputProps.endAdornment}
-                    </>
+                    </Box>
                   ),
                 }}
               />
