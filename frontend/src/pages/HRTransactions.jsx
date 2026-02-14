@@ -13,6 +13,8 @@ import {
   InputLabel,
   Tooltip,
   useMediaQuery,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -28,6 +30,19 @@ import HRPaymentDrawer from "../components/common/HRPaymentDrawer";
 import HRDiscountModal from "../components/modals/HRDiscountModal";
 import BaseModal from "../components/common/BaseModal";
 import PageScaffold from "../components/layout/PageScaffold";
+
+// Helper to compute net pay given gross and deduction rows
+function computeNetPay(grossAmount, deductionRowsSelected) {
+  const grossNum = grossAmount === null || grossAmount === undefined ? NaN : parseFloat(String(grossAmount));
+  if (!Number.isFinite(grossNum)) return "";
+  const sumDed = (deductionRowsSelected || []).reduce((acc, r) => {
+    const v = r?.amount === undefined || r?.amount === null ? NaN : parseFloat(String(r.amount));
+    const abs = Number.isFinite(v) ? Math.abs(v) : 0;
+    return acc + abs;
+  }, 0);
+  const net = Math.max(grossNum - sumDed, 0);
+  return net.toFixed(2);
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return "";
@@ -108,6 +123,14 @@ function buildDeductionNote(deductionRow) {
     return `Descuento ${parsedCurrent}/${parsedTotal} de ${amt} pesos`;
   }
   return `Descuento de ${amt} pesos`;
+}
+
+function buildDeductionsNote(deductionRows) {
+  const rows = Array.isArray(deductionRows) ? deductionRows : [];
+  const parts = rows.map((r) => buildDeductionNote(r)).filter((s) => String(s || "").trim() !== "");
+  if (!parts.length) return "";
+  // Use multi-line notes so payroll record can show multiple discounts clearly.
+  return parts.join("\n");
 }
 
 function pad2(n) {
@@ -193,6 +216,7 @@ const HRTransactions = () => {
   const [payNotes, setPayNotes] = useState("");
   const [payDate, setPayDate] = useState(todayYmd());
   const [paySaving, setPaySaving] = useState(false);
+  const [paySelectedDeductionIds, setPaySelectedDeductionIds] = useState([]);
 
   const handlePaySave = async () => {
     if (!payTarget?.employeeId) return;
@@ -213,6 +237,7 @@ const HRTransactions = () => {
         period_start: payTarget.periodStart,
         period_end: payTarget.periodEnd,
         notes: payNotes || "",
+        appliedDeductionIds: Array.isArray(paySelectedDeductionIds) ? paySelectedDeductionIds : [],
       });
       setPayModalOpen(false);
       await loadPaymentsData();
@@ -367,8 +392,15 @@ const HRTransactions = () => {
 
     const employeeId = employeeRow?.employeeId ?? employee?.id ?? employee?.value ?? null;
     const k = `${employeeId}|${half.periodStart}|${half.periodEnd}`;
-    const dedRow = deductionIndex.get(k);
-    const dedNote = buildDeductionNote(dedRow);
+    const dedRowsForPeriod = (deductionRows || []).filter((r) => {
+      const eid = r.employeeId ?? r.employee_id ?? r.employee?.id ?? null;
+      const ps = r.periodStart || r.period_start || "";
+      const pe = r.periodEnd || r.period_end || "";
+      return String(eid || "") === String(employeeId || "") && ps === half.periodStart && pe === half.periodEnd;
+    });
+
+    // For UI: show a small hint note built from all selected deductions (if any)
+    const dedNote = dedRowsForPeriod.length ? buildDeductionsNote(dedRowsForPeriod) : "";
 
     setPayTarget({
       employee,
@@ -377,9 +409,12 @@ const HRTransactions = () => {
       halfKey,
       periodStart: half.periodStart,
       periodEnd: half.periodEnd,
-      deductionRow: dedRow || null,
+      deductionRows: dedRowsForPeriod,
       deductionNote: dedNote || "",
     });
+
+    setPaySelectedDeductionIds(dedRowsForPeriod.map((r) => r.id).filter(Boolean));
+
     const rawSalary =
       employeeRow?.current_salary ??
       employee?.current_salary ??
@@ -389,16 +424,10 @@ const HRTransactions = () => {
 
     const salaryNum = rawSalary === null || rawSalary === undefined ? NaN : parseFloat(String(rawSalary));
     const halfSalary = Number.isFinite(salaryNum) ? (salaryNum / 2).toFixed(2) : "";
-
-    // If there is a deduction for this same period, default the payment Amount to net-to-transfer.
-    // Deductions are stored as negative amounts; subtract the absolute value from the gross half-salary.
     const grossNum = halfSalary ? parseFloat(String(halfSalary)) : NaN;
-    const dedNumRaw = dedRow?.amount === undefined || dedRow?.amount === null ? NaN : parseFloat(String(dedRow.amount));
-    const dedAbs = Number.isFinite(dedNumRaw) ? Math.abs(dedNumRaw) : 0;
 
-    if (dedRow && Number.isFinite(grossNum)) {
-      const net = Math.max(grossNum - dedAbs, 0);
-      setPayAmount(net.toFixed(2));
+    if (dedRowsForPeriod.length && Number.isFinite(grossNum)) {
+      setPayAmount(computeNetPay(grossNum, dedRowsForPeriod));
     } else {
       setPayAmount(halfSalary);
     }
@@ -874,6 +903,52 @@ const HRTransactions = () => {
                 <Typography variant="caption" sx={{ display: "block", mb: 0.5, color: "#5d8782" }}>
                   Notes (optional)
                 </Typography>
+                {Array.isArray(payTarget?.deductionRows) && payTarget.deductionRows.length ? (
+                  <Box sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ display: "block", mb: 0.5, color: "#5d8782" }}>
+                      Deductions to apply
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      {payTarget.deductionRows.map((d) => {
+                        const checked = paySelectedDeductionIds.includes(d.id);
+                        const label = `${formatDate(d.periodStart)}→${formatDate(d.periodEnd)} • ${d.notes} • ${formatAmount(d.amount)}`;
+                        return (
+                          <FormControlLabel
+                            key={d.id}
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const next = e.target.checked
+                                    ? [...paySelectedDeductionIds, d.id]
+                                    : paySelectedDeductionIds.filter((x) => x !== d.id);
+                                  setPaySelectedDeductionIds(next);
+
+                                  const selectedRows = payTarget.deductionRows.filter((r) => next.includes(r.id));
+                                  const combined = buildDeductionsNote(selectedRows);
+                                  setPayNotes(combined);
+
+                                  // Recompute net amount when toggling deductions (based on gross half salary)
+                                  const rawSalary =
+                                    payTarget?.employee?.current_salary ??
+                                    payTarget?.employee?.currentSalary ??
+                                    null;
+                                  const salaryNum = rawSalary === null || rawSalary === undefined ? NaN : parseFloat(String(rawSalary));
+                                  const halfSalaryNum = Number.isFinite(salaryNum) ? salaryNum / 2 : NaN;
+                                  if (Number.isFinite(halfSalaryNum)) {
+                                    setPayAmount(computeNetPay(halfSalaryNum, selectedRows));
+                                  }
+                                }}
+                              />
+                            }
+                            label={<Typography variant="caption">{label}</Typography>}
+                          />
+                        );
+                      })}
+                    </Stack>
+                  </Box>
+                ) : null}
                 {payTarget?.deductionNote ? (
                   <Typography variant="caption" sx={{ display: "block", mb: 0.8, color: "#D9822B" }}>
                     {payTarget.deductionNote}

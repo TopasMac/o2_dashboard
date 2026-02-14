@@ -68,6 +68,12 @@ export default function BaseModal({
     if (typeof onClose === 'function') onClose(event, reason);
   };
 
+  const handleSubmit = (e) => {
+    // Prevent any implicit submit bubbling to parent forms (can cause full page reload).
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+  };
+
   const paperSx = useMemo(
     () => ({
       width,
@@ -173,12 +179,14 @@ export default function BaseModal({
         )}
       </Box>
 
-      <Box sx={bodySx}>{children}</Box>
+      <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+        <Box sx={bodySx}>{children}</Box>
 
-      <Box sx={footerSx}>
-        <Stack direction="row" justifyContent="flex-end" spacing={1}>
-          {actions || defaultActions}
-        </Stack>
+        <Box sx={footerSx}>
+          <Stack direction="row" justifyContent="flex-end" spacing={1}>
+            {actions || defaultActions}
+          </Stack>
+        </Box>
       </Box>
     </Dialog>
   );

@@ -43,6 +43,9 @@ class HKReconcileService
         $start = $asOf->format('Y-m-01');
         $end   = $asOf->format('Y-m-t');
 
+        // Row-level note data (optional): hk_cleaning_id => ['resolution' => ?, 'status' => ?]
+        $rowNotesByCleaningId = $this->loadRowNoteDataByCleaningId($city, $month);
+
         /** @var HKCleanings[] $cleanings */
         $cleanings = $this->em->createQueryBuilder()
             ->select('hc', 'u')
@@ -115,6 +118,10 @@ class HKReconcileService
                 'report_status' => method_exists($hc, 'getReportStatus') ? $hc->getReportStatus() : null,
 
                 'notes'         => method_exists($hc, 'getNotes') ? $hc->getNotes() : null,
+
+                // latest row-level note data (from hk_cleanings_recon_notes)
+                'resolution'         => $rowNotesByCleaningId[$hc->getId()]['resolution'] ?? null,
+                'resolution_status'  => $rowNotesByCleaningId[$hc->getId()]['status'] ?? null,
 
                 // computed fields for reconciliation
                 'expected_cost' => $expected,
@@ -193,6 +200,47 @@ SQL;
             }
             $val = $row['cleaning_cost'] ?? null;
             $out[$unitId] = $val !== null ? $this->fmt2($this->toFloat($val)) : null;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Latest row-level note data per hk_cleaning_id for a given city+month.
+     * We only consider rows where hk_cleaning_id IS NOT NULL.
+     *
+     * @return array<int, array{resolution: string|null, status: string|null}> hk_cleaning_id => data
+     */
+    private function loadRowNoteDataByCleaningId(string $city, string $month): array
+    {
+        $conn = $this->em->getConnection();
+
+        $sql = <<<SQL
+SELECT hk_cleaning_id, resolution, status, updated_at, created_at
+FROM hk_cleanings_recon_notes
+WHERE city = :city
+  AND month = :month
+  AND hk_cleaning_id IS NOT NULL
+ORDER BY hk_cleaning_id ASC, COALESCE(updated_at, created_at) DESC
+SQL;
+
+        $rows = $conn->fetchAllAssociative($sql, [
+            'city' => $city,
+            'month' => $month,
+        ]);
+
+        $out = [];
+        foreach ($rows as $r) {
+            $id = (int)($r['hk_cleaning_id'] ?? 0);
+            if ($id <= 0) continue;
+            if (array_key_exists($id, $out)) {
+                // first row per id is the latest due to ordering
+                continue;
+            }
+            $out[$id] = [
+                'resolution' => $r['resolution'] !== null ? (string)$r['resolution'] : null,
+                'status' => $r['status'] !== null ? (string)$r['status'] : null,
+            ];
         }
 
         return $out;

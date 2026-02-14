@@ -273,30 +273,80 @@ class EmployeeLedgerService
         $this->em->persist($row);
         $this->em->flush();
 
-        // Auto-link salary rows to a deduction installment by structured fields (avoid text parsing).
+        // Link salary rows to deduction installments.
         //
-        // We link ONLY when there is exactly ONE unapplied deduction for the same employee and the same period bounds.
-        // If ambiguous (0 or >1 matches), we no-op (do not throw).
-        if ($type === 'salary' && $periodStart !== null && $periodEnd !== null) {
+        // Preferred: if the client provides `appliedDeductionIds` (array of deduction row IDs),
+        // we link ALL of them to this salary row (idempotent and safe).
+        //
+        // Fallback: if no IDs are provided, we try structured period matching and link only when
+        // there is exactly ONE unapplied deduction for the same employee and the same period bounds.
+        if ($type === 'salary') {
             $dedRepo = $this->em->getRepository(EmployeeFinancialLedger::class);
 
-            $matches = $dedRepo->createQueryBuilder('l')
-                ->andWhere('l.employee = :emp')
-                ->setParameter('emp', $emp)
-                ->andWhere('l.type = :type')
-                ->setParameter('type', 'deduction')
-                ->andWhere('l.appliedSalaryLedgerId IS NULL')
-                ->andWhere('l.periodStart = :ps')
-                ->setParameter('ps', $periodStart)
-                ->andWhere('l.periodEnd = :pe')
-                ->setParameter('pe', $periodEnd)
-                ->orderBy('l.id', 'ASC')
-                ->getQuery()
-                ->getResult();
+            $idsRaw = $payload['appliedDeductionIds'] ?? null;
+            $ids = [];
+            if (is_array($idsRaw)) {
+                foreach ($idsRaw as $v) {
+                    $idv = (int) $v;
+                    if ($idv > 0) {
+                        $ids[$idv] = true; // de-dup
+                    }
+                }
+                $ids = array_keys($ids);
+            }
 
-            if (count($matches) === 1) {
-                $matches[0]->setAppliedSalaryLedgerId($row->getId());
+            if (!empty($ids)) {
+                foreach ($ids as $dedId) {
+                    $ded = $dedRepo->find((int) $dedId);
+                    if (!$ded instanceof EmployeeFinancialLedger) {
+                        continue;
+                    }
+
+                    // Safety guards: only link deduction rows of same employee that are not already applied.
+                    if ((string) ($ded->getType() ?? '') !== 'deduction') {
+                        continue;
+                    }
+                    if ($ded->getEmployee() === null || $ded->getEmployee()->getId() !== $emp->getId()) {
+                        continue;
+                    }
+                    if ($ded->getAppliedSalaryLedgerId() !== null) {
+                        continue;
+                    }
+
+                    // Optional guard: if salary period bounds are present, only link deductions with same bounds.
+                    if ($periodStart !== null && $periodEnd !== null) {
+                        $dps = $ded->getPeriodStart();
+                        $dpe = $ded->getPeriodEnd();
+                        if (!$dps || !$dpe || $dps->format('Y-m-d') !== $periodStart->format('Y-m-d') || $dpe->format('Y-m-d') !== $periodEnd->format('Y-m-d')) {
+                            continue;
+                        }
+                    }
+
+                    $ded->setAppliedSalaryLedgerId($row->getId());
+                }
+
                 $this->em->flush();
+
+            } elseif ($periodStart !== null && $periodEnd !== null) {
+                // Fallback: period matching (only if unambiguous)
+                $matches = $dedRepo->createQueryBuilder('l')
+                    ->andWhere('l.employee = :emp')
+                    ->setParameter('emp', $emp)
+                    ->andWhere('l.type = :type')
+                    ->setParameter('type', 'deduction')
+                    ->andWhere('l.appliedSalaryLedgerId IS NULL')
+                    ->andWhere('l.periodStart = :ps')
+                    ->setParameter('ps', $periodStart)
+                    ->andWhere('l.periodEnd = :pe')
+                    ->setParameter('pe', $periodEnd)
+                    ->orderBy('l.id', 'ASC')
+                    ->getQuery()
+                    ->getResult();
+
+                if (count($matches) === 1) {
+                    $matches[0]->setAppliedSalaryLedgerId($row->getId());
+                    $this->em->flush();
+                }
             }
         }
 
@@ -354,6 +404,9 @@ class EmployeeLedgerService
     {
         // Whitelist edits for deductions (installment rows)
         $currentType = method_exists($row, 'getType') ? (string) $row->getType() : '';
+        $didChangeDeductionPeriod = false;
+        $oldPeriodStart = $row->getPeriodStart();
+        $oldPeriodEnd   = $row->getPeriodEnd();
 
         // Extra guard: never allow editing period dates for non-deductions (controller also guards this)
         if ($currentType !== 'deduction' && (array_key_exists('periodStart', $payload) || array_key_exists('periodEnd', $payload))) {
@@ -417,6 +470,10 @@ class EmployeeLedgerService
                 }
                 $row->setPeriodStart($dt);
             }
+            if ($currentType === 'deduction') {
+                $didChangeDeductionPeriod = ($oldPeriodStart?->format('Y-m-d') !== $row->getPeriodStart()?->format('Y-m-d'))
+                    || ($oldPeriodEnd?->format('Y-m-d') !== $row->getPeriodEnd()?->format('Y-m-d'));
+            }
         }
         if (array_key_exists('periodEnd', $payload)) {
             if ($payload['periodEnd'] === null || $payload['periodEnd'] === '') {
@@ -427,6 +484,10 @@ class EmployeeLedgerService
                     throw new \InvalidArgumentException('Invalid periodEnd (YYYY-MM-DD)');
                 }
                 $row->setPeriodEnd($dt);
+            }
+            if ($currentType === 'deduction') {
+                $didChangeDeductionPeriod = ($oldPeriodStart?->format('Y-m-d') !== $row->getPeriodStart()?->format('Y-m-d'))
+                    || ($oldPeriodEnd?->format('Y-m-d') !== $row->getPeriodEnd()?->format('Y-m-d'));
             }
         }
 
@@ -448,7 +509,72 @@ class EmployeeLedgerService
             $row->setCode($this->generateCode());
         }
 
-        $this->em->flush();
+        // If a deduction installment period changed, re-sequence ALL installments for the same loan
+        // so notes stay consistent with chronological order (1/N ... N/N).
+        //
+        // We identify the loan by parsing the advance code from deduction notes (EFLxxxxx).
+        // Then we load all deduction rows for this employee + that loan code and rewrite:
+        //   - deduction notes: "Loan repayment i/N for EFLxxxxx"
+        //   - linked salary notes (via applied_salary_ledger_id): update the fraction in "Descuento i/N ..." if present
+        if ($currentType === 'deduction' && $didChangeDeductionPeriod) {
+            // Flush the period change first so the subsequent ORDER BY periodStart reflects the new dates.
+            $this->em->flush();
+            $notesNow = (string) ($row->getNotes() ?? '');
+            if ($notesNow !== '' && preg_match('/\b(EFL\d+)\b/', $notesNow, $mLoan)) {
+                $loanCode = (string) $mLoan[1];
+                $empNow = $row->getEmployee();
+
+                if ($empNow !== null) {
+                    $repo = $this->em->getRepository(EmployeeFinancialLedger::class);
+
+                    // Load ALL deduction installments for this loan (applied and unapplied)
+                    $all = $repo->createQueryBuilder('d')
+                        ->andWhere('d.employee = :emp')
+                        ->setParameter('emp', $empNow)
+                        ->andWhere('d.type = :type')
+                        ->setParameter('type', 'deduction')
+                        ->andWhere('d.notes LIKE :needle')
+                        ->setParameter('needle', '%for ' . $loanCode . '%')
+                        ->orderBy('d.periodStart', 'ASC')
+                        ->addOrderBy('d.id', 'ASC')
+                        ->getQuery()
+                        ->getResult();
+
+                    $n = count($all);
+                    if ($n > 0) {
+                        $i = 1;
+                        foreach ($all as $ded) {
+                            // Update deduction note
+                            $ded->setNotes(sprintf('Loan repayment %d/%d for %s', $i, $n, $loanCode));
+
+                            // If applied, update linked salary note fraction as well (best-effort)
+                            $salaryId = $ded->getAppliedSalaryLedgerId();
+                            if ($salaryId !== null) {
+                                $salary = $repo->find((int) $salaryId);
+                                if ($salary instanceof EmployeeFinancialLedger) {
+                                    $sNotes = (string) ($salary->getNotes() ?? '');
+                                    if ($sNotes !== '') {
+                                        // Replace "Descuento X/Y" with new fraction if present; otherwise leave as-is.
+                                        $newFrac = $i . '/' . $n;
+                                        $updated = preg_replace('/\b(Descuento\s+)\d+\s*\/\s*\d+\b/iu', '$1' . $newFrac, $sNotes, 1);
+                                        if (is_string($updated) && $updated !== $sNotes) {
+                                            $salary->setNotes($updated);
+                                        }
+                                    }
+                                }
+                            }
+
+                            $i += 1;
+                        }
+                        // Persist the rewritten installment notes (and any linked salary note updates).
+                        $this->em->flush();
+                    }
+                }
+            }
+        }
+        if (!($currentType === 'deduction' && $didChangeDeductionPeriod)) {
+            $this->em->flush();
+        }
 
         return $row;
     }

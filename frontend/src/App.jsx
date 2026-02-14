@@ -53,8 +53,6 @@ import MobileEmployeeCash from './pages/mobilepages/MobileEmployeeCash';
 import MobileCashForm from './pages/mobilepages/mobileForms/MobileCashForm';
 import MobileCashEditForm from './pages/mobilepages/mobileForms/MobileCashEditForm';
 import MobileTaskEditForm from './pages/mobilepages/mobileForms/MobileTaskEditForm';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import './styles/form.css';
 import NewClientUnitNote from './components/forms/NewClientUnitNote';
 import UnitBalance from './pages/UnitBalance';
@@ -479,7 +477,6 @@ function App() {
         {/* Default route: redirect to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-        <ToastContainer position="top-right" autoClose={3000} />
       </Router>
     </LocalizationProvider>
   );

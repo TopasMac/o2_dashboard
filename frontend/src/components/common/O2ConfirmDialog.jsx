@@ -16,15 +16,23 @@ import '../layouts/Buttons.css';
  * - open: boolean
  * - title: string | ReactNode
  * - description: string | ReactNode
+ *
+ * Buttons (backward compatible):
  * - confirmLabel: string (default: 'OK')
  * - cancelLabel: string (default: 'Cancel')
- * - confirmColor: MUI button color (default: 'primary')
- * - confirmVariant: 'contained'|'outlined'|'text' (default: 'contained')
- * - cancelVariant: 'contained'|'outlined'|'text' (default: 'text')
- * - isDanger: boolean (if true, confirmColor defaults to 'error')
- * - loading: boolean (disables buttons)
+ * - thirdLabel: string | null (default: null)  // optional 3rd button
+ *
+ * Button styling (uses our global button classes by default):
+ * - confirmClassName: string (default: 'btn-primary')
+ * - cancelClassName: string (default: 'btn-danger')     // destructive (Discard)
+ * - thirdClassName: string (default: 'btn-secondary')   // neutral (Cancel)
+ *
+ * Behavior:
  * - onConfirm: () => void
- * - onClose: () => void (called for cancel/backdrop/escape)
+ * - onCancel: () => void          // optional; if omitted, cancel uses onClose
+ * - onClose: () => void           // cancel/backdrop/escape/third button
+ *
+ * - loading: boolean (disables buttons)
  */
 export default function O2ConfirmDialog({
   open,
@@ -32,20 +40,29 @@ export default function O2ConfirmDialog({
   description,
   confirmLabel = 'OK',
   cancelLabel = 'Cancel',
-  confirmColor,
-  confirmVariant = 'contained',
-  cancelVariant = 'text',
-  isDanger = false,
+  thirdLabel = null,
+  confirmClassName = 'btn-primary',
+  cancelClassName = 'btn-danger',     // destructive (Discard)
+  thirdClassName = 'btn-secondary',   // neutral (Cancel)
   loading = false,
   onConfirm,
+  onCancel,
   onClose,
 }) {
-  const resolvedConfirmColor = confirmColor || (isDanger ? 'error' : 'primary');
 
   const handleClose = React.useCallback(() => {
     if (loading) return;
     onClose?.();
   }, [loading, onClose]);
+
+  const handleCancel = React.useCallback(() => {
+    if (loading) return;
+    if (onCancel) {
+      onCancel();
+      return;
+    }
+    onClose?.();
+  }, [loading, onCancel, onClose]);
 
   const handleConfirm = React.useCallback(() => {
     if (loading) return;
@@ -77,18 +94,33 @@ export default function O2ConfirmDialog({
         </DialogContent>
       ) : null}
 
-      <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
+      <DialogActions sx={{ px: 2, pb: 2, gap: 1, justifyContent: 'flex-end' }}>
+        {/* Third action (usually Cancel → return to previous modal) */}
+        {thirdLabel ? (
+          <button
+            type="button"
+            className={thirdClassName}
+            onClick={handleClose}
+            disabled={loading}
+          >
+            {thirdLabel}
+          </button>
+        ) : null}
+
+        {/* Secondary destructive action (e.g. Discard) */}
         <button
           type="button"
-          className="btn-danger"
-          onClick={handleClose}
+          className={cancelClassName}
+          onClick={handleCancel}
           disabled={loading}
         >
           {cancelLabel}
         </button>
+
+        {/* Primary action (e.g. Save) */}
         <button
           type="button"
-          className="btn-primary"
+          className={confirmClassName}
           onClick={handleConfirm}
           disabled={loading}
           autoFocus

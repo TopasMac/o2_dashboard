@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import PageScaffold from '../components/layout/PageScaffold';
 import AppDrawer from '../components/common/AppDrawer';
+// import BaseModal from '../components/common/BaseModal';
 import HKCleaningsEditFormRHF from '../components/forms/HKCleaningsEditFormRHF';
 import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
 import api from '../api';
+// import { toast } from 'react-toastify';
+import HKReconMonthNotesModal from '../components/modals/HKReconMonthNotesModal';
 import {
   Autocomplete,
   Box,
@@ -51,11 +54,13 @@ function normalizeReportStatus(v) {
   return ''; // unknown -> empty
 }
 
+
 const statusColor = (v) => {
   if (v === 'reported') return '#1e6f68'; // teal
   if (v === 'needs_review') return '#f97316'; // orange
   return 'text.secondary';
 };
+
 
 export default function HKCleaningsRecon() {
   const [month, setMonth] = useState(ymNow());
@@ -70,6 +75,12 @@ export default function HKCleaningsRecon() {
   const [statusFilter, setStatusFilter] = useState(''); // '' = All
 
   const [unitFilter, setUnitFilter] = useState(null); // string unit_name or null
+
+  const [monthNotesOpen, setMonthNotesOpen] = useState(false);
+  const [monthNotesLoading, setMonthNotesLoading] = useState(false);
+  const [monthNotesHasValue, setMonthNotesHasValue] = useState(false);
+  const [monthNotesAllDone, setMonthNotesAllDone] = useState(false);
+  const [monthNotesFocusCleaningId, setMonthNotesFocusCleaningId] = useState(null);
 
 
   const unitOptions = useMemo(() => {
@@ -151,7 +162,25 @@ export default function HKCleaningsRecon() {
       const q = new URLSearchParams({ month, city }).toString();
       const res = await api.get(`/api/hk-reconcile?${q}`);
       const json = res?.data;
-      setRows(Array.isArray(json?.data) ? json.data : []);
+      const arr = Array.isArray(json?.data) ? json.data : [];
+      setRows(
+        arr.map((r) => {
+          const n = (r?.notes ?? '').toString();
+          const cc = (r?.cleaning_cost ?? '').toString();
+          const lc = (r?.laundry_cost ?? '').toString();
+          const rs = normalizeReportStatus(r?.report_status ?? r?.reportStatus) || 'pending';
+
+          return {
+            ...r,
+            __notesSaved: n,
+            __notesDirty: false,
+            __cleaningCostSaved: cc,
+            __laundryCostSaved: lc,
+            __reportStatusSaved: rs,
+            __rowDirty: false,
+          };
+        })
+      );
     } catch (e) {
       setErr(e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e));
     } finally {
@@ -159,14 +188,41 @@ export default function HKCleaningsRecon() {
     }
   }, [month]);
 
+  const refreshMonthNotesSummary = useCallback(async () => {
+    setMonthNotesLoading(true);
+    try {
+      const q = new URLSearchParams({ month, city }).toString();
+      const res = await api.get(`/api/hk-reconcile/notes?${q}`);
+      const json = res?.data;
+      const items = Array.isArray(json?.data) ? json.data : [];
+      const hasAny = items.length > 0;
+      const allDone = hasAny && items.every((it) => (String(it?.status ?? '').toLowerCase() === 'done'));
+      setMonthNotesHasValue(hasAny);
+      setMonthNotesAllDone(allDone);
+    } catch (e) {
+      // Non-blocking: don't break page load if notes fail.
+      setErr((prev) => prev || (e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e)));
+      setMonthNotesHasValue(false);
+      setMonthNotesAllDone(false);
+    } finally {
+      setMonthNotesLoading(false);
+    }
+  }, [month, city]);
+
   useEffect(() => {
     load();
-  }, [load]);
+    refreshMonthNotesSummary();
+  }, [load, refreshMonthNotesSummary]);
 
 
   const updateRow = (id, patch) => {
     setRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const next = { ...r, ...patch };
+        next.__rowDirty = computeRowDirty(next);
+        return next;
+      }),
     );
   };
 
@@ -174,6 +230,46 @@ export default function HKCleaningsRecon() {
     const c = parseFloat(String(row.cleaning_cost ?? '0').replace(',', '.')) || 0;
     const l = parseFloat(String(row.laundry_cost ?? '0').replace(',', '.')) || 0;
     return (c + l).toFixed(2);
+  };
+
+  const computeRowDirty = (row) => {
+    const cc = (row.cleaning_cost ?? '').toString();
+    const lc = (row.laundry_cost ?? '').toString();
+    const rs = normalizeReportStatus(row.report_status ?? row.reportStatus) || 'pending';
+    const notes = (row.notes ?? '').toString();
+
+    const ccSaved = (row.__cleaningCostSaved ?? '').toString();
+    const lcSaved = (row.__laundryCostSaved ?? '').toString();
+    const rsSaved = (row.__reportStatusSaved ?? 'pending').toString();
+    const notesSaved = (row.__notesSaved ?? '').toString();
+
+    return cc !== ccSaved || lc !== lcSaved || rs !== rsSaved || notes !== notesSaved;
+  };
+
+  // Helper to create a row-level note after reconcile save
+  const createRowNote = async (row) => {
+    const hkCleaningId = row.hk_cleaning_id ?? row.hkCleaningId;
+    if (!hkCleaningId) return; // cannot create row note without a cleaning id
+
+    const unitName = (row.unit_name ?? '').toString().trim() || 'Unit';
+    const rawDate = (row.service_date || '').toString().trim();
+    const ddmmyyyy = rawDate && rawDate.includes('-') ? rawDate.split('-').reverse().join('-') : rawDate;
+
+    const ctRaw = (row.cleaning_type ?? row.cleaningType ?? '').toString().trim();
+    const ctLabel = ctRaw ? (ctRaw.charAt(0).toUpperCase() + ctRaw.slice(1)) : '';
+
+    const title = `${unitName} • ${ddmmyyyy}${ctLabel ? ` * (${ctLabel})` : ''}`.trim();
+    const content = (row.notes ?? '').toString();
+    if (!content.trim()) return;
+
+    await api.post('/api/hk-reconcile/notes', {
+      city,
+      month,
+      hk_cleaning_id: Number(hkCleaningId),
+      text: title,
+      resolution: content,
+      status: 'open',
+    });
   };
 
   const saveRow = async (row) => {
@@ -209,6 +305,31 @@ export default function HKCleaningsRecon() {
     }
 
     await api.put(`/api/hk-reconcile/${row.id}?${q}`, payload);
+
+   // If NOTES changed, create a row-level note item (history)
+   const notesChanged = (row.notes ?? '').toString() !== (row.__notesSaved ?? '').toString();
+   const hasText = ((row.notes ?? '').toString().trim() !== '');
+   if (notesChanged && hasText) {
+      try {
+        await createRowNote(row);
+        // Optimistically mark as saved (load() will refresh anyway)
+        updateRow(row.id, {
+          __notesSaved: (row.notes ?? '').toString(),
+        });
+      } catch (e) {
+        // Non-blocking: keep reconcile save successful, but show error
+        setErr((prev) => prev || (e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e)));
+      }
+    }
+
+    // Snapshot saved values so row becomes clean immediately
+    updateRow(row.id, {
+      __cleaningCostSaved: (row.cleaning_cost ?? '').toString(),
+      __laundryCostSaved: (row.laundry_cost ?? '').toString(),
+      __reportStatusSaved: normalizeReportStatus(row.report_status ?? row.reportStatus) || 'pending',
+      __rowDirty: false,
+    });
+
     await load();
   };
 
@@ -308,6 +429,19 @@ export default function HKCleaningsRecon() {
 
             <Box sx={{ flex: 1 }} />
 
+            <Button
+              variant={monthNotesHasValue ? 'contained' : 'outlined'}
+              size="small"
+              onClick={async () => {
+                await refreshMonthNotesSummary();
+                setMonthNotesOpen(true);
+              }}
+              disabled={monthNotesLoading}
+              sx={{ textTransform: 'none' }}
+            >
+              Month notes{monthNotesHasValue ? (monthNotesAllDone ? ' • ✓' : ' • ●') : ''}
+            </Button>
+
           </Box>
 
           {err ? (
@@ -406,6 +540,20 @@ export default function HKCleaningsRecon() {
                 const total = recomputeTotal(r);
                 const dirtyTotal = r.total_cost !== total;
                 const cleaningCode = r.hk_cleaning_id ? `HK-${r.hk_cleaning_id}` : '—';
+                const noteStatusRaw = (r.resolution_status ?? r.resolutionStatus ?? '').toString().toLowerCase().trim();
+                const noteBorderColor = noteStatusRaw === 'done'
+                  ? '#1e6f68' // teal
+                  : noteStatusRaw === 'open'
+                    ? '#f59e0b' // amber
+                    : null;
+
+                const noteBorderSx = noteBorderColor
+                  ? {
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: noteBorderColor },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: noteBorderColor },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: noteBorderColor },
+                    }
+                  : {};
                 // Format date as dd-mm-yyyy
                 const formattedDate = r.service_date
                   ? r.service_date.split('-').reverse().join('-')
@@ -516,16 +664,33 @@ export default function HKCleaningsRecon() {
                     </TableCell>
 
                     <TableCell sx={{ py: 0.5, width: 220, minWidth: 220, maxWidth: 220 }}>
-                      <TextField
-                        value={r.notes ?? ''}
-                        onChange={(e) => updateRow(r.id, { notes: e.target.value })}
-                        size="small"
-                        variant="outlined"
-                        sx={{ width: 220 }}
-                        placeholder="Optional"
-                      />
+                      {((r.resolution ?? '').toString().trim() !== '') ? (
+                        <TextField
+                          value={r.resolution ?? ''}
+                          size="small"
+                          variant="outlined"
+                          sx={{ width: 220, cursor: 'pointer', ...noteBorderSx }}
+                          placeholder="Optional"
+                          InputProps={{ readOnly: true }}
+                          onClick={async () => {
+                            const hkId = r.hk_cleaning_id ?? r.hkCleaningId;
+                            setMonthNotesFocusCleaningId(hkId ? Number(hkId) : null);
+                            await refreshMonthNotesSummary();
+                            setMonthNotesOpen(true);
+                          }}
+                        />
+                      ) : (
+                        <TextField
+                          value={r.notes ?? ''}
+                          onChange={(e) => updateRow(r.id, { notes: e.target.value })}
+                          size="small"
+                          variant="outlined"
+                          sx={{ width: 220, ...noteBorderSx }}
+                          placeholder="Optional"
+                        />
+                          )}
                     </TableCell>
-
+                    
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
                       <Box sx={{ width: 120, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Select
@@ -557,6 +722,7 @@ export default function HKCleaningsRecon() {
                       <IconButton
                         title="Save"
                         size="small"
+                        type="button"
                         onClick={async () => {
                           try {
                             await saveRow(r);
@@ -566,7 +732,7 @@ export default function HKCleaningsRecon() {
                         }}
                         disabled={loading}
                       >
-                        <SaveIcon fontSize="small" />
+                        <SaveIcon fontSize="small" sx={{ color: r.__rowDirty ? '#1e6f68' : 'inherit' }} />
                       </IconButton>
 
                     </TableCell>
@@ -594,6 +760,23 @@ export default function HKCleaningsRecon() {
           Tip: select a month and city to review reconciliation lines.
         </Typography>
       )}
+      <HKReconMonthNotesModal
+        open={monthNotesOpen}
+        city={city}
+        month={month}
+        focusHkCleaningId={monthNotesFocusCleaningId}
+        onSaved={async () => {
+          // Refresh main table data (keeps current month because `month` state is unchanged)
+          await load();
+          await refreshMonthNotesSummary();
+        }}
+        onClose={async () => {
+          setMonthNotesOpen(false);
+          setMonthNotesFocusCleaningId(null);
+          await refreshMonthNotesSummary();
+        }}
+      />
+
       <AppDrawer
         open={editDrawerOpen}
         onClose={() => {

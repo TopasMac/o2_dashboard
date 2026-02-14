@@ -62,6 +62,19 @@
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* Warning variant (Amber outline) */
+.btn-warning {
+  background-color: transparent;
+  color: #b7791f;            /* amber-700 */
+  font-size: var(--fs-13);
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 2px solid #f6ad55; /* amber-400 */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
 @media (min-width: 1024px) {
   .btn-primary:hover {
     background-color: var(--color-teal);
@@ -80,6 +93,11 @@
     background-color: #c9302c;
     border-color: #c9302c;
     color: #ffffff;
+  }
+  .btn-warning:hover {
+    background-color: #f6ad55; /* amber-400 */
+    color: var(--color-white);
+    border-color: #f6ad55;
   }
 }
 
