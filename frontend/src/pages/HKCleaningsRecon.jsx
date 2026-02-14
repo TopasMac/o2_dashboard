@@ -246,6 +246,38 @@ export default function HKCleaningsRecon() {
     return cc !== ccSaved || lc !== lcSaved || rs !== rsSaved || notes !== notesSaved;
   };
 
+  const isNonEmpty = (v) => {
+    if (v === null || v === undefined) return false;
+    const s = String(v).trim();
+    return s !== '' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined';
+  };
+
+  const normalizeNoteStatus = (v) => {
+    const raw = (v ?? '').toString().toLowerCase().trim();
+    if (raw === 'open') return 'open';
+    if (raw === 'done') return 'done';
+    return '';
+  };
+
+  const deriveReportStatusForSave = (row) => {
+    const noteStatus = normalizeNoteStatus(row.resolution_status ?? row.resolutionStatus);
+    // Highest precedence: open notes => needs_review
+    if (noteStatus === 'open') return 'needs_review';
+
+    const hasPaid = isNonEmpty(row.cleaning_cost);
+    const hasLaundry = isNonEmpty(row.laundry_cost);
+    const hasCosts = hasPaid && hasLaundry;
+
+    const inlineNotesEmpty = ((row.notes ?? '').toString().trim() === '');
+
+    if (hasCosts && (inlineNotesEmpty || noteStatus === 'done')) {
+      return 'reported';
+    }
+
+    // otherwise keep current
+    return normalizeReportStatus(row.report_status ?? row.reportStatus) || 'pending';
+  };
+
   // Helper to create a row-level note after reconcile save
   const createRowNote = async (row) => {
     const hkCleaningId = row.hk_cleaning_id ?? row.hkCleaningId;
@@ -286,7 +318,7 @@ export default function HKCleaningsRecon() {
       service_date: row.service_date,
       cleaning_cost: toMoneyStr(row.cleaning_cost),
       laundry_cost: toMoneyStr(row.laundry_cost),
-      report_status: normalizeReportStatus(row.report_status ?? row.reportStatus) || null,
+      report_status: deriveReportStatusForSave(row) || null,
       notes: row.notes ?? null,
     };
 
@@ -323,10 +355,14 @@ export default function HKCleaningsRecon() {
     }
 
     // Snapshot saved values so row becomes clean immediately
+    const derivedStatus = deriveReportStatusForSave(row) || 'pending';
+
     updateRow(row.id, {
+      // reflect derived status in UI immediately
+      report_status: derivedStatus,
       __cleaningCostSaved: (row.cleaning_cost ?? '').toString(),
       __laundryCostSaved: (row.laundry_cost ?? '').toString(),
-      __reportStatusSaved: normalizeReportStatus(row.report_status ?? row.reportStatus) || 'pending',
+      __reportStatusSaved: derivedStatus,
       __rowDirty: false,
     });
 
