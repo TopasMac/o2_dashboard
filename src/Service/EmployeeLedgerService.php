@@ -273,6 +273,33 @@ class EmployeeLedgerService
         $this->em->persist($row);
         $this->em->flush();
 
+        // Auto-link salary rows to a deduction installment by structured fields (avoid text parsing).
+        //
+        // We link ONLY when there is exactly ONE unapplied deduction for the same employee and the same period bounds.
+        // If ambiguous (0 or >1 matches), we no-op (do not throw).
+        if ($type === 'salary' && $periodStart !== null && $periodEnd !== null) {
+            $dedRepo = $this->em->getRepository(EmployeeFinancialLedger::class);
+
+            $matches = $dedRepo->createQueryBuilder('l')
+                ->andWhere('l.employee = :emp')
+                ->setParameter('emp', $emp)
+                ->andWhere('l.type = :type')
+                ->setParameter('type', 'deduction')
+                ->andWhere('l.appliedSalaryLedgerId IS NULL')
+                ->andWhere('l.periodStart = :ps')
+                ->setParameter('ps', $periodStart)
+                ->andWhere('l.periodEnd = :pe')
+                ->setParameter('pe', $periodEnd)
+                ->orderBy('l.id', 'ASC')
+                ->getQuery()
+                ->getResult();
+
+            if (count($matches) === 1) {
+                $matches[0]->setAppliedSalaryLedgerId($row->getId());
+                $this->em->flush();
+            }
+        }
+
         // Auto-generate deduction schedule for legacy loan flow (type=advance)
         if ($type === 'advance') {
             $installmentsCount = (int) ($payload['installmentsCount'] ?? 0);
@@ -334,21 +361,10 @@ class EmployeeLedgerService
         }
 
         if ($currentType === 'deduction') {
-            // For deductions, allow ONLY: periodStart, periodEnd, notes
+            // For deductions, the frontend may send the full row payload.
+            // We only apply edits to: periodStart, periodEnd, notes.
+            // Everything else is ignored to keep the API idempotent and safe.
             $allowedKeys = ['periodStart', 'periodEnd', 'notes'];
-
-            foreach ($payload as $k => $_v) {
-                if (!in_array((string) $k, $allowedKeys, true)) {
-                    throw new \InvalidArgumentException('Only periodStart, periodEnd and notes can be edited for deduction entries.');
-                }
-            }
-
-            // Prevent amount edits explicitly (even if caller tries)
-            if (array_key_exists('amount', $payload)) {
-                throw new \InvalidArgumentException('Amount cannot be edited for deduction entries.');
-            }
-
-            // Reduce payload to whitelist to avoid accidental edits if more logic is added later
             $payload = array_intersect_key($payload, array_flip($allowedKeys));
         }
         if (isset($payload['employeeId']) && $payload['employeeId'] !== '') {

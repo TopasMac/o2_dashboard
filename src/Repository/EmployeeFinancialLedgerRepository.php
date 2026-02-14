@@ -89,4 +89,26 @@ class EmployeeFinancialLedgerRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+    /**
+     * Find unapplied deduction installments for a given employee and loan code.
+     *
+     * We group installments by looking for notes like: "Loan repayment 1/4 for EFL000027".
+     *
+     * @return EmployeeFinancialLedger[]
+     */
+    public function findUnappliedDeductionsForLoan(int $employeeId, string $loanCode): array
+    {
+        return $this->createQueryBuilder('l')
+            ->andWhere('l.employee = :emp')
+            ->setParameter('emp', $employeeId)
+            ->andWhere('l.type = :type')
+            ->setParameter('type', 'deduction')
+            ->andWhere('l.appliedSalaryLedgerId IS NULL')
+            ->andWhere('l.notes LIKE :needle')
+            ->setParameter('needle', '%for ' . $loanCode . '%')
+            ->orderBy('l.periodStart', 'ASC')
+            ->addOrderBy('l.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

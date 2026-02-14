@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(columns: ['employee_id'], name: 'idx_efl_employee')]
 #[ORM\Index(columns: ['division'], name: 'idx_efl_division')]
 #[ORM\Index(columns: ['city'], name: 'idx_efl_city')]
+#[ORM\Index(columns: ['applied_salary_ledger_id'], name: 'idx_efl_applied_salary')]
 class EmployeeFinancialLedger
 {
     #[ORM\Id]
@@ -62,6 +63,10 @@ class EmployeeFinancialLedger
 
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes = null;
+
+    // If this is a deduction installment, this links to the salary ledger row that applied it.
+    #[ORM\Column(name: 'applied_salary_ledger_id', type: 'integer', nullable: true)]
+    private ?int $appliedSalaryLedgerId = null;
 
     #[ORM\Column(name: 'created_at', type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
@@ -226,6 +231,17 @@ class EmployeeFinancialLedger
     public function setArea(?string $area): self
     {
         $this->area = $area;
+        return $this;
+    }
+
+    public function getAppliedSalaryLedgerId(): ?int
+    {
+        return $this->appliedSalaryLedgerId;
+    }
+
+    public function setAppliedSalaryLedgerId(?int $appliedSalaryLedgerId): self
+    {
+        $this->appliedSalaryLedgerId = $appliedSalaryLedgerId;
         return $this;
     }
 }
