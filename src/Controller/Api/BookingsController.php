@@ -112,10 +112,12 @@ class BookingsController extends AbstractController
             );
 
             // Ongoing across month end: overlaps month but checkout is after month end
+            // Important: only include truly ongoing stays (exclude Cancelled/Upcoming/etc.)
             $ongoingDuringMonth = $qb->expr()->andX(
                 $qb->expr()->lte('b.checkIn', ':mEnd'),
                 $qb->expr()->gte('b.checkOut', ':mStart'),
-                $qb->expr()->gt('b.checkOut', ':mEnd')
+                $qb->expr()->gt('b.checkOut', ':mEnd'),
+                $qb->expr()->eq('b.status', ':ongoingStatus')
             );
 
             $reconWindow = $qb->expr()->orX($checkoutInMonth, $ongoingDuringMonth);
@@ -142,11 +144,91 @@ class BookingsController extends AbstractController
 
             $qb->where($where)
                ->setParameter('mStart', $monthStart, Types::DATE_IMMUTABLE)
-               ->setParameter('mEnd', $monthEnd, Types::DATE_IMMUTABLE);
+               ->setParameter('mEnd', $monthEnd, Types::DATE_IMMUTABLE)
+               ->setParameter('ongoingStatus', 'Ongoing');
 
             $bookings = $qb->getQuery()->getResult();
             $statusUpdater->updateStatuses($bookings, true);
-            return $this->json($bookings);
+
+            // Recon payload: keep it small for month notes modal
+            // Also enrich Airbnb rows with reservationUrl from ical_events (match by reservation_code, fallback to confirmation_code)
+            $airbnbCodes = [];
+            foreach ($bookings as $b) {
+                if (!$b instanceof AllBookings) { continue; }
+                $src = method_exists($b, 'getSource') ? strtolower((string)($b->getSource() ?? '')) : '';
+                if ($src !== 'airbnb') { continue; }
+                $rc = method_exists($b, 'getReservationCode') ? (string)($b->getReservationCode() ?? '') : '';
+                $cc = method_exists($b, 'getConfirmationCode') ? (string)($b->getConfirmationCode() ?? '') : '';
+                $code = $rc !== '' ? $rc : $cc;
+                if ($code !== '') {
+                    $airbnbCodes[strtolower($code)] = true;
+                }
+            }
+
+            $urlByCode = [];
+            if (!empty($airbnbCodes)) {
+                try {
+                    $conn = $em->getConnection();
+                    $codes = array_keys($airbnbCodes);
+                    // Pull most recent reservation_url per reservation_code
+                    // NOTE: we match on LOWER(reservation_code) to keep it case-insensitive
+                    $sql = "
+                        SELECT LOWER(reservation_code) AS rc, reservation_url
+                          FROM ical_events
+                         WHERE reservation_url IS NOT NULL
+                           AND reservation_url <> ''
+                           AND LOWER(reservation_code) IN (:codes)
+                      ORDER BY updated_at DESC
+                    ";
+                    $rows = $conn->executeQuery(
+                        $sql,
+                        ['codes' => $codes],
+                        ['codes' => \Doctrine\DBAL\Connection::PARAM_STR_ARRAY]
+                    )->fetchAllAssociative();
+
+                    foreach ($rows as $r) {
+                        $k = (string)($r['rc'] ?? '');
+                        if ($k !== '' && !isset($urlByCode[$k])) {
+                            $urlByCode[$k] = (string)($r['reservation_url'] ?? '');
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // best-effort: ignore
+                }
+            }
+
+            $data = array_map(function ($b) use ($urlByCode) {
+                if (!$b instanceof AllBookings) {
+                    return null;
+                }
+                $src = method_exists($b, 'getSource') ? (string)($b->getSource() ?? '') : null;
+                $srcLower = strtolower((string)($src ?? ''));
+                $rc = method_exists($b, 'getReservationCode') ? (string)($b->getReservationCode() ?? '') : '';
+                $cc = method_exists($b, 'getConfirmationCode') ? (string)($b->getConfirmationCode() ?? '') : '';
+                $codeKey = strtolower($rc !== '' ? $rc : $cc);
+                $reservationUrl = null;
+                if ($srcLower === 'airbnb' && $codeKey !== '' && isset($urlByCode[$codeKey]) && $urlByCode[$codeKey] !== '') {
+                    $reservationUrl = $urlByCode[$codeKey];
+                }
+
+                return [
+                    'id' => $b->getId(),
+                    'confirmationCode' => method_exists($b, 'getConfirmationCode') ? $b->getConfirmationCode() : null,
+                    'reservationCode' => method_exists($b, 'getReservationCode') ? $b->getReservationCode() : null,
+                    'guestName' => method_exists($b, 'getGuestName') ? $b->getGuestName() : null,
+                    'source' => $src,
+                    'status' => method_exists($b, 'getStatus') ? $b->getStatus() : null,
+                    'checkIn' => $b->getCheckIn()?->format('Y-m-d'),
+                    'checkOut' => $b->getCheckOut()?->format('Y-m-d'),
+                    'paid' => method_exists($b, 'getIsPaid') ? (bool)$b->getIsPaid() : (method_exists($b, 'isPaid') ? (bool)$b->isPaid() : null),
+                    'reservationUrl' => $reservationUrl,
+                ];
+            }, $bookings);
+
+            // remove nulls defensively
+            $data = array_values(array_filter($data));
+
+            return $this->json($data);
         }
 
         if ($hasExplicitRange) {

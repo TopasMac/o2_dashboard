@@ -1,12 +1,10 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import PageScaffold from '../components/layout/PageScaffold';
 import AppDrawer from '../components/common/AppDrawer';
-// import BaseModal from '../components/common/BaseModal';
 import HKCleaningsEditFormRHF from '../components/forms/HKCleaningsEditFormRHF';
 import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
 import api from '../api';
-// import { toast } from 'react-toastify';
-import HKReconMonthNotesModal from '../components/modals/HKReconMonthNotesModal';
+import HKReconMonthNotesDrawer from '../components/drawers/HKReconMonthNotesDrawer';
 import {
   Autocomplete,
   Box,
@@ -75,11 +73,13 @@ export default function HKCleaningsRecon() {
   const [statusFilter, setStatusFilter] = useState(''); // '' = All
 
   const [unitFilter, setUnitFilter] = useState(null); // string unit_name or null
+  const [overExpectedOnly, setOverExpectedOnly] = useState(false);
 
   const [monthNotesOpen, setMonthNotesOpen] = useState(false);
   const [monthNotesLoading, setMonthNotesLoading] = useState(false);
   const [monthNotesHasValue, setMonthNotesHasValue] = useState(false);
   const [monthNotesAllDone, setMonthNotesAllDone] = useState(false);
+  const [monthNotesOpenCount, setMonthNotesOpenCount] = useState(0);
   const [monthNotesFocusCleaningId, setMonthNotesFocusCleaningId] = useState(null);
 
 
@@ -91,6 +91,13 @@ export default function HKCleaningsRecon() {
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [rows]);
+
+  const toNum = (v) => {
+    if (v === null || v === undefined) return 0;
+    const s = String(v).trim().replace(',', '.');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   const rowsToRender = useMemo(() => {
     let out = rows;
@@ -107,8 +114,12 @@ export default function HKCleaningsRecon() {
       out = out.filter((r) => (r.unit_name ?? '').toString().toLowerCase() === needle);
     }
 
+    if (overExpectedOnly) {
+      out = out.filter((r) => toNum(r.cleaning_cost) > toNum(r.expected_cost));
+    }
+
     return out;
-  }, [rows, statusFilter, unitFilter]);
+  }, [rows, statusFilter, unitFilter, overExpectedOnly]);
 
   const canSave = useMemo(() => rows.length > 0, [rows.length]);
 
@@ -196,14 +207,18 @@ export default function HKCleaningsRecon() {
       const json = res?.data;
       const items = Array.isArray(json?.data) ? json.data : [];
       const hasAny = items.length > 0;
-      const allDone = hasAny && items.every((it) => (String(it?.status ?? '').toLowerCase() === 'done'));
+      const openCount = items.filter((it) => String(it?.status ?? '').toLowerCase() === 'open').length;
+      const allDone = hasAny && openCount === 0;
+
       setMonthNotesHasValue(hasAny);
       setMonthNotesAllDone(allDone);
+      setMonthNotesOpenCount(openCount);
     } catch (e) {
       // Non-blocking: don't break page load if notes fail.
       setErr((prev) => prev || (e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e)));
       setMonthNotesHasValue(false);
       setMonthNotesAllDone(false);
+      setMonthNotesOpenCount(0);
     } finally {
       setMonthNotesLoading(false);
     }
@@ -245,6 +260,7 @@ export default function HKCleaningsRecon() {
 
     return cc !== ccSaved || lc !== lcSaved || rs !== rsSaved || notes !== notesSaved;
   };
+
 
   const isNonEmpty = (v) => {
     if (v === null || v === undefined) return false;
@@ -294,10 +310,13 @@ export default function HKCleaningsRecon() {
     const content = (row.notes ?? '').toString();
     if (!content.trim()) return;
 
+    const unitId = row.unit_id ?? row.unitId ?? null;
+
     await api.post('/api/hk-reconcile/notes', {
       city,
       month,
       hk_cleaning_id: Number(hkCleaningId),
+      unit_id: unitId != null ? Number(unitId) : null,
       text: title,
       resolution: content,
       status: 'open',
@@ -395,6 +414,10 @@ export default function HKCleaningsRecon() {
     setEditDrawerOpen(true);
   };
 
+  // Sum of fixed column widths below (120*9 + 240 = 1320)
+  const BASE_TABLE_MIN_WIDTH = 1320;
+  const NOTES_DRAWER_WIDTH = 500;
+
   return (
     <PageScaffold
       title="HK Reconciliation"
@@ -411,7 +434,7 @@ export default function HKCleaningsRecon() {
               sx={{ width: 180 }}
             />
 
-            <FormControl size="small" sx={{ width: 220 }}>
+            <FormControl size="small" sx={{ width: 160 }}>
               <InputLabel id="hk-recon-status">Status</InputLabel>
               <Select
                 labelId="hk-recon-status"
@@ -433,24 +456,30 @@ export default function HKCleaningsRecon() {
                 </MenuItem>
               </Select>
             </FormControl>
+            <Button
+              size="small"
+              variant={overExpectedOnly ? 'contained' : 'outlined'}
+              onClick={() => setOverExpectedOnly((v) => !v)}
+              sx={{ textTransform: 'none' }}
+            >
+              Over expected
+            </Button>
 
             {/* Summary metrics block */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-              <Typography variant="body2" color="text.secondary">
-                Rows: <b>{headerStats.totalRows}</b> • Saved: <b>{headerStats.savedRows}</b>
-              </Typography>
-
-              <Typography variant="body2" color="text.secondary">
-                Charged: <b>{headerStats.fmt(headerStats.charged)}</b>
-              </Typography>
-
-              <Typography variant="body2" color="text.secondary">
-                Cost: <b>{headerStats.fmt(headerStats.cost)}</b>
-              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1, gap: 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.05, whiteSpace: 'nowrap' }}>
+                  Rows: <b>{headerStats.totalRows}</b>&nbsp;&nbsp; Charged: <b>{headerStats.fmt(headerStats.charged)}</b>
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.05, whiteSpace: 'nowrap' }}>
+                  Saved: <b>{headerStats.savedRows}</b>&nbsp;&nbsp; Cost: <b>{headerStats.fmt(headerStats.cost)}</b>
+                </Typography>
+              </Box>
 
               <Typography
                 variant="body2"
                 sx={{
+                  whiteSpace: 'nowrap',
                   color:
                     headerStats.net > 0
                       ? '#1e6f68'
@@ -475,7 +504,42 @@ export default function HKCleaningsRecon() {
               disabled={monthNotesLoading}
               sx={{ textTransform: 'none' }}
             >
-              Month notes{monthNotesHasValue ? (monthNotesAllDone ? ' • ✓' : ' • ●') : ''}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <span>Month notes</span>
+                {monthNotesHasValue ? (
+                  monthNotesAllDone ? (
+                    <Box
+                      sx={{
+                        px: 0.75,
+                        borderRadius: 1,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        bgcolor: '#1e6f68',
+                        color: '#fff',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      ✓
+                    </Box>
+                  ) : monthNotesOpenCount > 0 ? (
+                    <Box
+                      sx={{
+                        minWidth: 18,
+                        px: 0.75,
+                        borderRadius: 10,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        bgcolor: '#f97316',
+                        color: '#fff',
+                        textAlign: 'center',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {monthNotesOpenCount > 9 ? '9+' : monthNotesOpenCount}
+                    </Box>
+                  ) : null
+                ) : null}
+              </Box>
             </Button>
 
           </Box>
@@ -489,17 +553,51 @@ export default function HKCleaningsRecon() {
       }
     >
 
-      <Box sx={{ display: 'flex', flex: 1, minHeight: 0, height: 'calc(100vh - 260px)' }}>
-        <Paper variant="outlined" sx={{ overflow: 'hidden', width: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flex: 1,
+          minHeight: 0,
+          height: 'calc(100vh - 260px)',
+          width: '100%',
+        }}
+      >
+        <Paper
+          variant="outlined"
+          sx={{
+            // Let the TableContainer own scrolling; don't clip horizontal scrollbar.
+            overflow: 'visible',
+            display: 'flex',
+            flex: 1,
+            minWidth: 0,
+            flexDirection: 'column',
+            transition: 'width 150ms ease',
+          }}
+        >
           <Divider />
           <TableContainer
             sx={{
               width: '100%',
-              overflowX: 'auto',
+              minWidth: 0,
+              flex: 1,
               maxHeight: '100%',
+              // Ensure horizontal + vertical scrollbars appear when needed
+              overflowX: 'auto',
+              overflowY: 'auto',
+              WebkitOverflowScrolling: 'touch',
             }}
           >
-            <Table size="small" stickyHeader sx={{ minWidth: 1220, tableLayout: 'fixed' }}>
+              <Table
+                size="small"
+                stickyHeader
+                sx={{
+                  // Fill available width (removes the right-side gap)
+                  width: '100%',
+                  // But never shrink below the base width (enables horizontal scroll when drawer reduces space)
+                  minWidth: `${BASE_TABLE_MIN_WIDTH}px`,
+                  tableLayout: 'fixed',
+                }}
+              >
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700 }}>Cleaning</TableCell>
@@ -524,12 +622,11 @@ export default function HKCleaningsRecon() {
                   />
                 </TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Type</TableCell>
-                <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Expected</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Paid</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Laundry</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Total</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Charged</TableCell>
-                <TableCell sx={{ width: 220, minWidth: 220, maxWidth: 220, fontWeight: 700 }}>Notes</TableCell>
+                <TableCell sx={{ width: 240, minWidth: 240, maxWidth: 240, fontWeight: 700 }}>Notes</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
                   <Select
                     variant="standard"
@@ -602,6 +699,15 @@ export default function HKCleaningsRecon() {
                 const diffColor =
                   diffVal > 0 ? '#1e6f68' : diffVal < 0 ? '#dc2626' : '#6b7280';
 
+                const overExpected = toNum(r.cleaning_cost) > toNum(r.expected_cost);
+                const overExpectedSx = overExpected
+                  ? {
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#dc2626' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#dc2626' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#dc2626' },
+                    }
+                  : {};
+
                 return (
                   <TableRow key={r.id} hover>
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120 }}>
@@ -636,23 +742,27 @@ export default function HKCleaningsRecon() {
                     </TableCell>
 
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
-                      <Box sx={{ width: 120, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 120,
+                          minHeight: 40,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
                         <Typography variant="body2" color="text.secondary">
                           {r.cleaning_type
                             ? r.cleaning_type.charAt(0).toUpperCase() + r.cleaning_type.slice(1)
                             : '—'}
                         </Typography>
-                      </Box>
-                    </TableCell>
-
-                    {/* Expected */}
-                    <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
-                      <Box sx={{ width: 120, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary">
                           {r.expected_cost ?? '—'}
                         </Typography>
                       </Box>
                     </TableCell>
+
 
                     {/* Cleaning cost */}
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
@@ -661,7 +771,7 @@ export default function HKCleaningsRecon() {
                         onChange={(e) => updateRow(r.id, { cleaning_cost: e.target.value })}
                         size="small"
                         variant="outlined"
-                        sx={{ width: 96, mx: 'auto' }}
+                        sx={{ width: 96, mx: 'auto', ...overExpectedSx }}
                         inputProps={{ inputMode: 'decimal', style: { textAlign: 'center' } }}
                       />
                     </TableCell>
@@ -699,13 +809,13 @@ export default function HKCleaningsRecon() {
                       </Box>
                     </TableCell>
 
-                    <TableCell sx={{ py: 0.5, width: 220, minWidth: 220, maxWidth: 220 }}>
+                    <TableCell sx={{ py: 0.5, width: 240, minWidth: 240, maxWidth: 240 }}>
                       {((r.resolution ?? '').toString().trim() !== '') ? (
                         <TextField
                           value={r.resolution ?? ''}
                           size="small"
                           variant="outlined"
-                          sx={{ width: 220, cursor: 'pointer', ...noteBorderSx }}
+                          sx={{ width: '100%', cursor: 'pointer', ...noteBorderSx }}
                           placeholder="Optional"
                           InputProps={{ readOnly: true }}
                           onClick={async () => {
@@ -721,7 +831,7 @@ export default function HKCleaningsRecon() {
                           onChange={(e) => updateRow(r.id, { notes: e.target.value })}
                           size="small"
                           variant="outlined"
-                          sx={{ width: 220, ...noteBorderSx }}
+                          sx={{ width: '100%', ...noteBorderSx }}
                           placeholder="Optional"
                         />
                           )}
@@ -778,7 +888,7 @@ export default function HKCleaningsRecon() {
 
               {rowsToRender.length === 0 && !loading ? (
                 <TableRow>
-                  <TableCell colSpan={11} sx={{ py: 4 }}>
+                  <TableCell colSpan={10} sx={{ py: 4 }}>
                     <Typography sx={{ color: 'text.secondary', textAlign: 'center' }}>
                       No lines for this month yet.
                     </Typography>
@@ -786,9 +896,36 @@ export default function HKCleaningsRecon() {
                 </TableRow>
               ) : null}
             </TableBody>
-          </Table>
+              </Table>
           </TableContainer>
         </Paper>
+        {monthNotesOpen ? (
+          <Box
+            sx={{
+              width: `${NOTES_DRAWER_WIDTH}px`,
+              flex: `0 0 ${NOTES_DRAWER_WIDTH}px`,
+              minWidth: `${NOTES_DRAWER_WIDTH}px`,
+              borderLeft: '1px solid #e5e7eb',
+              background: '#fff',
+            }}
+          >
+            <HKReconMonthNotesDrawer
+              open={monthNotesOpen}
+              onClose={async () => {
+                setMonthNotesOpen(false);
+                setMonthNotesFocusCleaningId(null);
+                await refreshMonthNotesSummary();
+              }}
+              title="Month notes"
+              city={city}
+              month={month}
+              focusHkCleaningId={monthNotesFocusCleaningId}
+              onChanged={async () => {
+                await refreshMonthNotesSummary();
+              }}
+            />
+          </Box>
+        ) : null}
       </Box>
 
       {canSave ? null : (
@@ -796,22 +933,6 @@ export default function HKCleaningsRecon() {
           Tip: select a month and city to review reconciliation lines.
         </Typography>
       )}
-      <HKReconMonthNotesModal
-        open={monthNotesOpen}
-        city={city}
-        month={month}
-        focusHkCleaningId={monthNotesFocusCleaningId}
-        onSaved={async () => {
-          // Refresh main table data (keeps current month because `month` state is unchanged)
-          await load();
-          await refreshMonthNotesSummary();
-        }}
-        onClose={async () => {
-          setMonthNotesOpen(false);
-          setMonthNotesFocusCleaningId(null);
-          await refreshMonthNotesSummary();
-        }}
-      />
 
       <AppDrawer
         open={editDrawerOpen}

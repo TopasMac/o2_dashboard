@@ -20,19 +20,25 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
     setUnitsLoading(true);
     setUnitsError(null);
     try {
-      // Prefer server-side city filter if supported; if not, we'll filter client-side below.
+      // Lightweight options endpoint (id + unit_name + city)
       const q = city ? new URLSearchParams({ city }).toString() : '';
-      const res = await api.get(`/api/units${q ? `?${q}` : ''}`);
+      const res = await api.get(`/api/units/options${q ? `?${q}` : ''}`);
       const data = res?.data;
       const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-      const mapped = arr.map((u) => ({
-        id: u?.id ?? null,
-        unitName: u?.unitName ?? u?.unit_name ?? u?.unit_id ?? u?.unitId ?? '',
-        city: u?.city ?? '',
-      })).filter((u) => Number(u.id) > 0 && String(u.unitName || '').trim() !== '');
 
-      const filtered = city ? mapped.filter((u) => String(u.city || '').toLowerCase() === String(city).toLowerCase()) : mapped;
-      // Sort by unitName
+      const mapped = arr
+        .map((u) => ({
+          id: u?.id ?? null,
+          unitName: u?.unit_name ?? u?.unitName ?? '',
+          city: u?.city ?? '',
+        }))
+        .filter((u) => Number(u.id) > 0 && String(u.unitName || '').trim() !== '');
+
+      // The endpoint already filters by city when provided, but keep a defensive client-side filter.
+      const filtered = city
+        ? mapped.filter((u) => String(u.city || '').toLowerCase() === String(city).toLowerCase())
+        : mapped;
+
       filtered.sort((a, b) => String(a.unitName).localeCompare(String(b.unitName)));
       setUnits(filtered);
     } catch (e) {
@@ -48,6 +54,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
   const originalRef = useRef([]);                // last loaded snapshot from server
 
   const [newText, setNewText] = useState('');
+  const [newUnitId, setNewUnitId] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all'); // all | pending | solved
 
@@ -168,8 +175,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
   const [bookingsByKey, setBookingsByKey] = useState(() => ({}));
   const [bookingsLoadingByKey, setBookingsLoadingByKey] = useState(() => ({}));
   const [bookingsErrorByKey, setBookingsErrorByKey] = useState(() => ({}));
-
-  const rowKey = useCallback((it) => (it?.id ?? it?._tmpId ?? ''), []);
+  const [unitSavingByKey, setUnitSavingByKey] = useState(() => ({}));
 
   const isExpanded = useCallback((key) => {
     return expandedKeys.has(key);
@@ -204,6 +210,36 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
     }
   }, [month]);
 
+  const autoSaveUnitId = useCallback(async (key, noteId, unitId) => {
+    if (!noteId) return;
+    setUnitSavingByKey((prev) => ({ ...prev, [key]: true }));
+    try {
+      await api.put(`/api/hk-reconcile/notes/${noteId}`, { unit_id: unitId });
+
+      // Update snapshot so isDirty reflects that this change is already saved
+      originalRef.current = (originalRef.current || []).map((x) => (x.id === noteId ? { ...x, unit_id: unitId } : x));
+
+      // Clear bookings cache for this row and reload bookings
+      setBookingsByKey((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      if (unitId) {
+        fetchReconBookings(key, unitId);
+      }
+
+      toast.success('Unit saved');
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
+      toast.error(msg);
+    } finally {
+      setUnitSavingByKey((prev) => ({ ...prev, [key]: false }));
+    }
+  }, [fetchReconBookings]);
+
+  const rowKey = useCallback((it) => (it?.id ?? it?._tmpId ?? ''), []);
+
   const hasResolution = useCallback((it) => {
     return String(it?.resolution ?? '').trim().length > 0;
   }, []);
@@ -215,6 +251,37 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
     const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!m) return s;
     return `${m[3]}/${m[2]}`;
+  }, []);
+
+  const applyNewUnitPrefix = useCallback((unitName) => {
+    const name = String(unitName || '').trim();
+    if (!name) return;
+
+    setNewText((prev) => {
+      const cur = String(prev || '');
+      const trimmed = cur.trim();
+
+      const prefix = `${name} * `;
+
+      // If empty, just set prefix
+      if (!trimmed) return prefix;
+
+      // If already starts with this prefix (case-insensitive), keep as-is
+      if (cur.toLowerCase().startsWith(prefix.toLowerCase())) return cur;
+
+      // If it already has a "Unit *" style prefix, replace it
+      // Examples:
+      //  - "Menesse 224B * 02/01"
+      //  - "Menesse_224B • 11-01-2026 * (Checkout)" (we only replace if it's the simple "*" pattern)
+      const m = cur.match(/^\s*([^*\n]{1,60})\s*\*\s*/);
+      if (m) {
+        const rest = cur.replace(/^\s*([^*\n]{1,60})\s*\*\s*/, '');
+        return prefix + rest;
+      }
+
+      // Otherwise, prepend
+      return prefix + cur;
+    });
   }, []);
 
   const anyExpanded = useMemo(() => expandedKeys.size > 0, [expandedKeys]);
@@ -234,15 +301,17 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
     const text = newText.trim();
     if (!text) return;
 
+    const tmpId = `tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
     setItems((prev) => [
       ...prev,
       {
-        _tmpId: `tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        _tmpId: tmpId,
         id: null,
         city,
         month,
         hk_cleaning_id: null,
-        unit_id: null,
+        unit_id: newUnitId ?? null,
         text,
         status: 'open',
         resolution: '',
@@ -253,8 +322,31 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
       },
     ]);
 
+    // Auto-expand the newly added draft note so the user sees month/unit context immediately
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      next.add(tmpId);
+      return next;
+    });
+
+    // If unit is already selected, preload bookings for this month
+    if (newUnitId) {
+      fetchReconBookings(tmpId, newUnitId);
+    }
+
+    // Scroll into view after render
+    setTimeout(() => {
+      try {
+        const el = document.getElementById(`hk-note-${tmpId}`);
+        el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      } catch {
+        // ignore
+      }
+    }, 0);
+
     setNewText('');
-  }, [newText, city, month]);
+    setNewUnitId(null);
+  }, [newText, city, month, newUnitId, fetchReconBookings]);
 
   const saveAll = useCallback(async () => {
     if (saving) return;
@@ -392,13 +484,45 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
         {/* Add new + Filter */}
         <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: '0 0 auto' }}>
+            <Autocomplete
+              size="small"
+              options={units}
+              loading={unitsLoading}
+              value={units.find((u) => Number(u.id) === Number(newUnitId)) || null}
+              getOptionLabel={(opt) => (opt?.unitName ? String(opt.unitName) : '')}
+              isOptionEqualToValue={(a, b) => Number(a?.id) === Number(b?.id)}
+              onChange={(e, opt) => {
+                const nextId = opt?.id ? Number(opt.id) : null;
+                setNewUnitId(nextId);
+                if (opt?.unitName) {
+                  applyNewUnitPrefix(opt.unitName);
+                }
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder={unitsLoading ? 'Units…' : 'Unit…'}
+                  disabled={loading}
+                  sx={{ width: 160 }}
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {unitsLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
             <TextField
               value={newText}
               onChange={(e) => setNewText(e.target.value)}
               placeholder="Add a note…"
               size="small"
               disabled={loading}
-              sx={{ width: 420, maxWidth: '52vw' }}
+              sx={{ width: 320, maxWidth: '42vw', minWidth: 220 }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -432,12 +556,23 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
                 fontWeight: 400,
                 border: 'none',
                 backgroundColor: 'transparent',
-                px: 1.5,
-                minWidth: 64,
-                color: '#6b7280', // grey default
+                px: 0.5,
+                minWidth: 'auto',
+                color: '#6b7280',
                 '&:hover': {
                   backgroundColor: 'transparent',
                 },
+                '&:not(:last-of-type)::after': {
+                  content: '" |"',
+                  display: 'inline-block',
+                  marginLeft: '6px',
+                  color: '#9ca3af',
+                  fontWeight: 400,
+                },
+              },
+              '& .MuiToggleButton-root.Mui-selected': {
+                fontWeight: 700,
+                backgroundColor: 'transparent',
               },
             }}
           >
@@ -447,7 +582,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
               sx={{
                 '&.Mui-selected': {
                   fontWeight: 600,
-                  color: '#374151',
+                  color: '#111827',
                   backgroundColor: 'transparent',
                 },
               }}
@@ -461,12 +596,12 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
               sx={{
                 '&.Mui-selected': {
                   fontWeight: 600,
-                  color: '#f59e0b', // amber
+                  color: '#f59e0b',
                   backgroundColor: 'transparent',
                 },
               }}
             >
-              Pending
+              Open
             </ToggleButton>
 
             <ToggleButton
@@ -505,11 +640,10 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
           ) : null}
 
           {filteredItems.map((it) => {
-            const done = (it.status || '').toLowerCase() === 'done';
-            const busy = saving || (deletingId != null && deletingId === it.id);
-
             const key = rowKey(it);
             const expanded = isExpanded(key);
+            const done = (it.status || '').toLowerCase() === 'done';
+            const busy = saving || (deletingId != null && deletingId === it.id) || !!unitSavingByKey[key];
             const showDot = hasResolution(it);
 
             return (
@@ -595,6 +729,11 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
                                   return same ? { ...x, unit_id: nextId } : x;
                                 })
                               );
+
+                              // Auto-save for existing notes
+                              if (it.id != null) {
+                                autoSaveUnitId(key, it.id, nextId);
+                              }
                             }}
                             renderInput={(params) => (
                               <TextField
@@ -639,47 +778,6 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
                               </Button>
                             );
                           })()}
-
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={busy || it.id == null}
-                            sx={{ textTransform: 'none' }}
-                            onClick={async () => {
-                              try {
-                                const val = it.unit_id === null || it.unit_id === undefined ? null : Number(it.unit_id);
-                                if (val !== null && (!Number.isFinite(val) || val <= 0)) {
-                                  toast.error('Unit ID must be a positive number');
-                                  return;
-                                }
-
-                                await api.put(`/api/hk-reconcile/notes/${it.id}`, { unit_id: val });
-                                toast.success('Unit saved');
-
-                                // refresh bookings cache for this row
-                                setBookingsByKey((prev) => {
-                                  const next = { ...prev };
-                                  delete next[key];
-                                  return next;
-                                });
-
-                                if (val) {
-                                  fetchReconBookings(key, val);
-                                }
-
-                                await load();
-                              } catch (e) {
-                                const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
-                                toast.error(msg);
-                              }
-                            }}
-                          >
-                            Set
-                          </Button>
-
-                          <Typography variant="caption" color="text.secondary">
-                            (Pick unit then view bookings)
-                          </Typography>
                         </Stack>
 
                         {(() => {
