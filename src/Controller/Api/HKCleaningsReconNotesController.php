@@ -32,6 +32,18 @@ class HKCleaningsReconNotesController extends AbstractController
             }
         }
 
+        $unitIdParam = $request->query->get('unit_id', null);
+        $unitId = null;
+        if ($unitIdParam !== null && $unitIdParam !== '') {
+            if (!is_numeric($unitIdParam)) {
+                return $this->json(['ok' => false, 'error' => 'invalid_unit_id', 'message' => 'unit_id must be numeric'], 400);
+            }
+            $unitId = (int) $unitIdParam;
+            if ($unitId <= 0) {
+                return $this->json(['ok' => false, 'error' => 'invalid_unit_id', 'message' => 'unit_id must be > 0'], 400);
+            }
+        }
+
         if ($month === '' || !preg_match('/^\d{4}-\d{2}$/', $month)) {
             return $this->json(['ok' => false, 'error' => 'invalid_month', 'message' => 'Invalid or missing month (YYYY-MM)'], 400);
         }
@@ -42,7 +54,7 @@ class HKCleaningsReconNotesController extends AbstractController
         }
 
         try {
-            $items = $repo->findByCityMonthAndOptionalCleaning($cityTrim, $month, $hkCleaningId);
+            $items = $repo->findByCityMonthAndOptionalCleaning($cityTrim, $month, $hkCleaningId, $unitId);
         } catch (\Throwable $e) {
             return $this->json(['ok' => false, 'error' => 'exception', 'message' => $e->getMessage()], 500);
         }
@@ -54,6 +66,7 @@ class HKCleaningsReconNotesController extends AbstractController
                 'city' => $it->getCity(),
                 'month' => $it->getMonth(),
                 'hk_cleaning_id' => $it->getHkCleaningId(),
+                'unit_id' => method_exists($it, 'getUnitId') ? $it->getUnitId() : null,
                 'text' => $it->getItemText(),
                 'status' => $it->getStatus(),
                 'resolution' => $it->getResolution(),
@@ -95,6 +108,7 @@ class HKCleaningsReconNotesController extends AbstractController
         $text = array_key_exists('text', $payload) ? (string)$payload['text'] : null;
         $status = array_key_exists('status', $payload) ? (string)$payload['status'] : null;
         $resolution = array_key_exists('resolution', $payload) ? $payload['resolution'] : null;
+        $unitId = array_key_exists('unit_id', $payload) ? $payload['unit_id'] : null;
 
         if ($text !== null) {
             $t = trim($text);
@@ -107,6 +121,21 @@ class HKCleaningsReconNotesController extends AbstractController
         if ($resolution !== null) {
             $r = trim((string)$resolution);
             $row->setResolution($r === '' ? null : $r);
+        }
+
+        if (array_key_exists('unit_id', $payload)) {
+            if ($unitId === null || $unitId === '') {
+                $row->setUnitId(null);
+            } else {
+                if (!is_numeric($unitId)) {
+                    return $this->json(['ok' => false, 'error' => 'invalid_unit_id', 'message' => 'unit_id must be numeric'], 400);
+                }
+                $u = (int) $unitId;
+                if ($u <= 0) {
+                    return $this->json(['ok' => false, 'error' => 'invalid_unit_id', 'message' => 'unit_id must be > 0'], 400);
+                }
+                $row->setUnitId($u);
+            }
         }
 
         if ($status !== null) {
@@ -143,6 +172,7 @@ class HKCleaningsReconNotesController extends AbstractController
                 'city' => $row->getCity(),
                 'month' => $row->getMonth(),
                 'hk_cleaning_id' => $row->getHkCleaningId(),
+                'unit_id' => $row->getUnitId(),
                 'text' => $row->getItemText(),
                 'status' => $row->getStatus(),
                 'resolution' => $row->getResolution(),
@@ -179,6 +209,17 @@ class HKCleaningsReconNotesController extends AbstractController
             }
         }
 
+        $unitId = null;
+        if (array_key_exists('unit_id', $payload) && $payload['unit_id'] !== null && $payload['unit_id'] !== '') {
+            if (!is_numeric($payload['unit_id'])) {
+                return $this->json(['ok' => false, 'error' => 'invalid_unit_id', 'message' => 'unit_id must be numeric'], 400);
+            }
+            $unitId = (int) $payload['unit_id'];
+            if ($unitId <= 0) {
+                return $this->json(['ok' => false, 'error' => 'invalid_unit_id', 'message' => 'unit_id must be > 0'], 400);
+            }
+        }
+
         if ($month === '' || !preg_match('/^\d{4}-\d{2}$/', $month)) {
             return $this->json(['ok' => false, 'error' => 'invalid_month', 'message' => 'Invalid or missing month (YYYY-MM)'], 400);
         }
@@ -201,6 +242,9 @@ class HKCleaningsReconNotesController extends AbstractController
         if ($hkCleaningId !== null) {
             $row->setHkCleaningId($hkCleaningId);
         }
+        if ($unitId !== null) {
+            $row->setUnitId($unitId);
+        }
 
         if (array_key_exists('resolution', $payload)) {
             $r = trim((string)($payload['resolution'] ?? ''));
@@ -221,6 +265,7 @@ class HKCleaningsReconNotesController extends AbstractController
                 'city' => $row->getCity(),
                 'month' => $row->getMonth(),
                 'hk_cleaning_id' => $row->getHkCleaningId(),
+                'unit_id' => $row->getUnitId(),
                 'text' => $row->getItemText(),
                 'status' => $row->getStatus(),
                 'resolution' => $row->getResolution(),

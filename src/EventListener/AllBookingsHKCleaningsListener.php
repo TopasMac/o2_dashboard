@@ -157,13 +157,17 @@ class AllBookingsHKCleaningsListener implements EventSubscriber
 
             $notes = method_exists($entity, 'getNotes') ? (string) ($entity->getNotes() ?? '') : '';
 
-            $newCheckoutDate = $checkOut->format('Y-m-d');
+            // Use DateTimeImmutable for HKCleanings.checkoutDate (DB is date)
+            $newCheckoutDt = ($checkOut instanceof \DateTimeImmutable)
+                ? $checkOut
+                : \DateTimeImmutable::createFromInterface($checkOut);
+            $newCheckoutYmd = $newCheckoutDt->format('Y-m-d');
 
             if (!$existingCleaning) {
                 $payload = [
                     'unitId'          => $unitId,
                     'city'            => $unitCity,
-                    'checkoutDate'    => $newCheckoutDate,
+                    'checkoutDate'    => $newCheckoutYmd,
                     'guestType'       => $guestType,
                     'bookingId'       => $bookingId,
                     'reservationCode' => $reservationCode,
@@ -183,11 +187,11 @@ class AllBookingsHKCleaningsListener implements EventSubscriber
 
             $existingCheckoutObj = $existingCleaning->getCheckoutDate();
             $existingCheckoutYmd = $existingCheckoutObj instanceof \DateTimeInterface ? $existingCheckoutObj->format('Y-m-d') : (string) $existingCheckoutObj;
-            if ($existingCheckoutYmd !== $newCheckoutDate) {
+            if ($existingCheckoutYmd !== $newCheckoutYmd) {
                 $targetType = method_exists($existingCleaning, 'getCleaningType') ? (string) $existingCleaning->getCleaningType() : (string) $intendedType;
                 $targetCleaning = $repo->findOneBy([
                     'unitId'       => $unitId,
-                    'checkoutDate' => $newCheckoutDate,
+                    'checkoutDate' => $newCheckoutDt,
                     'cleaningType' => $targetType,
                 ]);
 
@@ -205,7 +209,7 @@ class AllBookingsHKCleaningsListener implements EventSubscriber
                     $em->flush();
                     return;
                 } else {
-                    $existingCleaning->setCheckoutDate($newCheckoutDate);
+                    $existingCleaning->setCheckoutDate($newCheckoutDt);
                 }
             }
 

@@ -51,7 +51,7 @@ class HKCleaningsReconNotesRepository extends ServiceEntityRepository
     /**
      * @return HKCleaningsReconNotes[]
      */
-    public function findByCityMonthAndOptionalCleaning(string $city, string $month, ?int $hkCleaningId = null): array
+    public function findByCityMonthAndOptionalCleaning(string $city, string $month, ?int $hkCleaningId = null, ?int $unitId = null): array
     {
         $qb = $this->createQueryBuilder('n')
             ->andWhere('n.city = :city')
@@ -63,6 +63,11 @@ class HKCleaningsReconNotesRepository extends ServiceEntityRepository
         if ($hkCleaningId !== null) {
             $qb->andWhere('n.hkCleaningId = :hkCleaningId')
                ->setParameter('hkCleaningId', $hkCleaningId);
+        }
+
+        if ($unitId !== null) {
+            $qb->andWhere('n.unitId = :unitId')
+               ->setParameter('unitId', $unitId);
         }
 
         return $qb->getQuery()->getResult();

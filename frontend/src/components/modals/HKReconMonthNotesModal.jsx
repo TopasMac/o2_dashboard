@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Checkbox, Collapse, Divider, IconButton, Stack, TextField, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Autocomplete, Box, Button, Checkbox, CircularProgress, Collapse, Divider, IconButton, Stack, TextField, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -12,6 +12,37 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
+  const [unitsError, setUnitsError] = useState(null);
+  const loadUnits = useCallback(async () => {
+    if (!open) return;
+    setUnitsLoading(true);
+    setUnitsError(null);
+    try {
+      // Prefer server-side city filter if supported; if not, we'll filter client-side below.
+      const q = city ? new URLSearchParams({ city }).toString() : '';
+      const res = await api.get(`/api/units${q ? `?${q}` : ''}`);
+      const data = res?.data;
+      const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+      const mapped = arr.map((u) => ({
+        id: u?.id ?? null,
+        unitName: u?.unitName ?? u?.unit_name ?? u?.unit_id ?? u?.unitId ?? '',
+        city: u?.city ?? '',
+      })).filter((u) => Number(u.id) > 0 && String(u.unitName || '').trim() !== '');
+
+      const filtered = city ? mapped.filter((u) => String(u.city || '').toLowerCase() === String(city).toLowerCase()) : mapped;
+      // Sort by unitName
+      filtered.sort((a, b) => String(a.unitName).localeCompare(String(b.unitName)));
+      setUnits(filtered);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
+      setUnitsError(msg);
+      setUnits([]);
+    } finally {
+      setUnitsLoading(false);
+    }
+  }, [open, city]);
 
   const [items, setItems] = useState([]);        // draft items (can include new rows without id)
   const originalRef = useRef([]);                // last loaded snapshot from server
@@ -74,7 +105,8 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadUnits();
+  }, [load, loadUnits]);
 
   const normalize = (it) => ({
     _tmpId: null,
@@ -82,6 +114,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
     city: it?.city ?? city,
     month: it?.month ?? month,
     hk_cleaning_id: it?.hk_cleaning_id ?? it?.hkCleaningId ?? null,
+    unit_id: it?.unit_id ?? it?.unitId ?? null,
     text: (it?.text ?? '').toString(),
     status: (it?.status ?? 'open').toString(),
     resolution: it?.resolution === null || it?.resolution === undefined ? '' : (it.resolution ?? '').toString(),
@@ -105,6 +138,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
       if ((a?.text ?? '') !== (b?.text ?? '')) return true;
       if ((a?.status ?? 'open') !== (b?.status ?? 'open')) return true;
       if ((a?.resolution ?? '') !== (b?.resolution ?? '')) return true;
+      if ((a?.unit_id ?? null) !== (b?.unit_id ?? null)) return true;
     }
 
     return false;
@@ -131,6 +165,9 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
   }, [items, statusFilter]);
 
   const [expandedKeys, setExpandedKeys] = useState(() => new Set());
+  const [bookingsByKey, setBookingsByKey] = useState(() => ({}));
+  const [bookingsLoadingByKey, setBookingsLoadingByKey] = useState(() => ({}));
+  const [bookingsErrorByKey, setBookingsErrorByKey] = useState(() => ({}));
 
   const rowKey = useCallback((it) => (it?.id ?? it?._tmpId ?? ''), []);
 
@@ -147,8 +184,37 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
     });
   }, []);
 
+  const fetchReconBookings = useCallback(async (key, unitId) => {
+    if (!unitId) return;
+
+    // prevent duplicate loads
+    setBookingsLoadingByKey((prev) => ({ ...prev, [key]: true }));
+    setBookingsErrorByKey((prev) => ({ ...prev, [key]: null }));
+
+    try {
+      const q = new URLSearchParams({ mode: 'recon', month: String(month || ''), unitId: String(unitId) }).toString();
+      const res = await api.get(`/api/bookings?${q}`);
+      const arr = Array.isArray(res?.data) ? res.data : [];
+      setBookingsByKey((prev) => ({ ...prev, [key]: arr }));
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
+      setBookingsErrorByKey((prev) => ({ ...prev, [key]: msg }));
+    } finally {
+      setBookingsLoadingByKey((prev) => ({ ...prev, [key]: false }));
+    }
+  }, [month]);
+
   const hasResolution = useCallback((it) => {
     return String(it?.resolution ?? '').trim().length > 0;
+  }, []);
+
+  const fmtDdMm = useCallback((iso) => {
+    const s = String(iso || '').trim();
+    if (!s) return '—';
+    // Expect YYYY-MM-DD; fall back to original if unexpected
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return s;
+    return `${m[3]}/${m[2]}`;
   }, []);
 
   const anyExpanded = useMemo(() => expandedKeys.size > 0, [expandedKeys]);
@@ -176,6 +242,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
         city,
         month,
         hk_cleaning_id: null,
+        unit_id: null,
         text,
         status: 'open',
         resolution: '',
@@ -205,6 +272,7 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
           city,
           month,
           text: (row.text ?? '').toString().trim(),
+          unit_id: row.unit_id ?? null,
         };
         if ((row.status ?? 'open') !== 'open') payload.status = row.status;
         if ((row.resolution ?? '').toString().trim() !== '') payload.resolution = row.resolution;
@@ -226,10 +294,12 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
         const nextText = (row.text ?? '').toString();
         const nextStatus = (row.status ?? 'open').toString();
         const nextRes = (row.resolution ?? '').toString();
+        const nextUnitId = row.unit_id ?? null;
 
         if (nextText !== (before.text ?? '')) patch.text = nextText;
         if (nextStatus !== (before.status ?? 'open')) patch.status = nextStatus;
         if (nextRes !== (before.resolution ?? '')) patch.resolution = nextRes;
+        if (nextUnitId !== (before.unit_id ?? null)) patch.unit_id = nextUnitId;
 
         if (Object.keys(patch).length > 0) {
           // Keep minimal payload
@@ -503,6 +573,184 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
                           Resolved: {it.resolved_at}
                         </Typography>
                       ) : null}
+
+                      <Box sx={{ mt: 1, p: 1, border: '1px dashed #e5e7eb', borderRadius: 1, backgroundColor: '#fafafa' }}>
+                        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 88 }}>
+                            Unit context
+                          </Typography>
+
+                          <Autocomplete
+                            size="small"
+                            options={units}
+                            loading={unitsLoading}
+                            value={units.find((u) => Number(u.id) === Number(it.unit_id)) || null}
+                            getOptionLabel={(opt) => (opt?.unitName ? String(opt.unitName) : '')}
+                            isOptionEqualToValue={(a, b) => Number(a?.id) === Number(b?.id)}
+                            onChange={(e, opt) => {
+                              const nextId = opt?.id ? Number(opt.id) : null;
+                              setItems((prev) =>
+                                prev.map((x) => {
+                                  const same = (it.id != null && x.id === it.id) || (it.id == null && x._tmpId && x._tmpId === it._tmpId);
+                                  return same ? { ...x, unit_id: nextId } : x;
+                                })
+                              );
+                            }}
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                placeholder={unitsLoading ? 'Loading units…' : 'Select unit…'}
+                                disabled={busy}
+                                sx={{ minWidth: 260 }}
+                                InputProps={{
+                                  ...params.InputProps,
+                                  endAdornment: (
+                                    <>
+                                      {unitsLoading ? <CircularProgress color="inherit" size={16} /> : null}
+                                      {params.InputProps.endAdornment}
+                                    </>
+                                  ),
+                                }}
+                              />
+                            )}
+                          />
+                          {(() => {
+                            if (it.unit_id != null) return null;
+                            const t = String(it.text || '').toLowerCase();
+                            if (!t) return null;
+                            const suggested = units.find((u) => String(u.unitName || '').toLowerCase().includes(t) || t.includes(String(u.unitName || '').toLowerCase()));
+                            if (!suggested) return null;
+                            return (
+                              <Button
+                                size="small"
+                                variant="text"
+                                disabled={busy}
+                                sx={{ textTransform: 'none' }}
+                                onClick={() => {
+                                  setItems((prev) =>
+                                    prev.map((x) => {
+                                      const same = (it.id != null && x.id === it.id) || (it.id == null && x._tmpId && x._tmpId === it._tmpId);
+                                      return same ? { ...x, unit_id: Number(suggested.id) } : x;
+                                    })
+                                  );
+                                }}
+                              >
+                                Use suggestion: {suggested.unitName}
+                              </Button>
+                            );
+                          })()}
+
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={busy || it.id == null}
+                            sx={{ textTransform: 'none' }}
+                            onClick={async () => {
+                              try {
+                                const val = it.unit_id === null || it.unit_id === undefined ? null : Number(it.unit_id);
+                                if (val !== null && (!Number.isFinite(val) || val <= 0)) {
+                                  toast.error('Unit ID must be a positive number');
+                                  return;
+                                }
+
+                                await api.put(`/api/hk-reconcile/notes/${it.id}`, { unit_id: val });
+                                toast.success('Unit saved');
+
+                                // refresh bookings cache for this row
+                                setBookingsByKey((prev) => {
+                                  const next = { ...prev };
+                                  delete next[key];
+                                  return next;
+                                });
+
+                                if (val) {
+                                  fetchReconBookings(key, val);
+                                }
+
+                                await load();
+                              } catch (e) {
+                                const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
+                                toast.error(msg);
+                              }
+                            }}
+                          >
+                            Set
+                          </Button>
+
+                          <Typography variant="caption" color="text.secondary">
+                            (Pick unit then view bookings)
+                          </Typography>
+                        </Stack>
+
+                        {(() => {
+                          const u = it.unit_id === null || it.unit_id === undefined ? null : Number(it.unit_id);
+                          if (!u) {
+                            return (
+                              <Typography variant="caption" color="text.secondary">
+                                No unit selected. Set a Unit ID to load the booking calendar.
+                              </Typography>
+                            );
+                          }
+
+                          const loadingBk = !!bookingsLoadingByKey[key];
+                          const errBk = bookingsErrorByKey[key];
+                          const rows = bookingsByKey[key] || [];
+
+                          if (loadingBk) {
+                            return (
+                              <Typography variant="caption" color="text.secondary">
+                                Loading bookings…
+                              </Typography>
+                            );
+                          }
+
+                          if (errBk) {
+                            return (
+                              <Typography variant="caption" color="error">
+                                {errBk}
+                              </Typography>
+                            );
+                          }
+
+                          if (!rows || rows.length === 0) {
+                            return (
+                              <Typography variant="caption" color="text.secondary">
+                                No bookings found for this unit in recon mode for {month}.
+                              </Typography>
+                            );
+                          }
+
+                          return (
+                            <Box sx={{ mt: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                                Bookings (checkout in month or ongoing)
+                              </Typography>
+
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                {rows.map((b) => (
+                                  <Box key={b.id} sx={{ display: 'flex', gap: 1, alignItems: 'baseline' }}>
+                                    <Typography variant="caption" sx={{ minWidth: 72 }}>
+                                      {fmtDdMm(b.checkIn)}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ minWidth: 72, color: '#6b7280' }}>
+                                      {fmtDdMm(b.checkOut)}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ flex: 1 }}>
+                                      {b.guestName || '—'}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ minWidth: 64, color: '#6b7280' }}>
+                                      {b.source || '—'}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ minWidth: 72, color: '#6b7280', textAlign: 'right' }}>
+                                      {b.status || '—'}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            </Box>
+                          );
+                        })()}
+                      </Box>
                     </Collapse>
                   </Box>
 
@@ -511,6 +759,15 @@ const HKReconMonthNotesModal = memo(function HKReconMonthNotesModal({ open, city
                     disabled={busy}
                     onClick={() => {
                       toggleExpanded(key);
+
+                      // If expanding and unit_id exists, load bookings once
+                      if (!expanded) {
+                        const u = it.unit_id;
+                        if (u && bookingsByKey[key] === undefined && !bookingsLoadingByKey[key]) {
+                          fetchReconBookings(key, u);
+                        }
+                      }
+
                       // Let the DOM update then scroll the row into view
                       setTimeout(() => {
                         try {

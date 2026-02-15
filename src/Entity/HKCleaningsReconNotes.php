@@ -8,6 +8,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(columns: ['city', 'month'], name: 'idx_hk_recon_note_items_city_month')]
 #[ORM\Index(columns: ['status'], name: 'idx_hk_recon_note_items_status')]
 #[ORM\Index(columns: ['hk_cleaning_id'], name: 'idx_hk_recon_note_items_hk_cleaning')]
+#[ORM\Index(columns: ['unit_id'], name: 'idx_hk_recon_note_items_unit')]
 class HKCleaningsReconNotes
 {
     #[ORM\Id]
@@ -27,6 +28,10 @@ class HKCleaningsReconNotes
     // NULL means this is a month-level note.
     #[ORM\Column(name: 'hk_cleaning_id', type: 'integer', nullable: true)]
     private ?int $hkCleaningId = null;
+
+    // Optional link to a specific unit (for month-level notes that need booking calendar context)
+    #[ORM\Column(name: 'unit_id', type: 'integer', nullable: true)]
+    private ?int $unitId = null;
 
     // Main bullet text (issue / topic)
     #[ORM\Column(name: 'item_text', type: 'text')]
@@ -97,6 +102,22 @@ class HKCleaningsReconNotes
     {
         $this->hkCleaningId = $hkCleaningId;
         return $this;
+    }
+
+    public function getUnitId(): ?int
+    {
+        return $this->unitId;
+    }
+
+    public function setUnitId(?int $unitId): self
+    {
+        $this->unitId = $unitId;
+        return $this;
+    }
+
+    public function hasUnitContext(): bool
+    {
+        return $this->unitId !== null;
     }
 
     public function isRowNote(): bool

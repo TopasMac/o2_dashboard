@@ -15,12 +15,15 @@ use App\Entity\PrivateReservation;
 use App\Service\BookingStatusUpdaterService;
 use App\Service\MonthSliceRefresher;
 use App\Service\UnitListService;
+use App\Service\HKCleaningManager;
 use Doctrine\DBAL\Types\Types;
 
 class BookingsController extends AbstractController
 {
-    public function __construct(private MonthSliceRefresher $refresher)
-    {
+    public function __construct(
+        private MonthSliceRefresher $refresher,
+        private HKCleaningManager $hkCleaningManager
+    ) {
     }
 
     #[Route('/api/bookings', name: 'api_bookings', methods: ['GET'])]
@@ -32,6 +35,37 @@ class BookingsController extends AbstractController
         $checkOutFrom  = $request->query->get('checkOutFrom');
         $checkOutTo    = $request->query->get('checkOutTo');
         $focusId      = $request->query->get('focusId') ?? $request->query->get('focus');
+
+        // --- New: support unitId/unit_id, month, and mode=recon ---
+        $unitIdParam = $request->query->get('unitId') ?? $request->query->get('unit_id');
+        $monthParam  = $request->query->get('month');
+        $mode        = strtolower((string)($request->query->get('mode') ?? ''));
+
+        $unitId = null;
+        if ($unitIdParam !== null && $unitIdParam !== '') {
+            if (!is_numeric($unitIdParam)) {
+                return new JsonResponse(['error' => 'Invalid unitId'], 400);
+            }
+            $unitId = (int) $unitIdParam;
+            if ($unitId <= 0) {
+                return new JsonResponse(['error' => 'Invalid unitId'], 400);
+            }
+        }
+
+        $monthStart = null;
+        $monthEnd = null;
+        if ($monthParam !== null && $monthParam !== '') {
+            $m = trim((string)$monthParam);
+            if (!preg_match('/^\d{4}-\d{2}$/', $m)) {
+                return new JsonResponse(['error' => 'Invalid month (expected YYYY-MM)'], 400);
+            }
+            try {
+                $monthStart = new \DateTimeImmutable($m . '-01');
+                $monthEnd = $monthStart->modify('last day of this month');
+            } catch (\Throwable $e) {
+                return new JsonResponse(['error' => 'Invalid month'], 400);
+            }
+        }
 
         $parseYmd = static function ($value): ?\DateTimeImmutable {
             if (empty($value)) return null;
@@ -60,13 +94,67 @@ class BookingsController extends AbstractController
 
         $qb = $repository->createQueryBuilder('b');
 
+        // NOTE: unitId filtering is applied inside the WHERE expression (especially for recon mode)
+        // to avoid binding unused parameters when a later `$qb->where(...)` replaces conditions.
+
         // If caller provides any bounds, respect them; otherwise default to:
         // - ongoing stays (checkout >= today)
         // - plus current-month check-ins through +14 days after month end
         $hasExplicitRange = $ciFromDt || $ciToDt || $coFromDt || $coToDt;
 
+        // --- New: recon mode (HK reconciliation) ---
+        // Recon mode (HK reconciliation): focus on cleanings => checkout in month OR ongoing during month
+        // Requires month=YYYY-MM. If provided, it overrides the default range logic.
+        if ($mode === 'recon' && $monthStart instanceof \DateTimeImmutable && $monthEnd instanceof \DateTimeImmutable) {
+            $checkoutInMonth = $qb->expr()->andX(
+                $qb->expr()->gte('b.checkOut', ':mStart'),
+                $qb->expr()->lte('b.checkOut', ':mEnd')
+            );
+
+            // Ongoing across month end: overlaps month but checkout is after month end
+            $ongoingDuringMonth = $qb->expr()->andX(
+                $qb->expr()->lte('b.checkIn', ':mEnd'),
+                $qb->expr()->gte('b.checkOut', ':mStart'),
+                $qb->expr()->gt('b.checkOut', ':mEnd')
+            );
+
+            $reconWindow = $qb->expr()->orX($checkoutInMonth, $ongoingDuringMonth);
+
+            // Apply unit filter inside the expression if provided
+            $base = $reconWindow;
+            if ($unitId !== null) {
+                $base = $qb->expr()->andX(
+                    $qb->expr()->eq('b.unitId', ':unitId'),
+                    $reconWindow
+                );
+                $qb->setParameter('unitId', $unitId);
+            }
+
+            // If a focusId is provided, always include that booking id in the result (even if outside unit/month)
+            $where = $base;
+            if (!empty($focusId)) {
+                $where = $qb->expr()->orX(
+                    $base,
+                    $qb->expr()->eq('b.id', ':focusId')
+                );
+                $qb->setParameter('focusId', (int)$focusId);
+            }
+
+            $qb->where($where)
+               ->setParameter('mStart', $monthStart, Types::DATE_IMMUTABLE)
+               ->setParameter('mEnd', $monthEnd, Types::DATE_IMMUTABLE);
+
+            $bookings = $qb->getQuery()->getResult();
+            $statusUpdater->updateStatuses($bookings, true);
+            return $this->json($bookings);
+        }
+
         if ($hasExplicitRange) {
             $andX = $qb->expr()->andX();
+            if ($unitId !== null) {
+                $andX->add($qb->expr()->eq('b.unitId', ':unitId'));
+                $qb->setParameter('unitId', $unitId);
+            }
             if ($ciFromDt) {
                 $andX->add($qb->expr()->gte('b.checkIn', ':ciFrom'));
                 $qb->setParameter('ciFrom', $ciFromDt, Types::DATE_IMMUTABLE);
@@ -102,8 +190,8 @@ class BookingsController extends AbstractController
             // New business rule:
             // checkInFrom = first day of current month - 3 months
             // checkOutTo = end of current month + 6 months
-            $monthStart = $today->modify('first day of this month')->modify('-3 months');
-            $monthEnd   = $today->modify('last day of this month')->modify('+6 months');
+            $monthStartDefault = $today->modify('first day of this month')->modify('-3 months');
+            $monthEndDefault   = $today->modify('last day of this month')->modify('+6 months');
 
             $ongoing = $qb->expr()->gte('b.checkOut', ':today');
             $upcoming = $qb->expr()->andX(
@@ -112,6 +200,13 @@ class BookingsController extends AbstractController
             );
 
             $baseWhere = $qb->expr()->orX($ongoing, $upcoming);
+            if ($unitId !== null) {
+                $baseWhere = $qb->expr()->andX(
+                    $qb->expr()->eq('b.unitId', ':unitId'),
+                    $baseWhere
+                );
+                $qb->setParameter('unitId', $unitId);
+            }
 
             // If a focusId is provided, always include that booking id in the result
             if (!empty($focusId)) {
@@ -124,8 +219,8 @@ class BookingsController extends AbstractController
 
             $qb->where($baseWhere)
                ->setParameter('today', $today, Types::DATE_IMMUTABLE)
-               ->setParameter('monthStart', $monthStart, Types::DATE_IMMUTABLE)
-               ->setParameter('monthEnd', $monthEnd, Types::DATE_IMMUTABLE);
+               ->setParameter('monthStart', $monthStartDefault, Types::DATE_IMMUTABLE)
+               ->setParameter('monthEnd', $monthEndDefault, Types::DATE_IMMUTABLE);
         }
 
         $bookings = $qb->getQuery()->getResult();
@@ -518,6 +613,38 @@ class BookingsController extends AbstractController
 
         $entityManager->persist($booking);
         $entityManager->flush();
+
+        // If dates changed, resync hk_cleanings for this booking so checkout_date stays aligned
+        // (HKCleaningManager.bulkCreate() will update existing rows when report_status is pending)
+        $datesChanged = false;
+        if ($oldCheckIn instanceof \DateTimeInterface && $booking->getCheckIn() instanceof \DateTimeInterface) {
+            $datesChanged = $datesChanged || ($oldCheckIn->format('Y-m-d') !== $booking->getCheckIn()->format('Y-m-d'));
+        } elseif (($oldCheckIn instanceof \DateTimeInterface) !== ($booking->getCheckIn() instanceof \DateTimeInterface)) {
+            $datesChanged = true;
+        }
+        if ($oldCheckOut instanceof \DateTimeInterface && $booking->getCheckOut() instanceof \DateTimeInterface) {
+            $datesChanged = $datesChanged || ($oldCheckOut->format('Y-m-d') !== $booking->getCheckOut()->format('Y-m-d'));
+        } elseif (($oldCheckOut instanceof \DateTimeInterface) !== ($booking->getCheckOut() instanceof \DateTimeInterface)) {
+            $datesChanged = true;
+        }
+
+        if ($datesChanged) {
+            try {
+                $rc = method_exists($booking, 'getReservationCode') ? (string)($booking->getReservationCode() ?? '') : '';
+                $cc = method_exists($booking, 'getConfirmationCode') ? (string)($booking->getConfirmationCode() ?? '') : '';
+                $payload = [
+                    'bookingId'       => $booking->getId(),
+                    'unitId'          => method_exists($booking, 'getUnitId') ? (int)$booking->getUnitId() : null,
+                    'city'            => method_exists($booking, 'getCity') ? (string)$booking->getCity() : null,
+                    'reservationCode' => $rc !== '' ? $rc : ($cc !== '' ? $cc : null),
+                    'checkoutDate'    => $booking->getCheckOut()?->format('Y-m-d'),
+                    'cleaningType'    => 'checkout',
+                ];
+                $this->hkCleaningManager->bulkCreate([$payload]);
+            } catch (\Throwable $e) {
+                // Non-fatal: booking saved; ignore HK sync errors
+            }
+        }
 
         // After flush, refresh month slices. First purge any slices in old month range if dates changed.
         $newCheckIn  = $booking->getCheckIn();

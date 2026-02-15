@@ -75,17 +75,41 @@ class HKCleaningManager
             $checkoutDateYmd = $data['checkoutDate'];
             $checkoutDt = new \DateTimeImmutable($checkoutDateYmd);
 
-            // check if already exists (prefer reservation_code + date; fallback unit + date + type)
+            // check if already exists
+            // 1) Prefer stable keys that survive checkout date changes: bookingId, reservationCode (without date)
+            // 2) Then fallback to reservationCode + date and unit + date + type
             $reservationCode = $data['reservationCode'] ?? null;
+            $bookingId = $data['bookingId'] ?? null;
             $existing = null;
-            if ($reservationCode) {
-                $existing = $this->em->getRepository(HKCleanings::class)->findOneBy([
+            $repo = $this->em->getRepository(HKCleanings::class);
+
+            // A) bookingId + cleaningType (most stable)
+            if ($bookingId) {
+                $existing = $repo->findOneBy([
+                    'bookingId' => $bookingId,
+                    'cleaningType' => $cleaningType,
+                ]);
+            }
+
+            // B) reservationCode only (stable even if date changes)
+            if (!$existing && $reservationCode) {
+                $existing = $repo->findOneBy([
+                    'reservationCode' => $reservationCode,
+                    'cleaningType' => $cleaningType,
+                ]);
+            }
+
+            // C) reservationCode + date (legacy)
+            if (!$existing && $reservationCode) {
+                $existing = $repo->findOneBy([
                     'reservationCode' => $reservationCode,
                     'checkoutDate' => $checkoutDt,
                 ]);
             }
+
+            // D) unit + date + type (last resort)
             if (!$existing) {
-                $existing = $this->em->getRepository(HKCleanings::class)->findOneBy([
+                $existing = $repo->findOneBy([
                     'unit' => $unit,
                     'checkoutDate' => $checkoutDt,
                     'cleaningType' => $cleaningType,
@@ -93,6 +117,41 @@ class HKCleaningManager
             }
 
             if ($existing) {
+                // If booking checkout date changed, update checkoutDate ONLY when report_status is pending.
+                // status does not matter.
+                try {
+                    $canMove = true;
+                    if (method_exists($existing, 'getReportStatus')) {
+                        $rs = (string)($existing->getReportStatus() ?? '');
+                        $canMove = (strtolower(trim($rs)) === 'pending');
+                    }
+                    if ($canMove
+                        && method_exists($existing, 'getCheckoutDate')
+                        && method_exists($existing, 'setCheckoutDate')
+                    ) {
+                        $cur = $existing->getCheckoutDate();
+                        $curDt = $cur instanceof \DateTimeImmutable ? $cur : ($cur instanceof \DateTimeInterface ? \DateTimeImmutable::createFromInterface($cur) : null);
+                        if ($curDt && $curDt->format('Y-m-d') !== $checkoutDt->format('Y-m-d')) {
+                            $existing->setCheckoutDate($checkoutDt);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // best-effort; never block bulkCreate
+                }
+
+                // Ensure bookingId/reservationCode are attached when missing (helps future reconciliation)
+                if ($bookingId && method_exists($existing, 'getBookingId') && method_exists($existing, 'setBookingId')) {
+                    $curBid = $existing->getBookingId();
+                    if ($curBid === null || $curBid === 0 || $curBid === '0') {
+                        $existing->setBookingId($bookingId);
+                    }
+                }
+                if ($reservationCode && method_exists($existing, 'getReservationCode') && method_exists($existing, 'setReservationCode')) {
+                    $curRc = $existing->getReservationCode();
+                    if ($curRc === null || trim((string)$curRc) === '') {
+                        $existing->setReservationCode($reservationCode);
+                    }
+                }
                 // Update status to requested value (e.g., done after checkbox)
                 if (method_exists($existing, 'setStatus')) {
                     $existing->setStatus($status);
