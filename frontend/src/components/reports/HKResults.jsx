@@ -554,6 +554,43 @@ export default function HKResults({
     };
   }, [filteredRows, EPS]);
 
+  // ===== Tulum cleanings requiring attention (report_status pending / needs_review) =====
+  const tulumAttention = useMemo(() => {
+    const wants = [];
+    for (const r of filteredRows) {
+      // Only HK checkout/owner cleanings (cat 7/8) in Tulum
+      const city = String(r?.city || '').toLowerCase();
+      if (!city.includes('tulum')) continue;
+
+      const cat = Number(r?.category_id);
+      if (![7, 8].includes(cat)) continue;
+
+      const rs = String(r?.report_status || '').toLowerCase().trim();
+      if (rs !== 'pending' && rs !== 'needs_review') continue;
+
+      wants.push({
+        ...r,
+        _rs: rs,
+      });
+    }
+
+    // sort oldest first (date then unit)
+    wants.sort((a, b) => {
+      const da = String(a?.date || a?.checkout_date || '');
+      const db = String(b?.date || b?.checkout_date || '');
+      if (da !== db) return da.localeCompare(db);
+      return String(displayUnit(a)).localeCompare(String(displayUnit(b)));
+    });
+
+    const counts = { pending: 0, needs_review: 0 };
+    for (const r of wants) {
+      if (r._rs === 'pending') counts.pending += 1;
+      if (r._rs === 'needs_review') counts.needs_review += 1;
+    }
+
+    return { rows: wants, counts, total: wants.length };
+  }, [filteredRows]);
+
   return (
     <Box sx={{ pb: 3 }}>
       {error && (
@@ -1043,6 +1080,56 @@ export default function HKResults({
                       </TableCell>
                       <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
                         {fmtMoney(serverSummary?.tulum_cleanings?.paid ?? 0)}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Attention: pending / needs_review cleanings */}
+                    <TableRow>
+                      <TableCell colSpan={2} sx={{ borderBottom: 'none', pt: 1.0, pb: 0.25 }}>
+                        {tulumAttention.total === 0 ? (
+                          <Typography variant="caption" color="text.secondary">
+                            All Tulum cleanings are reported.
+                          </Typography>
+                        ) : (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                              Needs attention: {fmtInt(tulumAttention.total)}
+                              {tulumAttention.counts.pending ? ` • Pending: ${fmtInt(tulumAttention.counts.pending)}` : ''}
+                              {tulumAttention.counts.needs_review ? ` • Needs review: ${fmtInt(tulumAttention.counts.needs_review)}` : ''}
+                            </Typography>
+
+                            <Table size="small" sx={{ mt: 0.5, '& td, & th': { borderBottom: 'none', py: 0.25, px: 0 } }}>
+                              <TableBody>
+                                {tulumAttention.rows.slice(0, 12).map((r) => (
+                                  <TableRow key={`tulum-attn-${r.id}`}>
+                                    <TableCell sx={{ pr: 1 }}>
+                                      <Typography variant="caption" color="text.secondary">
+                                        <strong>{String(r.date || '').slice(0, 10) || '—'}</strong>
+                                        {' • '}{displayUnit(r)}
+                                        {r.description ? ` • ${r.description}` : ''}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {String(r.report_status || r._rs) === 'needs_review' ? 'Needs review' : 'Pending'}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+
+                                {tulumAttention.total > 12 && (
+                                  <TableRow>
+                                    <TableCell colSpan={2}>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Showing 12 of {fmtInt(tulumAttention.total)}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </Box>
+                        )}
                       </TableCell>
                     </TableRow>
                   </TableBody>

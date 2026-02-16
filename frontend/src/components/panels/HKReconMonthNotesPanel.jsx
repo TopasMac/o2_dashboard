@@ -682,7 +682,12 @@ export default function HKReconMonthNotesPanel({
                           checked={done}
                           onChange={(e) => {
                             const nextDone = !!e.target.checked;
-                            setRowField(it, { status: nextDone ? 'done' : 'open' });
+
+                            // Only update local state.
+                            // Persisting to API still requires clicking the Save icon.
+                            setRowField(it, {
+                              status: nextDone ? 'done' : 'open',
+                            });
                           }}
                         />
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>

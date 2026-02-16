@@ -33,6 +33,7 @@ class HKMonthlySummaryService
      *  - charged
      *  - allocation_target
      *  - city
+     *  - report_status
      */
     public function getCleaningsByMonth(int $year, int $month, ?string $city = null): array
     {
@@ -51,10 +52,12 @@ class HKMonthlySummaryService
               CAST(COALESCE(hk.paid, 0) AS DECIMAL(10,2)) AS paid,
               CAST(COALESCE(hk.charged, 0) AS DECIMAL(10,2)) AS charged,
               hk.allocation_target AS allocation_target,
-              hk.city AS city
+              hk.city AS city,
+              hc.report_status AS report_status
             FROM hktransactions hk
             LEFT JOIN unit u ON u.id = hk.unit_id
             LEFT JOIN transaction_category tc ON tc.id = hk.category_id
+            LEFT JOIN hk_cleanings hc ON hc.id = hk.hk_cleaning_id
             WHERE DATE(hk.`date`) BETWEEN :start AND LAST_DAY(:start)
         ";
 

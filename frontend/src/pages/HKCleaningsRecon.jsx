@@ -81,6 +81,7 @@ export default function HKCleaningsRecon() {
   const [monthNotesAllDone, setMonthNotesAllDone] = useState(false);
   const [monthNotesOpenCount, setMonthNotesOpenCount] = useState(0);
   const [monthNotesFocusCleaningId, setMonthNotesFocusCleaningId] = useState(null);
+  const [rowNotesByCleaningId, setRowNotesByCleaningId] = useState({}); // { [hk_cleaning_id]: resolution }
 
 
   const unitOptions = useMemo(() => {
@@ -166,7 +167,7 @@ export default function HKCleaningsRecon() {
     };
   }, [rows]);
 
-  const load = useCallback(async () => {
+ const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
@@ -197,7 +198,7 @@ export default function HKCleaningsRecon() {
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, [month, city]);
 
   const refreshMonthNotesSummary = useCallback(async () => {
     setMonthNotesLoading(true);
@@ -206,6 +207,19 @@ export default function HKCleaningsRecon() {
       const res = await api.get(`/api/hk-reconcile/notes?${q}`);
       const json = res?.data;
       const items = Array.isArray(json?.data) ? json.data : [];
+      // Build a quick lookup of resolution text per hk_cleaning_id
+      // If multiple notes exist for the same cleaning, prefer the most recent (last in list)
+      const byId = {};
+      for (const it of items) {
+        const hkId = it?.hk_cleaning_id ?? it?.hkCleaningId;
+        if (!hkId) continue;
+        const resolution = (it?.resolution ?? '').toString();
+        if (resolution.trim() !== '') {
+          byId[String(hkId)] = resolution;
+        }
+      }
+      setRowNotesByCleaningId(byId);
+
       const hasAny = items.length > 0;
       const openCount = items.filter((it) => String(it?.status ?? '').toLowerCase() === 'open').length;
       const allDone = hasAny && openCount === 0;
@@ -219,6 +233,7 @@ export default function HKCleaningsRecon() {
       setMonthNotesHasValue(false);
       setMonthNotesAllDone(false);
       setMonthNotesOpenCount(0);
+      setRowNotesByCleaningId({});
     } finally {
       setMonthNotesLoading(false);
     }
@@ -810,31 +825,39 @@ export default function HKCleaningsRecon() {
                     </TableCell>
 
                     <TableCell sx={{ py: 0.5, width: 240, minWidth: 240, maxWidth: 240 }}>
-                      {((r.resolution ?? '').toString().trim() !== '') ? (
-                        <TextField
-                          value={r.resolution ?? ''}
-                          size="small"
-                          variant="outlined"
-                          sx={{ width: '100%', cursor: 'pointer', ...noteBorderSx }}
-                          placeholder="Optional"
-                          InputProps={{ readOnly: true }}
-                          onClick={async () => {
-                            const hkId = r.hk_cleaning_id ?? r.hkCleaningId;
-                            setMonthNotesFocusCleaningId(hkId ? Number(hkId) : null);
-                            await refreshMonthNotesSummary();
-                            setMonthNotesOpen(true);
-                          }}
-                        />
-                      ) : (
-                        <TextField
-                          value={r.notes ?? ''}
-                          onChange={(e) => updateRow(r.id, { notes: e.target.value })}
-                          size="small"
-                          variant="outlined"
-                          sx={{ width: '100%', ...noteBorderSx }}
-                          placeholder="Optional"
-                        />
-                          )}
+                      {(() => {
+                        const hkId = r.hk_cleaning_id ?? r.hkCleaningId;
+                        const resolutionText = hkId ? (rowNotesByCleaningId[String(hkId)] ?? '') : '';
+
+                        if (resolutionText.toString().trim() !== '') {
+                          return (
+                            <TextField
+                              value={resolutionText}
+                              size="small"
+                              variant="outlined"
+                              sx={{ width: '100%', cursor: 'pointer', ...noteBorderSx }}
+                              placeholder="Optional"
+                              InputProps={{ readOnly: true }}
+                              onClick={async () => {
+                                setMonthNotesFocusCleaningId(hkId ? Number(hkId) : null);
+                                await refreshMonthNotesSummary();
+                                setMonthNotesOpen(true);
+                              }}
+                            />
+                          );
+                        }
+
+                        return (
+                          <TextField
+                            value={r.notes ?? ''}
+                            onChange={(e) => updateRow(r.id, { notes: e.target.value })}
+                            size="small"
+                            variant="outlined"
+                            sx={{ width: '100%', ...noteBorderSx }}
+                            placeholder="Optional"
+                          />
+                        );
+                      })()}
                     </TableCell>
                     
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
