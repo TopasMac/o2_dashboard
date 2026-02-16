@@ -3,7 +3,7 @@ import { Box, Typography, Grid, Paper, Tabs, Tab } from '@mui/material';
 import CCO2Results from './CCO2Results';
 import HKResults from './HKResults';
 import PageScaffold from '../layout/PageScaffold';
-import api, { BACKEND_BASE } from '../../api';
+import api from '../../api';
 import AppDrawer from '../common/AppDrawer';
 import NewO2TransactionForm from '../forms/NewO2TransactionForm';
 import EditO2TransactionForm from '../forms/EditO2TransactionForm';
@@ -57,6 +57,9 @@ export default function O2Results() {
   const [hkData, setHkData] = useState(null);
   const [hkLoading, setHkLoading] = useState(false);
   const [hkError, setHkError] = useState(null);
+  const [allData, setAllData] = useState(null);
+  const [allLoading, setAllLoading] = useState(false);
+  const [allError, setAllError] = useState(null);
 
   const [tab, setTab] = useState(0);
   const [o2TxDrawerOpen, setO2TxDrawerOpen] = useState(false);
@@ -224,45 +227,51 @@ export default function O2Results() {
   }, [transactions, employeeLedger]);
 
   useEffect(() => {
-    const ac = new AbortController();
+    let cancelled = false;
+
     async function load() {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ year: String(year), month: String(month) });
-        const endpoint = `${BACKEND_BASE}/api/reports/o2/monthly-summary?${params.toString()}`;
-        const res = await fetch(endpoint, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          signal: ac.signal,
+        const res = await api.get('/api/reports/monthly-results', {
+          params: {
+            year: Number(year),
+            month: Number(month),
+            scope: 'owners2',
+          },
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setBookings(Array.isArray(data.bookings) ? data.bookings : []);
-        setSlices(Array.isArray(data.slices) ? data.slices : []);
-        setCommissionByUnit(Array.isArray(data.commissionByUnit) ? data.commissionByUnit : []);
-        // Transactions can arrive as `transactions` or `o2transactions` depending on backend shape
-        const tx = Array.isArray(data.transactions)
-          ? data.transactions
-          : (Array.isArray(data.o2transactions) ? data.o2transactions : []);
+        if (cancelled) return;
+
+        const payload = res?.data?.data ?? null;
+        setBookings(Array.isArray(payload?.bookings) ? payload.bookings : []);
+        setSlices(Array.isArray(payload?.slices) ? payload.slices : []);
+        setCommissionByUnit(Array.isArray(payload?.commissionByUnit) ? payload.commissionByUnit : []);
+
+        const tx = Array.isArray(payload?.transactions)
+          ? payload.transactions
+          : (Array.isArray(payload?.o2transactions) ? payload.o2transactions : []);
         setTransactions(tx);
-        setEmployeeLedger(Array.isArray(data.employeeLedger) ? data.employeeLedger : []);
+
+        setEmployeeLedger(Array.isArray(payload?.employeeLedger) ? payload.employeeLedger : []);
       } catch (e) {
-        if (e.name !== 'AbortError') {
-          console.error('Failed to load monthly summary', e);
-          setError(e.message || 'Failed to load');
-          setBookings([]);
-          setSlices([]);
-          setCommissionByUnit([]);
-          setTransactions([]);
-          setEmployeeLedger([]);
-        }
+        if (cancelled) return;
+        console.error('Failed to load monthly results (owners2)', e);
+        const msg = e?.response?.data?.message || e?.message || 'Failed to load';
+        setError(msg);
+        setBookings([]);
+        setSlices([]);
+        setCommissionByUnit([]);
+        setTransactions([]);
+        setEmployeeLedger([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
     load();
-    return () => ac.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [year, month, reloadKey]);
 
   useEffect(() => {
@@ -275,11 +284,11 @@ export default function O2Results() {
       setHkLoading(true);
       setHkError(null);
       try {
-        const res = await api.get('/api/reports/hk/monthly-summary', {
-          params: { year: Number(year), month: Number(month) },
+        const res = await api.get('/api/reports/monthly-results', {
+          params: { year: Number(year), month: Number(month), scope: 'hk' },
         });
         if (cancelled) return;
-        setHkData(res?.data ?? null);
+        setHkData(res?.data?.data ?? null);
       } catch (e) {
         if (cancelled) return;
         console.error('Failed to load HK monthly summary', e);
@@ -292,6 +301,37 @@ export default function O2Results() {
     }
 
     loadHk();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, year, month, reloadKey]);
+
+  useEffect(() => {
+    if (tab !== 2) return;
+
+    let cancelled = false;
+
+    async function loadAll() {
+      setAllLoading(true);
+      setAllError(null);
+      try {
+        const res = await api.get('/api/reports/monthly-results', {
+          params: { year: Number(year), month: Number(month), scope: 'all' },
+        });
+        if (cancelled) return;
+        setAllData(res?.data?.data ?? null);
+      } catch (e) {
+        if (cancelled) return;
+        console.error('Failed to load monthly results (all)', e);
+        const msg = e?.response?.data?.message || e?.message || 'Failed to load';
+        setAllError(msg);
+        setAllData(null);
+      } finally {
+        if (!cancelled) setAllLoading(false);
+      }
+    }
+
+    loadAll();
     return () => {
       cancelled = true;
     };
@@ -516,9 +556,11 @@ export default function O2Results() {
 
           {(tab === 1 || tab === 2) && hkLoading && 'Loading…'}
           {(tab === 1 || tab === 2) && !hkLoading && hkError && `Error: ${hkError}`}
+          {tab === 2 && allLoading && 'Loading…'}
+          {tab === 2 && !allLoading && allError && `Error: ${allError}`}
         </Typography>
 
-       {tab === 0 && (
+        {tab === 0 && (
           <CCO2Results
             totals={totals}
             netMarginPct={netMarginPct}
@@ -543,9 +585,8 @@ export default function O2Results() {
 
         {tab === 1 && (
           <HKResults
-            year={year}
-            month={month}
             yearMonth={hkData?.yearMonth || ym}
+            report={hkData}
             rows={Array.isArray(hkData?.data) ? hkData.data : []}
             loading={hkLoading}
             error={hkError}
@@ -555,10 +596,30 @@ export default function O2Results() {
         )}
 
         {tab === 2 && (
-          <Box sx={{ mt: 4 }}>
-            <Typography variant="body2" color="text.secondary">
-              Combined view (Owners2 + Housekeepers) will be added here.
-            </Typography>
+          <Box sx={{ mt: 2 }}>
+            <Paper
+              elevation={0}
+              sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)' }}
+            >
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                All (Owners2 + Housekeepers)
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Owners2 net: {fmt(allData?.summary?.owners2_net || 0)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                HK balance: {fmt(allData?.summary?.hk_balance || 0)}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Net: {fmt(allData?.summary?.net || 0)}
+              </Typography>
+            </Paper>
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Detailed combined view will be added here.
+              </Typography>
+            </Box>
           </Box>
         )}
       </Box>
