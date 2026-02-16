@@ -696,37 +696,9 @@ class BookingsController extends AbstractController
         $entityManager->persist($booking);
         $entityManager->flush();
 
-        // If dates changed, resync hk_cleanings for this booking so checkout_date stays aligned
-        // (HKCleaningManager.bulkCreate() will update existing rows when report_status is pending)
-        $datesChanged = false;
-        if ($oldCheckIn instanceof \DateTimeInterface && $booking->getCheckIn() instanceof \DateTimeInterface) {
-            $datesChanged = $datesChanged || ($oldCheckIn->format('Y-m-d') !== $booking->getCheckIn()->format('Y-m-d'));
-        } elseif (($oldCheckIn instanceof \DateTimeInterface) !== ($booking->getCheckIn() instanceof \DateTimeInterface)) {
-            $datesChanged = true;
-        }
-        if ($oldCheckOut instanceof \DateTimeInterface && $booking->getCheckOut() instanceof \DateTimeInterface) {
-            $datesChanged = $datesChanged || ($oldCheckOut->format('Y-m-d') !== $booking->getCheckOut()->format('Y-m-d'));
-        } elseif (($oldCheckOut instanceof \DateTimeInterface) !== ($booking->getCheckOut() instanceof \DateTimeInterface)) {
-            $datesChanged = true;
-        }
-
-        if ($datesChanged) {
-            try {
-                $rc = method_exists($booking, 'getReservationCode') ? (string)($booking->getReservationCode() ?? '') : '';
-                $cc = method_exists($booking, 'getConfirmationCode') ? (string)($booking->getConfirmationCode() ?? '') : '';
-                $payload = [
-                    'bookingId'       => $booking->getId(),
-                    'unitId'          => method_exists($booking, 'getUnitId') ? (int)$booking->getUnitId() : null,
-                    'city'            => method_exists($booking, 'getCity') ? (string)$booking->getCity() : null,
-                    'reservationCode' => $rc !== '' ? $rc : ($cc !== '' ? $cc : null),
-                    'checkoutDate'    => $booking->getCheckOut()?->format('Y-m-d'),
-                    'cleaningType'    => 'checkout',
-                ];
-                $this->hkCleaningManager->bulkCreate([$payload]);
-            } catch (\Throwable $e) {
-                // Non-fatal: booking saved; ignore HK sync errors
-            }
-        }
+        // Booking-driven hk_cleanings rows are synchronized by the Doctrine listener
+        // (AllBookingsHKCleaningsListener) via HKCleaningManager::syncCheckoutCleaningForBooking().
+        // Keep controller logic free of duplicate/legacy bulkCreate() sync paths.
 
         // After flush, refresh month slices. First purge any slices in old month range if dates changed.
         $newCheckIn  = $booking->getCheckIn();
@@ -751,6 +723,14 @@ class BookingsController extends AbstractController
         // Always refresh for the new/persisted dates when both exist
         if ($newCheckIn instanceof \DateTimeInterface && $newCheckOut instanceof \DateTimeInterface) {
             $refresher->refreshForBooking($booking->getId(), $newCheckIn, $newCheckOut);
+        }
+
+        // If dates changed, resync hk_cleanings for this booking so checkout_date stays aligned.
+        // Single source of truth: delegate to HKCleaningManager::syncCheckoutCleaningForBooking()
+        try {
+            $this->hkCleaningManager->syncCheckoutCleaningForBooking($booking);
+        } catch (\Throwable $e) {
+            // best-effort: do not block booking update
         }
 
         // Recompute and sync housekeeping (will flip hk_cleanings to cancelled when applicable)

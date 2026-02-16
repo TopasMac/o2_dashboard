@@ -17,6 +17,8 @@ use Doctrine\DBAL\Connection;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
+use App\Entity\AllBookings;
+
 class HKCleaningManager
 {
     private EntityManagerInterface $em;
@@ -33,6 +35,143 @@ class HKCleaningManager
         $this->conn = $em->getConnection();
         $this->rateResolver = $rateResolver;
         $this->documentUploadService = $documentUploadService;
+    }
+
+    private function normalizeCity(?string $city): string
+    {
+        $c = trim((string)($city ?? ''));
+        if ($c === '') {
+            return '';
+        }
+        $lc = strtolower($c);
+        if (str_contains($lc, 'playa')) {
+            return 'Playa del Carmen';
+        }
+        if (str_contains($lc, 'tulum')) {
+            return 'Tulum';
+        }
+        if (str_contains($lc, 'general')) {
+            return 'General';
+        }
+        return $c;
+    }
+
+    private function costCentreFromCity(string $city): string
+    {
+        $lc = strtolower(trim($city));
+        if (str_contains($lc, 'tulum')) {
+            return HKCleanings::COST_CENTRE_HK_TULUM;
+        }
+        if (str_contains($lc, 'playa')) {
+            return HKCleanings::COST_CENTRE_HK_PLAYA;
+        }
+        return HKCleanings::COST_CENTRE_GENERAL;
+    }
+
+    /**
+     * Booking guest_type -> housekeeping billing target.
+     *
+     * Rules (start simple):
+     * - guest_type=owner => bill_to=CLIENT (owner stays are billed to the unit's Client)
+     * - otherwise        => bill_to=OWNERS2
+     */
+    private function billToFromGuestType(?string $guestType): string
+    {
+        $gt = strtolower(trim((string)($guestType ?? '')));
+        if ($gt === 'owner') {
+            return 'CLIENT';
+        }
+        return 'OWNERS2';
+    }
+
+    /**
+     * Create/update the booking-driven checkout/owner cleaning row in hk_cleanings.
+     *
+     * This is the single source of truth for hk_cleanings rows that come from AllBookings.
+     * It normalizes city/guestType and delegates idempotency + safe updates to bulkCreate().
+     *
+     * Rules (simple):
+     * - guestType=owner => cleaning_type=owner, bill_to=CLIENT
+     * - otherwise       => cleaning_type=checkout, bill_to=OWNERS2
+     *
+     * @return array Summary returned by bulkCreate()
+     */
+    public function syncCheckoutCleaningForBooking(AllBookings $booking): array
+    {
+        $checkOut = method_exists($booking, 'getCheckOut') ? $booking->getCheckOut() : null;
+        if (!$checkOut instanceof \DateTimeInterface) {
+            return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
+
+        // Resolve unit + city (prefer relation; fall back to scalar fields)
+        $unit = method_exists($booking, 'getUnit') ? $booking->getUnit() : null;
+        $unitId = null;
+        $cityRaw = '';
+
+        if ($unit instanceof Unit && method_exists($unit, 'getId')) {
+            $unitId = (int)$unit->getId();
+            $cityRaw = method_exists($unit, 'getCity') ? (string)($unit->getCity() ?? '') : '';
+        } else {
+            if (method_exists($booking, 'getUnitId')) {
+                $unitId = (int)($booking->getUnitId() ?? 0);
+            }
+            if (method_exists($booking, 'getCity')) {
+                $cityRaw = (string)($booking->getCity() ?? '');
+            }
+        }
+
+        if (!$unitId) {
+            return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
+
+        // Normalize + validate guest type
+        // Only these guest types should generate an hk_cleanings row from bookings:
+        //   owner, previous, new, airbnb_guest
+        // Anything else (including hold/block) should be ignored.
+        $guestTypeRaw = method_exists($booking, 'getGuestType')
+            ? strtolower(trim((string)($booking->getGuestType() ?? '')))
+            : '';
+
+        // Normalize common variants
+        $guestTypeRaw = str_replace(['-', ' '], '_', $guestTypeRaw);
+        if ($guestTypeRaw === 'airbnb' || $guestTypeRaw === 'airbnbguest') {
+            $guestTypeRaw = 'airbnb_guest';
+        }
+
+        // Explicitly ignore hold/block (and any other unsupported values)
+        $allowedGuestTypes = ['owner', 'previous', 'new', 'airbnb_guest'];
+        if (!in_array($guestTypeRaw, $allowedGuestTypes, true)) {
+            return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
+
+        $guestType = $guestTypeRaw;
+
+        $city = $this->normalizeCity($cityRaw);
+        $checkoutYmd = ($checkOut instanceof \DateTimeImmutable)
+            ? $checkOut->format('Y-m-d')
+            : \DateTimeImmutable::createFromInterface($checkOut)->format('Y-m-d');
+
+        $reservationCode = method_exists($booking, 'getConfirmationCode') ? $booking->getConfirmationCode() : null;
+        $notes = method_exists($booking, 'getNotes') ? (string)($booking->getNotes() ?? '') : '';
+
+        // Explicit defaults (bulkCreate also defaults these, but we send them to keep behavior consistent)
+        $billTo = $this->billToFromGuestType($guestType);
+        $costCentre = $this->costCentreFromCity($city);
+
+        $payload = [
+            'unitId'          => $unitId,
+            'city'            => $city,
+            'checkoutDate'    => $checkoutYmd,
+            'guestType'       => $guestType,
+            'bookingId'       => method_exists($booking, 'getId') ? $booking->getId() : null,
+            'reservationCode' => $reservationCode,
+            'status'          => HKCleanings::STATUS_PENDING,
+            'notes'           => $notes,
+            'bill_to'         => $billTo,
+            'cost_centre'     => $costCentre,
+        ];
+
+        return $this->bulkCreate([$payload]);
     }
 
     /**
@@ -63,7 +202,12 @@ class HKCleaningManager
                 continue;
             }
 
-            $guestTypeRaw = isset($data['guestType']) ? strtolower((string)$data['guestType']) : '';
+            $guestTypeRaw = isset($data['guestType']) ? strtolower(trim((string)$data['guestType'])) : '';
+            // Normalize common variants so bulkCreate behaves consistently with syncCheckoutCleaningForBooking()
+            $guestTypeRaw = str_replace(['-', ' '], '_', $guestTypeRaw);
+            if ($guestTypeRaw === 'airbnb' || $guestTypeRaw === 'airbnbguest') {
+                $guestTypeRaw = 'airbnb_guest';
+            }
             if ($guestTypeRaw === 'owner') {
                 $cleaningType = HKCleanings::TYPE_OWNER; // use constant
             } else {
@@ -71,7 +215,12 @@ class HKCleaningManager
             }
 
             $status = $data['status'] ?? HKCleanings::STATUS_PENDING; // auto-created rows start as pending
-            $city = $data['city'] ?? ($unit->getCity() ?? '');
+            $city = $this->normalizeCity($data['city'] ?? ($unit->getCity() ?? ''));
+
+            // Defaults
+            $defaultBillTo = $this->billToFromGuestType($guestTypeRaw);
+            $defaultCostCentre = $this->costCentreFromCity($city);
+
             $checkoutDateYmd = $data['checkoutDate'];
             $checkoutDt = new \DateTimeImmutable($checkoutDateYmd);
 
@@ -175,11 +324,27 @@ class HKCleaningManager
                     }
                 }
 
-                // Respect provided bill_to (accept snake_case and camelCase)
-                $billToRaw = $data['bill_to'] ?? $data['billTo'] ?? null;
-                if ($billToRaw !== null && $billToRaw !== '') {
-                    if (method_exists($existing, 'setBillTo')) {
-                        $existing->setBillTo((string)$billToRaw);
+                // Ensure bill_to is set (default from guestType). Only overwrite when safe (report_status pending).
+                $billToIncoming = $data['bill_to'] ?? $data['billTo'] ?? null;
+                $billToFinal = ($billToIncoming !== null && $billToIncoming !== '') ? (string)$billToIncoming : (string)$defaultBillTo;
+
+                if (method_exists($existing, 'setBillTo') && method_exists($existing, 'getBillTo')) {
+                    $curBillTo = (string)($existing->getBillTo() ?? '');
+                    $canChangeBillTo = true;
+                    if (method_exists($existing, 'getReportStatus')) {
+                        $rs = strtolower(trim((string)($existing->getReportStatus() ?? '')));
+                        $canChangeBillTo = ($rs === 'pending' || $rs === '');
+                    }
+                    if (($curBillTo === '' || $canChangeBillTo) && $billToFinal !== '') {
+                        $existing->setBillTo($billToFinal);
+                    }
+                }
+
+                // Ensure cost_centre is set (default from city). Only set when missing.
+                if (method_exists($existing, 'setCostCentre') && method_exists($existing, 'getCostCentre')) {
+                    $curCc = (string)($existing->getCostCentre() ?? '');
+                    if (trim($curCc) === '' && $defaultCostCentre !== '') {
+                        $existing->setCostCentre($defaultCostCentre);
                     }
                 }
                 $this->em->persist($existing);
@@ -195,12 +360,19 @@ class HKCleaningManager
             $hk->setCleaningType($cleaningType);
             $hk->setBookingId($data['bookingId'] ?? null);
             $hk->setReservationCode($data['reservationCode'] ?? null);
-            // Respect provided bill_to (accept snake_case and camelCase)
+
+            // bill_to: prefer payload, otherwise default from guestType
             $billToRaw = $data['bill_to'] ?? $data['billTo'] ?? null;
-            if ($billToRaw !== null && $billToRaw !== '') {
-                if (method_exists($hk, 'setBillTo')) {
-                    $hk->setBillTo((string)$billToRaw);
-                }
+            $billToFinal = ($billToRaw !== null && $billToRaw !== '') ? (string)$billToRaw : (string)$defaultBillTo;
+            if ($billToFinal !== '' && method_exists($hk, 'setBillTo')) {
+                $hk->setBillTo($billToFinal);
+            }
+
+            // cost_centre: prefer payload, otherwise default from city
+            $ccRaw = $data['cost_centre'] ?? $data['costCentre'] ?? null;
+            $ccFinal = ($ccRaw !== null && $ccRaw !== '') ? (string)$ccRaw : (string)$defaultCostCentre;
+            if ($ccFinal !== '' && method_exists($hk, 'setCostCentre')) {
+                $hk->setCostCentre($ccFinal);
             }
             if (method_exists($hk, 'setStatus')) {
                 $hk->setStatus($status);

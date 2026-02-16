@@ -951,7 +951,107 @@ export default function HKResults({
             </Paper>
           </Grid>
 
-          {/* 3) Issues */}
+          {/* 3) Cleaning Results (Playa & Tulum) */}
+          <Grid item xs={12}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                pt: 1.5,
+                borderRadius: 2,
+                border: '1px solid rgba(0,0,0,0.08)',
+                position: 'relative',
+              }}
+            >
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: -10,
+                  left: 12,
+                  px: 0.5,
+                  backgroundColor: 'background.paper',
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                  Cleaning Results
+                </Typography>
+              </Box>
+
+              <TableContainer>
+                <Table size="small" aria-label="hk cleaning results">
+                  <TableBody>
+                    {/* Playa del Carmen */}
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.5, fontWeight: 700 }}>
+                        Playa del Carmen
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.5, fontWeight: 700 }}>
+                        {fmtMoney(serverSummary?.playa_cleanings?.result ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                        Charged (cat 7 + 8)
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                        {fmtMoney(serverSummary?.playa_cleanings?.charged ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                        Laundry
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                        {fmtMoney(serverSummary?.playa_cleanings?.laundry ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                        Fixed HR cost (Cleaner)
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                        {fmtMoney(serverSummary?.playa_cleanings?.fixed_hr_cost ?? 0)}
+                      </TableCell>
+                    </TableRow>
+
+                    <TableRow>
+                      <TableCell colSpan={2} sx={{ borderBottom: 'none', py: 0.6 }}>
+                        <Divider />
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Tulum */}
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.5, fontWeight: 700 }}>
+                        Tulum
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.5, fontWeight: 700 }}>
+                        {fmtMoney(serverSummary?.tulum_cleanings?.result ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                        Charged (cat 7 + 8 + 14)
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                        {fmtMoney(serverSummary?.tulum_cleanings?.charged ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                        Paid (incl. laundry)
+                      </TableCell>
+                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                        {fmtMoney(serverSummary?.tulum_cleanings?.paid ?? 0)}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Paper>
+          </Grid>
+
+          {/* 4) Issues */}
           <Grid item xs={12}>
             <Paper
               elevation={0}

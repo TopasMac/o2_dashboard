@@ -9,7 +9,6 @@ const CLEANING_TYPE_OPTIONS = [
   { value: 'midstay', label: 'Mid-stay' },
   { value: 'refresh', label: 'Refresh' },
   { value: 'initial', label: 'Initial' },
-  { value: 'owner', label: 'Owner' },
   { value: 'redo', label: 'Redo' },
 ];
 
@@ -49,9 +48,9 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
       date: todayISO(),
       unit_id: '',
       cleaning_type: 'midstay',
-      status: (todayISO() < todayISO() ? 'done' : 'pending'),
+      status: 'pending',
       o2_collected_fee: '',
-      bill_to: 'OWNERS2',
+      bill_to: 'CLIENT',
     }),
     []
   );
@@ -67,10 +66,46 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
   useEffect(() => {
     if (!selectedDate) return;
     const today = todayISO();
-    if (selectedDate < today) {
+
+    if (selectedDate <= today) {
       form.setValue('status', 'done', { shouldDirty: true });
+    } else {
+      form.setValue('status', 'pending', { shouldDirty: true });
     }
-  }, [selectedDate]);
+  }, [selectedDate, form]);
+
+  const selectedCleaningType = form.watch('cleaning_type');
+  const selectedUnitId = form.watch('unit_id');
+
+  const selectedUnitCity = useMemo(() => {
+    if (!selectedUnitId) return null;
+    const u = (Array.isArray(units) ? units : []).find(
+      (row) => String(row.unit_id ?? row.id) === String(selectedUnitId)
+    );
+    return u?.city || u?.unit_city || null;
+  }, [units, selectedUnitId]);
+
+  // Auto-default bill_to based on cleaning_type rules
+  useEffect(() => {
+    if (!selectedCleaningType) return;
+
+    if (selectedCleaningType === 'initial' || selectedCleaningType === 'refresh') {
+      form.setValue('bill_to', 'CLIENT', { shouldDirty: true });
+      return;
+    }
+
+    if (selectedCleaningType === 'redo') {
+      // Redo is billed to Housekeepers; HK_Playa/HK_Tulum is determined server-side by city/cost_centre rules.
+      form.setValue('bill_to', 'HOUSEKEEPERS', { shouldDirty: true });
+      return;
+    }
+
+    if (selectedCleaningType === 'midstay') {
+      // Default to Client, but user may edit.
+      form.setValue('bill_to', 'CLIENT', { shouldDirty: true });
+      return;
+    }
+  }, [selectedCleaningType, selectedUnitCity, form]);
 
   const unitOptions = useMemo(() => {
     return (Array.isArray(units) ? units : [])
@@ -137,7 +172,7 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
       done_at: null,
       source: 'Housekeepers',
       laundry_cost: null,
-      bill_to: values.bill_to || 'OWNERS2',
+      bill_to: values.bill_to || 'CLIENT',
       report_status: reportStatus,
     };
 

@@ -3,8 +3,6 @@
 namespace App\Command;
 
 use App\Entity\AllBookings;
-use App\Entity\HKCleanings;
-use App\Entity\Unit;
 use App\Service\HKCleaningManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -105,45 +103,32 @@ class BackfillHkCleaningsCommand extends Command
                 continue;
             }
 
-            $unitName = method_exists($b, 'getUnitName') ? $b->getUnitName() : null;
             $checkOut = method_exists($b, 'getCheckOut') ? $b->getCheckOut() : null;
-            if (!$unitName || !$checkOut instanceof \DateTimeInterface) { $skipped++; continue; }
-
-            // Find Unit entity by unit_name
-            $unitRepo = $this->em->getRepository(Unit::class);
-            $unit = $unitRepo->findOneBy(['unitName' => $unitName]);
-            if (!$unit) {
+            if (!$checkOut instanceof \DateTimeInterface) {
                 $skipped++;
-                $io->warning('No Unit match for unit_name: ' . (string)$unitName . ' — skipping booking id ' . (method_exists($b, 'getId') ? $b->getId() : 'n/a'));
                 continue;
             }
 
-            $payload = [
-                'unitId'         => method_exists($unit, 'getId') ? $unit->getId() : null,
-                'city'           => method_exists($b, 'getCity') ? (string)$b->getCity() : (method_exists($unit, 'getCity') ? (string)$unit->getCity() : ''),
-                'checkoutDate'   => $checkOut->format('Y-m-d'),
-                'cleaningType'   => HKCleanings::TYPE_CHECKOUT,
-                'bookingId'      => method_exists($b, 'getId') ? $b->getId() : null,
-                'reservationCode'=> method_exists($b, 'getConfirmationCode') ? $b->getConfirmationCode() : null,
-                'status'         => HKCleanings::STATUS_PENDING,
-                'o2CollectedFee' => method_exists($unit, 'getCleaningFee') ? $unit->getCleaningFee() : null,
-            ];
+            $reservationCode = method_exists($b, 'getConfirmationCode') ? (string)($b->getConfirmationCode() ?? '') : '';
 
             if ($dryRun) {
-                $io->writeln(sprintf('[DRY] would create HK for booking %s (%s) on %s',
-                    (string)$payload['reservationCode'],
-                    (string)$payload['unitId'],
-                    $payload['checkoutDate']
+                // For dry-run, don’t write anything; just show what would be synced.
+                $io->writeln(sprintf('[DRY] would sync HK cleaning for booking id=%s code=%s checkout=%s',
+                    method_exists($b, 'getId') ? $b->getId() : 'n/a',
+                    $reservationCode !== '' ? $reservationCode : 'n/a',
+                    $checkOut->format('Y-m-d')
                 ));
-            } else {
-                try {
-                    $res = $this->hkManager->bulkCreate([$payload]);
-                    $created += (int)($res['created'] ?? 0);
-                    $skipped += (int)($res['skipped'] ?? 0);
-                } catch (\Throwable $e) {
-                    $errors++;
-                    $io->warning('Error creating HK for booking id ' . $b->getId() . ': ' . $e->getMessage());
-                }
+                continue;
+            }
+
+            try {
+                // Single source of truth for booking-driven checkout/owner cleanings
+                $res = $this->hkManager->syncCheckoutCleaningForBooking($b);
+                $created += (int)($res['created'] ?? 0);
+                $skipped += (int)($res['skipped'] ?? 0);
+            } catch (\Throwable $e) {
+                $errors++;
+                $io->warning('Error syncing HK for booking id ' . (method_exists($b, 'getId') ? $b->getId() : 'n/a') . ': ' . $e->getMessage());
             }
         }
 
