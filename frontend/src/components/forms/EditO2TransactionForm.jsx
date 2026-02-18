@@ -163,13 +163,12 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         const amt = d.amount != null ? String(d.amount) : '';
         if (active) {
           const isBothTx = d.paid != null || d.charged != null;
-          const loadedType = d.type || (isBothTx ? 'Abono' : 'Ingreso');
+          const loadedType = d.type || 'Ingreso';
           setFormData({
             costCentre: d.costCentre || 'Owners2',
             date: d.date || '',
             category: catId ? String(catId) : '',
-            // For Both-style transactions, legacy 'Ingreso' should be shown as 'Abono'
-            type: (isBothTx && loadedType === 'Ingreso') ? 'Abono' : loadedType,
+            type: loadedType,
             description: d.description || '',
             amount: amt,
             // Preserve API values exactly; null -> '' so inputs can render
@@ -232,7 +231,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
 
   // For "Both" categories, derive type from Paid vs Charged:
   // - Paid > Charged  => Gasto
-  // - Paid < Charged  => Abono
+  // - Paid < Charged  => Ingreso
   useEffect(() => {
     const isBothCategory = (selectedCategory?.type === 'Both');
     // If categories haven't loaded yet but we already have paid/charged values (editing existing tx), treat it as Both.
@@ -245,7 +244,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
 
     let derived = formData.type;
     if (paidNum > chargedNum) derived = 'Gasto';
-    else if (paidNum < chargedNum) derived = 'Abono';
+    else if (paidNum < chargedNum) derived = 'Ingreso';
 
     if (derived !== formData.type) {
       setFormData((p) => ({ ...p, type: derived }));
@@ -329,7 +328,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         if (paidNum > chargedNum) {
           resolvedType = 'Gasto';
         } else if (paidNum < chargedNum) {
-          resolvedType = 'Abono';
+          resolvedType = 'Ingreso';
         }
       }
 
@@ -438,9 +437,8 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         disabled={disabled}
         style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
       >
-        <option value="Abono">Abono</option>
-        <option value="Gasto">Gasto</option>
         <option value="Ingreso">Ingreso</option>
+        <option value="Gasto">Gasto</option>
       </select>
     );
   };
