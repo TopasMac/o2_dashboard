@@ -22,6 +22,7 @@ class EmployeeCashLedgerRepository extends ServiceEntityRepository
      * @param int|null $employeeId
      * @param string|null $status
      * @param string|null $type
+     * @param string|null $month
      * @param string|null $division
      * @param string|null $city
      * @return EmployeeCashLedger[]
@@ -30,6 +31,7 @@ class EmployeeCashLedgerRepository extends ServiceEntityRepository
         ?int $employeeId,
         ?string $status,
         ?string $type,
+        ?string $month,
         ?string $division,
         ?string $city
     ): array {
@@ -48,6 +50,20 @@ class EmployeeCashLedgerRepository extends ServiceEntityRepository
         if ($type) {
             $qb->andWhere('c.type = :tp')
                ->setParameter('tp', $type);
+        }
+
+        if ($month !== null && $month !== '') {
+            $month = trim($month);
+            if (preg_match('/^\d{4}-\d{2}$/', $month) === 1) {
+                $start = new \DateTimeImmutable($month . '-01', new \DateTimeZone('UTC'));
+                $end = $start->modify('first day of next month');
+
+                $qb
+                    ->andWhere('c.date >= :monthStart')
+                    ->andWhere('c.date < :monthEnd')
+                    ->setParameter('monthStart', $start)
+                    ->setParameter('monthEnd', $end);
+            }
         }
 
         if ($division) {

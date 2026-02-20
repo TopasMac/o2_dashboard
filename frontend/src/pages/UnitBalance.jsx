@@ -3,6 +3,7 @@ import TableLite from '../components/layout/TableLite';
 import AppDrawer from '../components/common/AppDrawer';
 import UnitBalanceNewUnitLedgerForm from '../components/forms/UnitBalancePage/UnitBalanceNewUnitLedgerForm';
 import EditUnitLedgerForm from '../components/forms/EditUnitLedgerForm';
+import UnitBalanceDetailsDrawer from '../components/drawers/UnitBalanceDetailsDrawer';
 import api from '../api';
 
 import { HiOutlineDocumentText } from 'react-icons/hi';
@@ -77,6 +78,7 @@ export default function UnitBalance() {
   const [rows, setRows] = useState([]);         // ledger rows
   const [error, setError] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedLedgerId, setSelectedLedgerId] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -405,20 +407,21 @@ export default function UnitBalance() {
     // Removed "Created By" column
   ]), [setPreviewUrl, setPreviewTitle, setPreviewOpen, unitFilterOptions, typeFilterOptions]);
 
-  // Payments Balance box JSX to reuse in actions
+  const netBalanceO2 = Number(paymentsSummary.balance || 0);
+  const netBalanceColor = netBalanceO2 < 0 ? '#B91C1C' : netBalanceO2 > 0 ? '#1E6F68' : '#6b7280';
+// Payments Balance box JSX to reuse in actions
   const paymentsBalanceBox = (
     <div
       style={{
         position: 'relative',
         border: '1px solid #e5e7eb',
-        borderTop: '4px solid #e5e7eb',
-        borderRadius: 8,
+        borderRadius: 12,
         padding: '12px 30px',
         background: '#fff',
         maxWidth: '700px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         gap: 24
       }}
     >
@@ -426,64 +429,89 @@ export default function UnitBalance() {
       <div
         style={{
           position: 'absolute',
-          top: -10,
+          top: 0,
           left: 12,
+          transform: 'translateY(-50%)',
           background: '#fff',
           padding: '0 8px',
           fontSize: 12,
-          fontWeight: 600,
+          fontWeight: 700,
           color: '#374151',
+          lineHeight: 1,
         }}
       >
         Payments Balance
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: '#374151', fontSize: 13 }}>Balance:</span>
-        <span style={{ fontWeight: 600, color: '#1E6F68' }}>
-          {paymentsSummary.fmt(paymentsSummary.balance)}
-        </span>
-      </div>
-      <div style={{ width: 2, alignSelf: 'stretch', background: '#e5e7eb', margin: '2px 0' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 24, flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: '#374151', fontSize: 13, fontWeight: 700 }}>Balance:</span>
+          <span style={{ fontWeight: 700, color: netBalanceColor, fontVariantNumeric: 'tabular-nums' }}>
+            {paymentsSummary.fmt(netBalanceO2)}
+          </span>
+        </div>
+        <div style={{ width: 2, alignSelf: 'stretch', background: '#e5e7eb', margin: '2px 0' }} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: '#374151', fontSize: 13 }}>O2 → Clients:</span>
-        <span style={{ fontWeight: 400, color: '#B91C1C' }}>
-          {paymentsSummary.fmt(Math.abs(paymentsSummary.o2ToClients))}
-        </span>
-      </div>
-      <div style={{ width: 2, alignSelf: 'stretch', background: '#e5e7eb', margin: '2px 0' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: '#374151', fontSize: 13 }}>To Pay:</span>
+          <span style={{ fontWeight: 400, color: '#B91C1C', fontVariantNumeric: 'tabular-nums' }}>
+            {paymentsSummary.fmt(Math.abs(paymentsSummary.o2ToClients))}
+          </span>
+        </div>
+        <div style={{ width: 2, alignSelf: 'stretch', background: '#e5e7eb', margin: '2px 0' }} />
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: '#374151', fontSize: 13 }}>Clients → O2:</span>
-        <span style={{ fontWeight: 400, color: '#065F46' }}>
-          {paymentsSummary.fmt(paymentsSummary.clientsToO2)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ color: '#374151', fontSize: 13 }}>To Collect:</span>
+          <span style={{ fontWeight: 400, color: '#1E6F68', fontVariantNumeric: 'tabular-nums' }}>
+            {paymentsSummary.fmt(paymentsSummary.clientsToO2)}
+          </span>
+        </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setDetailsOpen(true)}
+        style={{
+          padding: '6px 10px',
+          borderRadius: 8,
+          border: '1px solid #e5e7eb',
+          background: '#fff',
+          color: '#374151',
+          fontWeight: 600,
+          cursor: 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Details
+      </button>
     </div>
   );
 
   const stickyHeaderContent = (
     <TablePageHeader
-      summary={paymentsBalanceBox}
-      actions={(
-        <button
-          type="button"
-          onClick={() => { setSelectedLedgerId(null); setDrawerOpen(true); }}
-          style={{
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid #e5e7eb',
-            background: '#F57C4D',
-            color: '#fff',
-            fontWeight: 600,
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Add +
-        </button>
+      summary={(
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button
+            type="button"
+            onClick={() => { setSelectedLedgerId(null); setDrawerOpen(true); }}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #e5e7eb',
+              background: '#F57C4D',
+              color: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Add +
+          </button>
+
+          {paymentsBalanceBox}
+        </div>
       )}
+      actions={null}
     />
   );
 
@@ -543,6 +571,30 @@ export default function UnitBalance() {
               }}
             />
           )}
+        </AppDrawer>
+
+        <AppDrawer
+          open={detailsOpen}
+          onClose={() => setDetailsOpen(false)}
+          title="Payments Balance — Details"
+          width={420}
+          showActions={false}
+        >
+          <div style={{ padding: 12 }}>
+            <UnitBalanceDetailsDrawer
+              rows={rows}
+              onSelectUnit={(u) => {
+                // optional: when we later add a unit filter, we can set it here
+                // for now we just close the drawer to keep UX snappy
+                try {
+                  if (u?.unitId) {
+                    window.dispatchEvent(new CustomEvent('datatable:highlight', { detail: { unitId: u.unitId } }));
+                  }
+                } catch (_) {}
+                setDetailsOpen(false);
+              }}
+            />
+          </div>
         </AppDrawer>
 
         <PreviewOverlay

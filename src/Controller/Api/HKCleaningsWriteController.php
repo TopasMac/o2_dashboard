@@ -895,6 +895,7 @@ public function markDoneBy(Request $request): JsonResponse
 
         $newStatus = method_exists($hk, 'getStatus') ? strtolower((string)$hk->getStatus()) : null;
         $transitionToDone = ($oldStatus !== 'done' && $newStatus === 'done');
+        $transitionFromDone = ($oldStatus === 'done' && $newStatus !== 'done');
 
         // Enforce bill_to defaulting rule on update:
         // If cleaning_type is owner AND bill_to is empty AND user did not explicitly set bill_to,
@@ -926,6 +927,18 @@ public function markDoneBy(Request $request): JsonResponse
         }
 
         $this->em->flush();
+
+        // If a cleaning was previously DONE and is now NOT done (e.g. cancelled),
+        // ensure any hktransactions row linked by hk_cleaning_id is removed.
+        if ($transitionFromDone) {
+            try {
+                if (method_exists($this->hkCleaningManager, 'deleteTransactionForCleaning')) {
+                    $this->hkCleaningManager->deleteTransactionForCleaning($hk);
+                }
+            } catch (\Throwable $e) {
+                // Non-fatal: do not fail the update if tx removal fails.
+            }
+        }
 
         if ($transitionToDone) {
             $txResult = null;

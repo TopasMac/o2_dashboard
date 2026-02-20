@@ -42,10 +42,11 @@ class EmployeeCashLedgerService
         ?int $employeeId,
         ?string $status,
         ?string $type,
+        ?string $month,
         ?string $division,
         ?string $city
     ): array {
-        $rows = $this->repo->search($employeeId, $status, $type, $division, $city);
+        $rows = $this->repo->search($employeeId, $status, $type, $month, $division, $city);
 
         // Compute running balance per row (excluding the effect of Rejected rows)
         $balanceById = [];

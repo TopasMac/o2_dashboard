@@ -8,8 +8,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Chip, Button, IconButton, Typography, Divider, ToggleButtonGroup, ToggleButton, TextField } from '@mui/material';
-import PageScaffold from '../components/layout/PageScaffold';
+import PageScaffoldTable from '../components/layout/PageScaffoldTable';
 import TableLite from '../components/layout/TableLite';
+import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 import AppDrawer from '../components/common/AppDrawer';
 import EmployeeTransAdminNewFormRHF from '../components/forms/EmployeeCashLedgerNewFormRHF';
 import NewO2TransactionForm from '../components/forms/NewO2TransactionForm';
@@ -19,6 +20,12 @@ import HRTransactionsNewFormRHF from '../components/forms/HRTransactionsNewFormR
 import EmployeeCashLedgerEditFormRHF from '../components/forms/EmployeeCashLedgerEditFormRHF';
 import api from '../api';
 
+function getCurrentYearMonth() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+}
 // Status -> color mapping for the status pill
 const STATUS_COLOR_MAP = {
   Pending: 'warning',
@@ -88,6 +95,7 @@ export default function EmployeeCashAdmin() {
     status: '',
     type: '',
     employee: '',
+    month: getCurrentYearMonth(),
   });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -378,6 +386,7 @@ export default function EmployeeCashAdmin() {
         const params = new URLSearchParams();
         if (filters.status) params.append('status', filters.status);
         if (filters.type) params.append('type', filters.type);
+        if (filters.month) params.append('month', filters.month);
 
         const query = params.toString();
         const url = query ? "/api/employee-cash-ledger?" + query : "/api/employee-cash-ledger";
@@ -402,7 +411,7 @@ export default function EmployeeCashAdmin() {
     };
 
     fetchRows();
-  }, [filters.status, filters.type, reloadToken]);
+  }, [filters.status, filters.type, filters.month, reloadToken]);
 
   const columns = useMemo(
     () => [
@@ -544,10 +553,20 @@ export default function EmployeeCashAdmin() {
           const amount = format(value);
           const balance = format(row?.balance);
 
+          const balanceNum = row?.balance == null ? null : Number(row.balance);
+          const balanceColor =
+            balanceNum == null || Number.isNaN(balanceNum)
+              ? '#666'
+              : balanceNum > 0
+                ? '#1E6F68'
+                : balanceNum < 0
+                  ? '#C62828'
+                  : '#666';
+
           return (
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2', textAlign: 'right' }}>
               <span>{amount}</span>
-              <span style={{ fontSize: '11px', color: '#666' }}>{balance}</span>
+              <span style={{ fontSize: '11px', color: balanceColor, fontWeight: 600 }}>{balance}</span>
             </div>
           );
         },
@@ -673,34 +692,40 @@ export default function EmployeeCashAdmin() {
     [setPreviewUrl, setAllocationRow, setAllocationDrawerOpen, setAllocationType, setEditRow, setEditDrawerOpen]
   );
 
-  return (
-    <PageScaffold>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 1.5 }}>
-        <Button
-          variant="outlined"
-          size="small"
-          sx={{
+  const stickyHeader = (
+    <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: 2 }}>
+      <Button
+        variant="outlined"
+        size="small"
+        sx={{
+          borderColor: '#1E6F68',
+          color: '#1E6F68',
+          fontWeight: 500,
+          '&:hover': {
             borderColor: '#1E6F68',
-            color: '#1E6F68',
-            fontWeight: 500,
-            '&:hover': {
-              borderColor: '#1E6F68',
-              backgroundColor: 'rgba(30, 111, 104, 0.04)',
-            },
-          }}
-          startIcon={
-            <Box
-              component="span"
-              sx={{ fontSize: 18, lineHeight: 1 }}
-            >
-              +
-            </Box>
-          }
-          onClick={() => setDrawerOpen(true)}
-        >
-          Add
-        </Button>
+            backgroundColor: 'rgba(30, 111, 104, 0.04)',
+          },
+        }}
+        startIcon={
+          <Box component="span" sx={{ fontSize: 18, lineHeight: 1 }}>
+            +
+          </Box>
+        }
+        onClick={() => setDrawerOpen(true)}
+      >
+        Add
+      </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <YearMonthPicker
+          value={filters.month}
+          onChange={(ym) => handleFilterChange('month', ym)}
+        />
       </Box>
+    </Box>
+  );
+
+  return (
+    <PageScaffoldTable stickyHeader={stickyHeader}>
 
       <TableLite
         columns={columns}
@@ -971,6 +996,6 @@ export default function EmployeeCashAdmin() {
           </>
         )}
       </AppDrawer>
-    </PageScaffold>
+    </PageScaffoldTable>
   );
 }

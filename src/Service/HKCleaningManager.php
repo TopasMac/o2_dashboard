@@ -760,6 +760,72 @@ class HKCleaningManager
     }
 
     /**
+     * Ensure there is NO hk_transactions row linked to this cleaning.
+     *
+     * Used when a cleaning is cancelled or otherwise not DONE.
+     * Idempotent: if no row exists, does nothing.
+     */
+    public function deleteTransactionForCleaning(HKCleanings $hk): void
+    {
+        $txRepo = $this->em->getRepository(HKTransactions::class);
+
+        $existingTx = null;
+        // Fast-path: check inverse/bidirectional relation if present on HKCleanings
+        if (method_exists($hk, 'getHkTransaction')) {
+            $maybeTx = $hk->getHkTransaction();
+            if ($maybeTx instanceof HKTransactions) {
+                $existingTx = $maybeTx;
+            }
+        }
+        // Repo lookup by hkCleaning
+        if (!$existingTx) {
+            $existingTx = $txRepo->findOneBy(['hkCleaning' => $hk]);
+        }
+
+        if (!$existingTx instanceof HKTransactions) {
+            return;
+        }
+
+        // Best-effort: clear owning-side relation if setter exists
+        if (method_exists($hk, 'setHkTransaction')) {
+            try {
+                $hk->setHkTransaction(null);
+                $this->em->persist($hk);
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        $this->em->remove($existingTx);
+        $this->em->flush();
+    }
+
+    /**
+     * Sync hk_transactions row for a cleaning based on its current status.
+     *
+     * - If status is DONE: ensure exactly one hk_transactions row exists.
+     * - Otherwise (cancelled/pending/etc): ensure zero hk_transactions rows exist.
+     */
+    public function syncTransactionForCleaningStatus(HKCleanings $hk): void
+    {
+        $status = '';
+        if (method_exists($hk, 'getStatus')) {
+            $status = strtolower(trim((string)($hk->getStatus() ?? '')));
+        }
+
+        $done = strtolower((string)HKCleanings::STATUS_DONE);
+
+        if ($status === $done) {
+            // Idempotent
+            $this->markDoneAndCreateTransaction($hk);
+            return;
+        }
+
+        // Not done => ensure no ledger row
+        $this->deleteTransactionForCleaning($hk);
+    }
+
+    /**
      * Save or update a checklist draft for a cleaning (no submission).
      *
      * Responsibilities:

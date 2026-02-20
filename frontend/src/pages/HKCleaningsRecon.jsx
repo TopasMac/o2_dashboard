@@ -9,11 +9,13 @@ import {
   Autocomplete,
   Box,
   Button,
+  CircularProgress,
   Divider,
   FormControl,
   InputLabel,
   MenuItem,
   Paper,
+  Popover,
   Select,
   Table,
   TableBody,
@@ -21,12 +23,16 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import TextField from '@mui/material/TextField';
 import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 import IconButton from '@mui/material/IconButton';
 import SaveIcon from '@mui/icons-material/Save';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import CloseIcon from '@mui/icons-material/Close';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 
 function ymNow() {
@@ -34,6 +40,24 @@ function ymNow() {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
+}
+
+function formatMonthLabel(ym) {
+  const raw = (ym ?? '').toString().trim();
+  const m = raw.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return raw;
+  const y = m[1];
+  const mm = m[2];
+  return `${mm}-${y}`;
+}
+
+function formatMoneyEU(n) {
+  const num = Number(n ?? 0);
+  if (!Number.isFinite(num)) return '0,00';
+  return num.toLocaleString('de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 const REPORT_STATUS_OPTIONS = [
@@ -53,10 +77,20 @@ function normalizeReportStatus(v) {
 }
 
 
+
 const statusColor = (v) => {
   if (v === 'reported') return '#1e6f68'; // teal
   if (v === 'needs_review') return '#f97316'; // orange
   return 'text.secondary';
+};
+
+// Helper to normalize booking fields
+const normalizeBookingField = (b, keys, fallback = '') => {
+  for (const k of keys) {
+    const v = b?.[k];
+    if (v !== null && v !== undefined && String(v).trim() !== '') return v;
+  }
+  return fallback;
 };
 
 
@@ -81,7 +115,205 @@ export default function HKCleaningsRecon() {
   const [monthNotesAllDone, setMonthNotesAllDone] = useState(false);
   const [monthNotesOpenCount, setMonthNotesOpenCount] = useState(0);
   const [monthNotesFocusCleaningId, setMonthNotesFocusCleaningId] = useState(null);
+
   const [rowNotesByCleaningId, setRowNotesByCleaningId] = useState({}); // { [hk_cleaning_id]: resolution }
+
+  // Month bookings popover (per unit)
+  const [bookingsByKey, setBookingsByKey] = useState({}); // { ["YYYY-MM::unitId"]: [] }
+  const [bookingsLoadingByKey, setBookingsLoadingByKey] = useState({});
+  const [bookingsErrorByKey, setBookingsErrorByKey] = useState({});
+  const [bookingsAnchorEl, setBookingsAnchorEl] = useState(null);
+  const [bookingsOpenKey, setBookingsOpenKey] = useState(null);
+  const [bookingsOpenUnitName, setBookingsOpenUnitName] = useState('');
+
+  const makeBookingsKey = (m, unitId) => `${m}::${unitId}`;
+
+  const fetchUnitMonthBookings = useCallback(async (m, unitId) => {
+    if (!m || !unitId) return;
+    const key = makeBookingsKey(m, unitId);
+
+    // Cache hit: do not refetch.
+    if (Array.isArray(bookingsByKey[key])) return;
+    if (bookingsLoadingByKey[key]) return;
+
+    setBookingsLoadingByKey((p) => ({ ...p, [key]: true }));
+    setBookingsErrorByKey((p) => ({ ...p, [key]: '' }));
+
+    try {
+      const q = new URLSearchParams({ mode: 'recon', month: m, unitId: String(unitId) }).toString();
+      const res = await api.get(`/api/bookings?${q}`);
+      const json = res?.data;
+      const arr = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.rows)
+          ? json.rows
+          : Array.isArray(json)
+            ? json
+            : [];
+      setBookingsByKey((p) => ({ ...p, [key]: arr }));
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e);
+      setBookingsErrorByKey((p) => ({ ...p, [key]: msg }));
+      setBookingsByKey((p) => ({ ...p, [key]: [] }));
+    } finally {
+      setBookingsLoadingByKey((p) => ({ ...p, [key]: false }));
+    }
+  }, [bookingsByKey, bookingsLoadingByKey]);
+
+  const closeBookingsPopover = () => {
+    setBookingsAnchorEl(null);
+    setBookingsOpenKey(null);
+    setBookingsOpenUnitName('');
+  };
+
+  // Renders the content of the bookings popover
+  const renderBookingsPopoverContent = () => {
+    if (!bookingsOpenKey) return null;
+
+    const isLoading = !!bookingsLoadingByKey[bookingsOpenKey];
+    const errMsg = bookingsErrorByKey[bookingsOpenKey];
+    const items = bookingsByKey[bookingsOpenKey] || [];
+
+    const status = (b) => normalizeBookingField(b, ['status', 'booking_status', 'bookingStatus'], '').toString();
+    const source = (b) => normalizeBookingField(b, ['source', 'channel'], '').toString();
+    const url = (b) => normalizeBookingField(b, ['reservation_url', 'reservationUrl', 'url', 'link'], '').toString();
+
+    const formatShortDate = (d) => {
+      const s = (d ?? '').toString().trim();
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return s;
+      return `${m[3]}/${m[2]}`;
+    };
+
+    const fmtRange = (b) => {
+      const ci = normalizeBookingField(b, ['check_in', 'checkIn', 'check_in_date', 'start_date', 'startDate'], '');
+      const co = normalizeBookingField(b, ['check_out', 'checkOut', 'check_out_date', 'end_date', 'endDate'], '');
+      const ciF = ci ? formatShortDate(ci) : '';
+      const coF = co ? formatShortDate(co) : '';
+      if (ciF && coF) return `${ciF} - ${coF}`;
+      return ciF || coF || '—';
+    };
+
+    const formatStatusLabel = (s) => {
+      const raw = (s ?? '').toString().trim();
+      if (!raw) return '';
+      const t = raw.replace(/_/g, ' ');
+      return t.charAt(0).toUpperCase() + t.slice(1);
+    };
+
+    const isCancelled = (b) => {
+      const s = status(b).toLowerCase();
+      return s.includes('cancel');
+    };
+
+    const guestLine = (b) => {
+      const guest = normalizeBookingField(b, ['guest_name', 'guestName', 'guest'], '').toString();
+      const st = formatStatusLabel(status(b));
+      return `${guest || 'Reservation'}${st ? ` * (${st})` : ''}`;
+    };
+
+    const sortedItems = [...items].sort((a, b) => {
+      const ac = isCancelled(a) ? 1 : 0;
+      const bc = isCancelled(b) ? 1 : 0;
+      return ac - bc;
+    });
+
+    return (
+      <Box sx={{ width: 420, p: 1.25 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>
+            {bookingsOpenUnitName || 'Unit'} • {formatMonthLabel(month)}
+          </Typography>
+          <IconButton
+            size="small"
+            aria-label="Close"
+            onClick={closeBookingsPopover}
+            sx={{
+              p: 0.25,
+              color: '#6b7280',
+              '&:hover': { color: '#111827', backgroundColor: 'rgba(17, 24, 39, 0.06)' },
+              flex: '0 0 auto',
+            }}
+          >
+            <CloseIcon fontSize="small" sx={{ display: 'block' }} />
+          </IconButton>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          Month bookings
+        </Typography>
+
+        <Divider sx={{ my: 1 }} />
+
+        {isLoading ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+            <CircularProgress size={18} />
+            <Typography variant="body2" color="text.secondary">Loading…</Typography>
+          </Box>
+        ) : errMsg ? (
+          <Typography variant="body2" sx={{ color: 'error.main', py: 1 }}>
+            {errMsg}
+          </Typography>
+        ) : items.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+            No bookings in this month.
+          </Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {sortedItems.slice(0, 10).map((b, idx) => (
+              <Box
+                key={normalizeBookingField(b, ['id', 'booking_id', 'confirmation_code'], idx)}
+                sx={{
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 1,
+                  p: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+                  <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                      {guestLine(b)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" noWrap>
+                      {fmtRange(b)}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: '0 0 auto' }}>
+                    {source(b) ? (
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {source(b)}
+                      </Typography>
+                    ) : null}
+
+                    {url(b) ? (
+                      <Tooltip title="Open in new tab">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => window.open(url(b), '_blank', 'noopener,noreferrer')}
+                            sx={{ p: 0.25, color: '#1e6f68' }}
+                            aria-label="Open reservation"
+                          >
+                            <OpenInNewIcon fontSize="small" sx={{ display: 'block' }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    ) : null}
+                  </Box>
+                </Box>
+              </Box>
+            ))}
+
+            {items.length > 10 ? (
+              <Typography variant="caption" color="text.secondary">
+                Showing 10 of {items.length}
+              </Typography>
+            ) : null}
+          </Box>
+        )}
+      </Box>
+    );
+  };
 
 
   const unitOptions = useMemo(() => {
@@ -149,13 +381,7 @@ export default function HKCleaningsRecon() {
 
     const net = charged - cost;
 
-    const fmt = (n) => {
-      try {
-        return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      } catch (e) {
-        return n.toFixed(2);
-      }
-    };
+    const fmt = (n) => formatMoneyEU(n);
 
     return {
       totalRows,
@@ -616,7 +842,7 @@ export default function HKCleaningsRecon() {
             <TableHead>
               <TableRow>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700 }}>Cleaning</TableCell>
-                <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700 }}>
+                <TableCell sx={{ width: 140, minWidth: 140, maxWidth: 140, fontWeight: 700 }}>
                   <Autocomplete
                     size="small"
                     options={unitOptions}
@@ -639,8 +865,8 @@ export default function HKCleaningsRecon() {
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Type</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Paid</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Laundry</TableCell>
-                <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Total</TableCell>
-                <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'center' }}>Charged</TableCell>
+                {/* <TableCell sx={{ width: 100, minWidth: 100, maxWidth: 100, fontWeight: 700, textAlign: 'center' }}>Total</TableCell> */}
+                <TableCell sx={{ width: 140, minWidth: 140, maxWidth: 140, fontWeight: 700, textAlign: 'center' }}>Result</TableCell>
                 <TableCell sx={{ width: 240, minWidth: 240, maxWidth: 240, fontWeight: 700 }}>Notes</TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
                   <Select
@@ -744,15 +970,64 @@ export default function HKCleaningsRecon() {
                       />
                     </TableCell>
 
-                    <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, overflow: 'hidden' }}>
-                      <Box sx={{ width: 120, minHeight: 40, display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                    <TableCell sx={{ py: 0.5, width: 140, minWidth: 140, maxWidth: 140, overflow: 'visible' }}>
+                      <Box
+                        sx={{
+                          width: 140,
+                          minWidth: 0,
+                          minHeight: 40,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 0.5,
+                          overflow: 'visible',
+                        }}
+                      >
                         <Typography
                           variant="body2"
                           color="text.primary"
-                          sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}
+                          sx={{
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            flex: '1 1 auto',
+                            minWidth: 0,
+                          }}
                         >
                           {r.unit_name ?? ''}
                         </Typography>
+
+                        {(r.unit_id ?? r.unitId) ? (
+                          <Tooltip title="Month bookings">
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label="Show month bookings"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const unitId = r.unit_id ?? r.unitId;
+                                  if (!unitId) return;
+                                  const key = makeBookingsKey(month, unitId);
+                                  setBookingsAnchorEl(e.currentTarget);
+                                  setBookingsOpenKey(key);
+                                  setBookingsOpenUnitName((r.unit_name ?? '').toString());
+                                  await fetchUnitMonthBookings(month, unitId);
+                                }}
+                                sx={{
+                                  p: 0.1,
+                                  flex: '0 0 auto',
+                                  color: '#6b7280',
+                                  '&:hover': {
+                                    color: '#111827',
+                                    backgroundColor: 'rgba(17, 24, 39, 0.06)',
+                                  },
+                                }}
+                              >
+                                <ExpandMoreIcon fontSize="small" sx={{ display: 'block' }} />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : null}
                       </Box>
                     </TableCell>
 
@@ -772,8 +1047,20 @@ export default function HKCleaningsRecon() {
                             ? r.cleaning_type.charAt(0).toUpperCase() + r.cleaning_type.slice(1)
                             : '—'}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {r.expected_cost ?? '—'}
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {(() => {
+                            const raw = (r.bill_to ?? '').toString().trim().toUpperCase();
+                            if (raw === 'OWNERS2') return 'O2';
+                            if (raw === 'CLIENT') return 'Client';
+                            if (raw === 'GUEST') return 'Guest';
+                            return raw || '—';
+                          })()}
+                          {r.expected_cost != null ? (
+                            <>
+                              {' '}•{' '}
+                              {formatMoneyEU(r.expected_cost)}
+                            </>
+                          ) : null}
                         </Typography>
                       </Box>
                     </TableCell>
@@ -803,24 +1090,54 @@ export default function HKCleaningsRecon() {
                       />
                     </TableCell>
 
-                    {/* Total */}
-                    <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
-                      <Box sx={{ width: 120, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {dirtyTotal ? total : (r.total_cost ?? total)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
+                    {/* Result (Paid + Charged + Diff) */}
+                    <TableCell sx={{ py: 0.5, width: 140, minWidth: 140, maxWidth: 140, textAlign: 'center' }}>
+                      <Box
+                        sx={{
+                          width: '100%',
+                          minHeight: 40,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          gap: 0.25,
+                        }}
+                      >
+                        {/* Paid (Total) */}
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Typography component="span" variant="caption" sx={{ mr: 0.5, color: '#6b7280' }}>
+                            P
+                          </Typography>
+                          <Typography component="span" variant="body2" color="text.primary">
+                            {formatMoneyEU(dirtyTotal ? total : (r.total_cost ?? total))}
+                          </Typography>
+                        </Box>
 
-                    {/* Charged (with Diff below) */}
-                    <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
-                      <Box sx={{ width: 120, minHeight: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {chargedVal.toFixed(2)}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: diffColor }}>
-                          {diffVal >= 0 ? '+' : ''}{diffVal.toFixed(2)}
-                        </Typography>
+                        {/* Charged + Diff */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <Typography component="span" variant="caption" sx={{ mr: 0.5, color: '#6b7280' }}>
+                              C
+                            </Typography>
+                            <Typography component="span" variant="body2" color="text.secondary">
+                              {formatMoneyEU(chargedVal)}
+                            </Typography>
+                          </Box>
+
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            sx={{
+                              color:
+                                diffVal > 0
+                                  ? '#1e6f68'
+                                  : diffVal < 0
+                                    ? '#dc2626'
+                                    : '#6b7280',
+                            }}
+                          >
+                            {diffVal >= 0 ? '+' : ''}{formatMoneyEU(diffVal)}
+                          </Typography>
+                        </Box>
                       </Box>
                     </TableCell>
 
@@ -956,6 +1273,17 @@ export default function HKCleaningsRecon() {
           Tip: select a month and city to review reconciliation lines.
         </Typography>
       )}
+
+      <Popover
+        open={Boolean(bookingsAnchorEl) && Boolean(bookingsOpenKey)}
+        anchorEl={bookingsAnchorEl}
+        onClose={closeBookingsPopover}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        {renderBookingsPopoverContent()}
+      </Popover>
 
       <AppDrawer
         open={editDrawerOpen}

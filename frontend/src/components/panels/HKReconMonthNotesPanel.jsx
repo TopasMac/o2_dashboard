@@ -608,8 +608,19 @@ export default function HKReconMonthNotesPanel({
                   <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
                     {it.text || '—'}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {it.updated_at ? `Updated ${it.updated_at}` : ''}
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {(() => {
+                      const res = String(it?.resolution ?? '').trim();
+                      const firstLine = res ? res.split(/\r?\n/)[0].trim() : '';
+
+                      // When collapsed, show resolution preview (first line). If empty, fall back to Updated timestamp.
+                      if (!expanded) {
+                        return firstLine || (it.updated_at ? `Updated ${it.updated_at}` : '');
+                      }
+
+                      // When expanded, keep showing timestamp.
+                      return it.updated_at ? `Updated ${it.updated_at}` : '';
+                    })()}
                   </Typography>
                 </Box>
 

@@ -54,7 +54,22 @@ class EmployeeCashLedgerController extends AbstractController
         $division = $request->query->get('division') ?: null;
         $city     = $request->query->get('city') ?: null;
 
-        $rows = $this->service->list($employeeId, $status, $type, $division, $city);
+        $month    = $request->query->get('month') ?: null;
+
+        if ($month !== null) {
+            $month = trim((string) $month);
+            if ($month !== '' && preg_match('/^\d{4}-\d{2}$/', $month) !== 1) {
+                return $this->json([
+                    'success' => false,
+                    'error' => 'Invalid month format. Expected YYYY-MM.',
+                ], 400);
+            }
+            if ($month === '') {
+                $month = null;
+            }
+        }
+
+        $rows = $this->service->list($employeeId, $status, $type, $month, $division, $city);
 
         return $this->json([
             'success' => true,
