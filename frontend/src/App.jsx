@@ -26,6 +26,7 @@ import O2Transactions from './pages/O2Transactions';
 import O2Results from './components/reports/O2Results';
 import Condos from './pages/Condos';
 import Clients from './pages/Clients';
+import ServiceProviders from './pages/ServiceProviders';
 import ClientForm from './components/forms/ClientForm';
 import NewCondoForm from './components/forms/NewCondoForm';
 import EditCondoForm from './components/forms/EditCondoForm';
@@ -224,6 +225,7 @@ function App() {
           />
           <Route path="/bookings/search" element={<MobileBookingsSearch />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="/service-providers" element={<ServiceProviders />} />
           <Route path="/clients/new" element={<ClientForm />} />
           <Route path="/clients/edit/:id" element={<EditClientForm />} />
           <Route path="/units" element={<Units />} />

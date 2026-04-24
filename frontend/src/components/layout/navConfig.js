@@ -43,6 +43,7 @@ import {
         { label: 'Units', icon: BuildingOfficeIcon, to: '/units' },
         { label: 'Unit Media', icon: PhotoIcon, to: '/units-media' },
         { label: 'Condos', icon: BuildingOffice2Icon, to: '/condos' },
+        { label: 'Service Providers', icon: WrenchScrewdriverIcon, to: '/service-providers' },
         { label: 'HR', icon: UserGroupIcon, to: '/employees', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
         { label: 'Tasks', icon: ClipboardDocumentCheckIcon, to: '/employee-tasks', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
       ],

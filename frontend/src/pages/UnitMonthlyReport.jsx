@@ -191,6 +191,7 @@ const NotchedCard = ({ label, children, sx, action }) => (
       borderRadius: 1,
       '&': { borderColor: 'divider' },
       width: 220,
+      minWidth: 0,
       ...(sx || {}),
     }}
   >
@@ -1424,17 +1425,17 @@ export default function UnitMonthlyReport() {
 >
   {/* LEFT: KPI stacks (unchanged logic/rows) */}
   <Box sx={{ flex: '0 0 auto', minWidth: 'fit-content' }}>
-    {/* Opening / Month Result / Closing Balance */}
+    {/* Opening / Month Result / Balance Movements / Closing Balance */}
     <Box sx={{
       display: 'grid',
-      gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, min-content)' },
+      gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' },
       justifyItems: 'start',
       columnGap: 0.5,
       rowGap: 2,
       mb: 2,
     }}>
       {/* Opening */}
-      <NotchedCard label="Opening Balance">
+      <NotchedCard label="Opening Balance" sx={{ width: '100%' }}>
         {(() => {
           const val =
             Number(previewData?.openingBalance ?? previewData?.opening_balance ?? previewData?.opening);
@@ -1448,7 +1449,7 @@ export default function UnitMonthlyReport() {
       </NotchedCard>
 
       {/* Month Result */}
-      <NotchedCard label="Month Result">
+      <NotchedCard label="Month Result" sx={{ width: '100%' }}>
         {(() => {
           if (isClientUnit) {
             const mr = Number(derivedClientCredit) - Number(derivedClientDebit);
@@ -1460,8 +1461,26 @@ export default function UnitMonthlyReport() {
         })()}
       </NotchedCard>
 
+      {/* Balance Movements */}
+      <NotchedCard label="Balance Movements" sx={{ width: '100%' }}>
+        {(() => {
+          const val = Number(
+            previewData?.balanceMovements ??
+            previewData?.balance_movements ??
+            previewData?.movements ??
+            0
+          );
+          const out = Number.isFinite(val) ? val : 0;
+          return (
+            <Typography variant="h6" sx={{ mt: 0.5, color: amtColor(out) }}>
+              {peso(out)}
+            </Typography>
+          );
+        })()}
+      </NotchedCard>
+
       {/* Closing Balance */}
-      <NotchedCard label="Closing Balance">
+      <NotchedCard label="Closing Balance" sx={{ width: '100%' }}>
         {(() => {
           // Prefer backend closingBalance to avoid drift with PDF/service rules
           const closingBackend = Number(
@@ -1475,7 +1494,7 @@ export default function UnitMonthlyReport() {
             );
           }
 
-          // Fallback: compute locally from backend opening + monthly
+          // Fallback: compute locally from backend opening + monthly + movements
           const opening = Number(
             previewData?.openingBalance ?? previewData?.opening_balance ?? previewData?.opening
           );
@@ -1488,7 +1507,15 @@ export default function UnitMonthlyReport() {
             monthVal = rk ? Number(previewData[rk]) : NaN;
           }
 
-          const val = (Number.isFinite(opening) && Number.isFinite(monthVal)) ? (opening + monthVal) : undefined;
+          const movements = Number(
+            previewData?.balanceMovements ??
+            previewData?.balance_movements ??
+            previewData?.movements ??
+            0
+          );
+          const val = (Number.isFinite(opening) && Number.isFinite(monthVal))
+            ? (opening + monthVal + (Number.isFinite(movements) ? movements : 0))
+            : undefined;
           return (
             <Typography variant="h6" sx={{ mt: 0.5, color: amtColor(val) }}>
               {val === undefined ? '-' : peso(val)}
@@ -1649,7 +1676,7 @@ export default function UnitMonthlyReport() {
   </Box>
 
   {/* RIGHT: Sidebar with Expected Payments + Unit Report Workflow (side by side) */}
-  <Box sx={{ flex: '0 0 auto', width: { xs: '100%', sm: 420 } }}>
+  <Box sx={{ flex: '0 0 auto', width: { xs: '100%', sm: 500 } }}>
     <Box
       sx={{
         display: { xs: 'block', sm: 'grid' },
@@ -1775,7 +1802,11 @@ export default function UnitMonthlyReport() {
               const ed = bundle?.clientDebit || {};
               monthVal = Number(ep.total ?? NaN) - Number(ed.total ?? NaN);
             }
-            if (Number.isFinite(opening) && Number.isFinite(monthVal)) return opening + monthVal;
+            const mk = ['balanceMovements','balance_movements','movements'].find(k => bundle[k] !== undefined);
+            const movements = mk ? Number(bundle[mk]) : 0;
+            if (Number.isFinite(opening) && Number.isFinite(monthVal)) {
+              return opening + monthVal + (Number.isFinite(movements) ? movements : 0);
+            }
             return null;
           };
           const closing = computeClosingLocal(previewData || {});

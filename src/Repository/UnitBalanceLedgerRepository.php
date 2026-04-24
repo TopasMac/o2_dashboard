@@ -58,8 +58,12 @@ class UnitBalanceLedgerRepository
 
     /**
      * Opening balance to use for a given reporting month (YYYY-MM).
-     * Rule: use the latest ledger row up to the first day of the next month;
-     * EXCEPT if the latest row is a Month Report for the same yearmonth, then skip it.
+     *
+     * Ledger rules:
+     * - Month Report entries belong to their report month via yearmonth.
+     * - Report payments belong to the report month they settle via yearmonth.
+     * - Partial/ad-hoc payments belong to the month when they happened via txn_date.
+     * - Unit Balance entries are treated as manual balance adjustments and belong to txn_date.
      */
     public function findOpeningBalanceForMonth(int $unitId, string $currentYearMonth): ?float
     {
@@ -67,22 +71,34 @@ class UnitBalanceLedgerRepository
         if ($dt === false) {
             return null;
         }
-        $cutoff = $dt->modify('+1 month')->setTime(0, 0, 0)->format('Y-m-d H:i:s');
+
+        $monthStart = $dt->format('Y-m-d');
 
         $sql = <<<SQL
-            SELECT balance_after
+            SELECT COALESCE(SUM(CASE
+                WHEN (
+                    entry_type = 'Month Report'
+                    AND yearmonth < :ym
+                )
+                OR (
+                    entry_type IN ('O2 Report Payment', 'Client Report Payment')
+                    AND yearmonth < :ym
+                )
+                OR (
+                    entry_type IN ('O2 Partial Payment', 'Client Partial Payment', 'Unit Balance')
+                    AND txn_date < :monthStart
+                )
+                THEN amount ELSE 0 END), 0) AS opening_balance
             FROM unit_balance_ledger
             WHERE unit_id = :uid
-              AND COALESCE(txn_date, created_at) < :cutoff
-            ORDER BY COALESCE(txn_date, created_at) DESC, id DESC
-            LIMIT 1
         SQL;
 
-        $row = $this->conn->fetchAssociative($sql, [
-            'uid'    => $unitId,
-            'cutoff' => $cutoff,
+        $value = $this->conn->fetchOne($sql, [
+            'uid'        => $unitId,
+            'ym'         => $currentYearMonth,
+            'monthStart' => $monthStart,
         ]);
 
-        return $row ? (float) $row['balance_after'] : null;
+        return $value === false ? null : (float) $value;
     }
 }

@@ -437,6 +437,17 @@
               <td class="label">{{ 'Month Result'|trans({}, 'unit_report', _lang) }}:</td>
               <td class="value num">{{ '$' }}{{ (monthlyResult|default(totals.monthlyEarnings|default(totals.result|default(0))))|number_format(2, _mdec, _mth) }}</td>
             </tr>
+            {% set _bm = (balanceMovements|default(totals.balanceMovements|default(meta.balanceMovements|default(0)))) %}
+            {% if _bm != 0 %}
+            <tr>
+              <td class="label">
+                {{ (_bm < 0)
+                    ? 'O2 Partial Payment'
+                    : 'Client Partial Payment' }}:
+              </td>
+              <td class="value num">{{ '$' }}{{ _bm|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+            {% endif %}
             <tr>
               <td class="label">{{ 'Opening Balance'|trans({}, 'unit_report', _lang) }}:</td>
               <td class="value num">{{ '$' }}{{ (openingBalance|default(totals.unitBalanceStart|default(meta.openingBalance|default(0))))|number_format(2, _mdec, _mth) }}</td>

@@ -118,6 +118,50 @@ SQL;
         // Closing depends on monthly; keep placeholder until monthly is computed
         $closing = $opening + $monthly;
 
+        // Balance movements are ledger-based movements that affect the unit balance
+        // but should not affect the monthly performance result.
+        // Rules:
+        // - Report payments belong to the report month they settle via yearmonth.
+        // - Partial/ad-hoc payments belong to the month when they happened via txn_date.
+        $balanceMovements = 0.0;
+
+        try {
+            $dt = \DateTimeImmutable::createFromFormat('Y-m', $yearMonth);
+            if ($dt !== false) {
+                $monthStart = $dt->format('Y-m-01');
+                $nextMonth = $dt->modify('first day of next month')->format('Y-m-01');
+
+                $sqlMovements = <<<SQL
+SELECT COALESCE(SUM(amount), 0) AS movements
+FROM unit_balance_ledger
+WHERE unit_id = :unit
+  AND (
+        (
+          entry_type IN ('O2 Report Payment', 'Client Report Payment')
+          AND yearmonth = :ym
+        )
+        OR
+        (
+          entry_type IN ('O2 Partial Payment', 'Client Partial Payment')
+          AND txn_date >= :monthStart
+          AND txn_date < :nextMonth
+        )
+  )
+SQL;
+
+                $val = $this->db->fetchOne($sqlMovements, [
+                    'unit' => $unitId,
+                    'ym' => $yearMonth,
+                    'monthStart' => $monthStart,
+                    'nextMonth' => $nextMonth,
+                ]);
+
+                $balanceMovements = $val !== false ? (float) $val : 0.0;
+            }
+        } catch (\Throwable $e) {
+            $balanceMovements = 0.0;
+        }
+
         // --- Sections (bookings/expenses/abonos/notes) ---
         // BOOKING SLICES for this unit & month
         $bookingsRows = [];
@@ -550,7 +594,7 @@ SQL;
             $monthly = $sumClientPayout - ($sumGastos + $sumHKCharged) + $sumAbonos;
         }
 
-        $closing = $opening + $monthly;
+        $closing = $opening + $monthly + $balanceMovements;
 
         // --- Notes --- (report-only for the selected unit and month)
         $notes = [
@@ -1112,7 +1156,7 @@ SQL;
         }
 
         // Ensure closing reflects the enforced opening + monthly
-        $closing = $opening + $monthly;
+        $closing = $opening + $monthly + $balanceMovements;
 
         return [
             'unit' => $unitBlock,
@@ -1122,6 +1166,7 @@ SQL;
             'period' => $yearMonth,
             'openingBalance' => $opening,
             'monthlyResult' => $monthly,
+            'balanceMovements' => $balanceMovements,
             'closingBalance' => $closing,
             'metrics' => $metrics,
             'bookings' => $bookings,
