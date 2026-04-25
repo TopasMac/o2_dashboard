@@ -278,6 +278,10 @@
     width: 66%;          /* slightly wider label column */
     padding-right: 2pt;  /* bring value closer */
   }
+  .summary-card .summary-table .label strong {
+    font-weight: 800;
+    color: #374151;
+  }
   .summary-card .summary-table .value {
     text-align: right;
     white-space: nowrap;
@@ -390,8 +394,12 @@
     {% endfor %}
   {% endif %}
 
-  {# ---- Helper: final closing balance value used for client card conditions ---- #}
-  {% set _closing = closingBalance|default(totals.closingBalance|default(meta.closingBalance|default(0))) %}
+  {# ---- Helper: PDF/report closing balance value used for summary labels and client card conditions ---- #}
+  {# The PDF should include partial/ad-hoc payments, but exclude regular report-settlement payments. #}
+  {% set _openingForReport = openingBalance|default(totals.unitBalanceStart|default(meta.openingBalance|default(0))) %}
+  {% set _monthlyForReport = monthlyResult|default(totals.monthlyEarnings|default(totals.result|default(0))) %}
+  {% set _partialMovementsForReport = partialBalanceMovements|default(totals.partialBalanceMovements|default(meta.partialBalanceMovements|default(0))) %}
+  {% set _closing = _openingForReport + _monthlyForReport + _partialMovementsForReport %}
 
   {# ===== Summary (KPI left "card", Client right) ===== #}
   <div class="grid-2">
@@ -401,16 +409,12 @@
         <table class="summary-table">
           <tbody>
             <tr>
-              <td class="label">{{ 'Client Commissions'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="label">{{ 'Owner Share'|trans({}, 'unit_report', _lang) }}:</td>
               {# In OWNERS2 mode, clientCredit.total includes credits; use payouts only for commissions #}
               {% set _ccTotal = _isClient
                 ? _clientPrivateTotal
                 : (clientCredit.payouts|default(bookings.totals.ownerPayout|default(totals.payoutReservas|default(totals.bookings|default(0))))) %}
               <td class="value num">{{ '$' }}{{ _ccTotal|number_format(2, _mdec, _mth) }}</td>
-            </tr>
-            <tr>
-              <td class="label">O2:</td>
-              <td class="value num">{{ '$' }}{{ (bookings.totals.o2Commission|default(totals.o2Commission|default(0)))|number_format(2, _mdec, _mth) }}</td>
             </tr>
             {% if _isClient %}
             <tr>
@@ -434,10 +438,14 @@
               <td class="value num">{{ '$' }}{{ (abonos.totals.amount|default(credits.totals.amount|default(totals.abonosTotalClient|default(totals.credits|default(0)))))|number_format(2, _mdec, _mth) }}</td>
             </tr>
             <tr>
-              <td class="label">{{ 'Month Result'|trans({}, 'unit_report', _lang) }}:</td>
-              <td class="value num">{{ '$' }}{{ (monthlyResult|default(totals.monthlyEarnings|default(totals.result|default(0))))|number_format(2, _mdec, _mth) }}</td>
+              <td class="label"><strong>{{ 'Month Result'|trans({}, 'unit_report', _lang) }}:</strong></td>
+              <td class="value num"><strong>{{ '$' }}{{ (monthlyResult|default(totals.monthlyEarnings|default(totals.result|default(0))))|number_format(2, _mdec, _mth) }}</strong></td>
             </tr>
-            {% set _bm = (balanceMovements|default(totals.balanceMovements|default(meta.balanceMovements|default(0)))) %}
+            <tr>
+              <td class="label">{{ 'Opening Balance'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value num">{{ '$' }}{{ (openingBalance|default(totals.unitBalanceStart|default(meta.openingBalance|default(0))))|number_format(2, _mdec, _mth) }}</td>
+            </tr>
+{% set _bm = (partialBalanceMovements|default(totals.partialBalanceMovements|default(meta.partialBalanceMovements|default(0)))) %}
             {% if _bm != 0 %}
             <tr>
               <td class="label">
@@ -449,16 +457,22 @@
             </tr>
             {% endif %}
             <tr>
-              <td class="label">{{ 'Opening Balance'|trans({}, 'unit_report', _lang) }}:</td>
-              <td class="value num">{{ '$' }}{{ (openingBalance|default(totals.unitBalanceStart|default(meta.openingBalance|default(0))))|number_format(2, _mdec, _mth) }}</td>
+              <td class="label">
+                <strong>
+                  {% if _payMode|upper == 'CLIENT' and _closing < 0 %}
+                    {{ 'Amount Due'|trans({}, 'unit_report', _lang) }}:
+                  {% elseif _payMode|upper == 'CLIENT' and _closing > 0 %}
+                    {{ 'Amount to Receive'|trans({}, 'unit_report', _lang) }}:
+                  {% else %}
+                    {{ 'Closing Balance'|trans({}, 'unit_report', _lang) }}:
+                  {% endif %}
+                </strong>
+              </td>
+              <td class="value num"><strong>{{ '$' }}{{ _closing|number_format(2, _mdec, _mth) }}</strong></td>
             </tr>
             <tr>
-              <td class="label">
-                {{ (_payMode|upper == 'OWNERS2' and _closing < 0)
-                    ? 'Amount Due'|trans({}, 'unit_report', _lang)
-                    : 'Closing Balance'|trans({}, 'unit_report', _lang) }}:
-              </td>
-              <td class="value num"><strong>{{ '$' }}{{ (closingBalance|default(totals.closingBalance|default(meta.closingBalance|default(0))))|number_format(2, _mdec, _mth) }}</strong></td>
+              <td class="label">{{ 'Management Fee (O2)'|trans({}, 'unit_report', _lang) }}:</td>
+              <td class="value num">{{ '$' }}{{ (bookings.totals.o2Commission|default(totals.o2Commission|default(0)))|number_format(2, _mdec, _mth) }}</td>
             </tr>
           </tbody>
         </table>
@@ -997,14 +1011,14 @@
   <div class="defs-card">
     <div class="card-title">{{ 'Definitions'|trans({}, 'unit_report', _lang) }}</div>
     <div>
-      <p><strong>{{ 'Month Result'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Calculated as client commissions + credits − expenses'|trans({}, 'unit_report', _lang) }}.</p>
+      <p><strong>{{ 'Month Result'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Calculated as owner share + credits − expenses'|trans({}, 'unit_report', _lang) }}.</p>
       <p>
         <strong>{{ 'Opening Balance'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'The unit’s balance at the beginning of the report month'|trans({}, 'unit_report', _lang) }}.
         <span class="spacer"></span>
         <strong>{{ 'Closing Balance'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Opening Balance + Month Result'|trans({}, 'unit_report', _lang) }}.
       </p>
       <p><strong>{{ 'Net Payout'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Result from Total Payout − Tax − Cleaning fee. If the reservation extends into the following month, it shows the proportional value for the current month'|trans({}, 'unit_report', _lang) }}.</p>
-      <p><strong>O2</strong>: {{ 'Owners2 reservation commission'|trans({}, 'unit_report', _lang) }}. <strong>{{ 'Client'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Client reservation commission'|trans({}, 'unit_report', _lang) }}.</p>
+      <p><strong>{{ 'Management Fee (O2)'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Management Fee (O2) definition'|trans({}, 'unit_report', _lang) }}. <strong>{{ 'Owner Share'|trans({}, 'unit_report', _lang) }}</strong>: {{ 'Owner Share definition'|trans({}, 'unit_report', _lang) }}.</p>
     </div>
   </div>
 

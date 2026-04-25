@@ -124,6 +124,7 @@ SQL;
         // - Report payments belong to the report month they settle via yearmonth.
         // - Partial/ad-hoc payments belong to the month when they happened via txn_date.
         $balanceMovements = 0.0;
+        $partialBalanceMovements = 0.0;
 
         try {
             $dt = \DateTimeImmutable::createFromFormat('Y-m', $yearMonth);
@@ -157,9 +158,27 @@ SQL;
                 ]);
 
                 $balanceMovements = $val !== false ? (float) $val : 0.0;
+
+                $sqlPartialMovements = <<<SQL
+SELECT COALESCE(SUM(amount), 0) AS movements
+FROM unit_balance_ledger
+WHERE unit_id = :unit
+  AND entry_type IN ('O2 Partial Payment', 'Client Partial Payment')
+  AND txn_date >= :monthStart
+  AND txn_date < :nextMonth
+SQL;
+
+                $partialVal = $this->db->fetchOne($sqlPartialMovements, [
+                    'unit' => $unitId,
+                    'monthStart' => $monthStart,
+                    'nextMonth' => $nextMonth,
+                ]);
+
+                $partialBalanceMovements = $partialVal !== false ? (float) $partialVal : 0.0;
             }
         } catch (\Throwable $e) {
             $balanceMovements = 0.0;
+            $partialBalanceMovements = 0.0;
         }
 
         // --- Sections (bookings/expenses/abonos/notes) ---
@@ -1167,6 +1186,7 @@ SQL;
             'openingBalance' => $opening,
             'monthlyResult' => $monthly,
             'balanceMovements' => $balanceMovements,
+            'partialBalanceMovements' => $partialBalanceMovements,
             'closingBalance' => $closing,
             'metrics' => $metrics,
             'bookings' => $bookings,

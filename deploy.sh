@@ -3,9 +3,6 @@
 echo "🔄 Pulling latest changes from main..."
 git pull origin main || { echo "❌ Git pull failed"; exit 1; }
 
-echo "🧹 Cleaning old cache manually..."
-rm -rf var/cache/*
-
 echo "📦 Installing PHP dependencies (prod only)..."
 composer install --no-dev --optimize-autoloader --no-scripts || { echo "❌ Composer install failed"; exit 1; }
 
