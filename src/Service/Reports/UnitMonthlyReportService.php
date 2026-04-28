@@ -1111,71 +1111,61 @@ SQL;
             ];
         }
 
-        // --- Final enforcement of opening/closing using repository rule (with SQL fallback) ---
-        $openingRepo = null;
+        // --- Final enforcement of opening/closing using ledger chronology ---
+        // Business rules:
+        // - If a Month Report ledger row exists for the selected month, its balance_after is the source of truth.
+        // - Opening Balance is derived backwards from that row: closing - month result - balance movements.
+        // - This prevents double-counting partial payments that happened inside the report month.
+        // - If no Month Report exists yet, Opening Balance is the latest ledger balance before the next month.
         try {
-            $openingRepo = $this->ledgerRepo->findOpeningBalanceForMonth($unitId, $yearMonth);
-        } catch (\Throwable $e) {
-            $openingRepo = null;
-        }
+            $dt = \DateTimeImmutable::createFromFormat('Y-m', $yearMonth);
+            if ($dt !== false) {
+                $nextMonthStart = $dt->modify('first day of next month')->setTime(0, 0, 0)->format('Y-m-d 00:00:00');
 
-        if ($openingRepo === null || (!is_numeric($openingRepo) || abs((float)$openingRepo) < 0.00001)) {
-            // Fallback: compute using cutoff at first day of next month and skip same-month Month Report
-            try {
-                $dt = \DateTimeImmutable::createFromFormat('Y-m', $yearMonth);
-                if ($dt !== false) {
-                    $cutoff = $dt->modify('first day of next month')->setTime(0, 0, 0)->format('Y-m-d 00:00:00');
-
-                    // Latest row strictly before cutoff
-                    $sqlLatest = <<<SQL
-SELECT id, yearmonth, entry_type, balance_after, COALESCE(txn_date, created_at) AS sort_dt
-FROM unit_balance_ledger
-WHERE unit_id = :unit AND COALESCE(txn_date, created_at) < :cutoff
-ORDER BY sort_dt DESC, id DESC
-LIMIT 1
-SQL;
-                    $latest = $this->db->fetchAssociative($sqlLatest, [
-                        'unit'   => $unitId,
-                        'cutoff' => $cutoff,
-                    ]);
-
-                    if (is_array($latest) && $latest) {
-                        $isSameMonthReport = (
-                            isset($latest['entry_type'], $latest['yearmonth']) &&
-                            $latest['entry_type'] === 'Month Report' &&
-                            $latest['yearmonth'] === $yearMonth
-                        );
-
-                        if ($isSameMonthReport) {
-                            // Fetch the previous row
-                            $sqlPrev = <<<SQL
+                $sqlCurrentReport = <<<SQL
 SELECT balance_after
 FROM unit_balance_ledger
-WHERE unit_id = :unit AND COALESCE(txn_date, created_at) < :sortdt
+WHERE unit_id = :unit
+  AND yearmonth = :ym
+  AND entry_type = 'Month Report'
 ORDER BY COALESCE(txn_date, created_at) DESC, id DESC
 LIMIT 1
 SQL;
-                            $prev = $this->db->fetchAssociative($sqlPrev, [
-                                'unit'   => $unitId,
-                                'sortdt' => $latest['sort_dt'],
-                            ]);
-                            $opening = isset($prev['balance_after']) ? (float)$prev['balance_after'] : 0.0;
-                        } else {
-                            $opening = isset($latest['balance_after']) ? (float)$latest['balance_after'] : 0.0;
-                        }
-                    } else {
-                        $opening = 0.0;
-                    }
-                }
-            } catch (\Throwable $e) {
-                // keep whatever opening was previously
-            }
-        } else {
-            $opening = (float)$openingRepo;
-        }
 
-        // Ensure closing reflects the enforced opening + monthly
-        $closing = $opening + $monthly + $balanceMovements;
+                $currentReportRow = $this->db->fetchAssociative($sqlCurrentReport, [
+                    'unit' => $unitId,
+                    'ym' => $yearMonth,
+                ]);
+
+                if (is_array($currentReportRow) && isset($currentReportRow['balance_after'])) {
+                    $closing = (float) $currentReportRow['balance_after'];
+                    $opening = $closing - $monthly - $balanceMovements;
+                } else {
+                    $sqlOpening = <<<SQL
+SELECT balance_after
+FROM unit_balance_ledger
+WHERE unit_id = :unit
+  AND COALESCE(txn_date, created_at) < :nextMonthStart
+ORDER BY COALESCE(txn_date, created_at) DESC, id DESC
+LIMIT 1
+SQL;
+
+                    $openingRow = $this->db->fetchAssociative($sqlOpening, [
+                        'unit' => $unitId,
+                        'nextMonthStart' => $nextMonthStart,
+                    ]);
+
+                    $opening = is_array($openingRow) && isset($openingRow['balance_after'])
+                        ? (float) $openingRow['balance_after']
+                        : 0.0;
+
+                    $closing = $opening + $monthly + $balanceMovements;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Keep previously computed values if the ledger lookup fails.
+            $closing = $opening + $monthly + $balanceMovements;
+        }
 
         return [
             'unit' => $unitBlock,
