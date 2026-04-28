@@ -284,6 +284,7 @@ export default function UnitMonthlyReport() {
   const [emailBusy, setEmailBusy] = useState(false);
   const [toast, setToast] = useState({ open:false, severity:'success', msg:'' });
   const [emailOpen, setEmailOpen] = useState(false);
+  const [sendEmailConfirmOpen, setSendEmailConfirmOpen] = useState(false);
   const [emailInitial, setEmailInitial] = useState({
     to: '',
     cc: '',
@@ -291,6 +292,10 @@ export default function UnitMonthlyReport() {
     htmlBody: '',
     attachments: []
   });
+
+  const openSendEmailConfirm = () => {
+    setSendEmailConfirmOpen(true);
+  };
   const handleSendEmail = async () => {
     if (!selectedUnit?.id) return;
     const uid = Number(selectedUnit.id);
@@ -811,9 +816,81 @@ export default function UnitMonthlyReport() {
   };
   const openEditCommentDrawer = (id, txt) => { setEditNoteId(id); setEditCommentValue(txt); setDrawer('comment-edit'); };
 
+  const getWorkflowClosingBalance = () => {
+    const bundle = previewData || {};
+    const direct = Number(
+      bundle?.closingBalance ?? bundle?.closing_balance ?? bundle?.closing
+    );
+    if (Number.isFinite(direct)) return direct;
+
+    const opening = Number(
+      bundle?.openingBalance ?? bundle?.opening_balance ?? bundle?.opening
+    );
+
+    const monthResult = Number(
+      bundle?.monthlyResult ?? bundle?.monthly_result ?? bundle?.result
+    );
+
+    const movements = Number(
+      bundle?.balanceMovements ?? bundle?.balance_movements ?? bundle?.movements ?? 0
+    );
+
+    if (Number.isFinite(opening) && Number.isFinite(monthResult)) {
+      return opening + monthResult + (Number.isFinite(movements) ? movements : 0);
+    }
+
+    return null;
+  };
+
+  const workflowEmailAlreadySent = () => {
+    const src = (statusData && statusData.workflow) ? statusData.workflow : (statusData || {});
+    const sentBool = src.emailSent ?? src.email?.sent ?? false;
+    const statusStr = String(src.email?.status || src.emailStatus || '').toUpperCase();
+    const stateStr = String(src.email?.state || '').toUpperCase();
+    return Boolean(sentBool || statusStr === 'SENT' || stateStr === 'SENT');
+  };
+
+  const workflowHasBankAccount = () => {
+    const normalizeStr = (v) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v).trim();
+      const low = s.toLowerCase();
+      if (!s || low === 'null' || low === 'undefined' || s === '-') return '';
+      return s;
+    };
+    const bankFrom = (obj) => (obj ? (normalizeStr(obj.bank_account) || normalizeStr(obj.bankAccount)) : '');
+    return !!(bankFrom(previewData?.client) || bankFrom(previewData?.unit) || bankFrom(previewData?.unit?.client));
+  };
+
+  const shouldPromptSendEmailAfterReport = () => {
+    if (workflowEmailAlreadySent()) return false;
+    const closing = getWorkflowClosingBalance();
+
+    // If client owes Owners2, the sequence is: report -> email -> pay.
+    if (Number.isFinite(closing) && closing < 0) return true;
+
+    // If there is no payment step available, the sequence is: report -> email.
+    if (!workflowHasBankAccount()) return true;
+
+    return false;
+  };
+
+  const shouldPromptSendEmailAfterPay = () => {
+    if (workflowEmailAlreadySent()) return false;
+    const closing = getWorkflowClosingBalance();
+
+    // If Owners2 owes the client, the sequence is: report -> pay -> email.
+    return Number.isFinite(closing) && closing >= 0;
+  };
+
   const afterMutation = async () => {
+    const wasLedgerNewDrawer = drawer === 'ledger-new';
     closeDrawer();
     await handleLoadMonth();
+
+    if (wasLedgerNewDrawer && shouldPromptSendEmailAfterPay()) {
+      setSendEmailConfirmOpen(true);
+    }
   };
 
   const deleteComment = async (noteId) => {
@@ -1067,6 +1144,10 @@ export default function UnitMonthlyReport() {
         const out = await generateReport(uid, ym, replace);
         setToast({ open: true, severity: 'success', msg: `Report saved${out?.replaced ? ' (replaced)' : ''}` });
         await handleLoadMonth();
+
+        if (shouldPromptSendEmailAfterReport()) {
+          setSendEmailConfirmOpen(true);
+        }
       } catch (e) {
         setToast({ open:true, severity:'error', msg: e?.response?.data?.message || e?.message || 'Failed to generate report' });
       } finally {
@@ -1399,6 +1480,23 @@ export default function UnitMonthlyReport() {
           } finally {
             setGenBusy(false);
           }
+        }}
+      />
+      <O2ConfirmDialog
+        open={sendEmailConfirmOpen}
+        title="Send email?"
+        description=""
+        confirmLabel="Yes"
+        cancelLabel="No"
+        loading={emailBusy}
+        onClose={() => {
+          if (emailBusy) return;
+          setSendEmailConfirmOpen(false);
+        }}
+        onConfirm={async () => {
+          if (emailBusy) return;
+          setSendEmailConfirmOpen(false);
+          await handleSendEmail();
         }}
       />
       {error && (
