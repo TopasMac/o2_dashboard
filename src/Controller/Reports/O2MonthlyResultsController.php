@@ -106,6 +106,7 @@ class O2MonthlyResultsController extends AbstractController
             // Playa cleaning results (fixed HR cost for Cleaners only; salary + deduction; ignore advances)
             $playaCharged = 0.0;
             $playaLaundry = 0.0;
+            $playaExternalHrCost = 0.0;
             foreach ($rows as $r) {
                 $rawCity = strtolower(trim((string)($r['city'] ?? '')));
                 $isPlaya = ($rawCity !== '' && str_contains($rawCity, 'playa'));
@@ -117,6 +118,9 @@ class O2MonthlyResultsController extends AbstractController
                     }
                     if ($catId === 14) {
                         $playaLaundry += (float)($r['paid'] ?? 0);
+                    }
+                    if ($catId === 24 && ($r['cost_centre'] ?? '') === 'HK_Playa') {
+                        $playaExternalHrCost += (float)($r['paid'] ?? 0);
                     }
                 }
             }
@@ -131,11 +135,12 @@ class O2MonthlyResultsController extends AbstractController
                 }
             }
 
-            $playaResult = $playaCharged - $playaLaundry - $playaFixedHr;
+            $playaResult = $playaCharged - $playaLaundry - $playaFixedHr - $playaExternalHrCost;
 
             // Tulum cleanings (simple: charged - paid on categories 7/8/14)
             $tulumCharged = 0.0;
             $tulumPaid = 0.0;
+            $tulumExternalHrCost = 0.0;
             foreach ($rows as $r) {
                 $rawCity = strtolower(trim((string)($r['city'] ?? '')));
                 $isTulum = ($rawCity !== '' && str_contains($rawCity, 'tulum'));
@@ -145,8 +150,11 @@ class O2MonthlyResultsController extends AbstractController
                     $tulumCharged += (float)($r['charged'] ?? 0);
                     $tulumPaid += (float)($r['paid'] ?? 0);
                 }
+                if ($isTulum && $catId === 24 && ($r['cost_centre'] ?? '') === 'HK_Tulum') {
+                    $tulumExternalHrCost += (float)($r['paid'] ?? 0);
+                }
             }
-            $tulumResult = $tulumCharged - $tulumPaid;
+            $tulumResult = $tulumCharged - $tulumPaid - $tulumExternalHrCost;
 
             return [
                 'data' => $rows,
@@ -171,11 +179,13 @@ class O2MonthlyResultsController extends AbstractController
                         'charged' => round($playaCharged, 2),
                         'laundry' => round($playaLaundry, 2),
                         'fixed_hr_cost' => round($playaFixedHr, 2),
+                        'external_hr_cost' => round($playaExternalHrCost, 2),
                         'result' => round($playaResult, 2),
                     ],
                     'tulum_cleanings' => [
                         'charged' => round($tulumCharged, 2),
                         'paid' => round($tulumPaid, 2),
+                        'external_hr_cost' => round($tulumExternalHrCost, 2),
                         'result' => round($tulumResult, 2),
                     ],
                 ],
@@ -258,7 +268,7 @@ class O2MonthlyResultsController extends AbstractController
         $hkBlock = $buildHkBlock();
 
         $o2Net = $extractOwners2Net(is_array($o2) ? $o2 : []);
-        $hkNet = (float)($hkBlock['summary']['balance'] ?? 0);
+        $hkNet = (float)($hkBlock['summary']['balance'] ?? 0) - (float)($hkBlock['summary']['hr_amount'] ?? 0);
 
         $allSummary = [
             'owners2_net' => $o2Net,

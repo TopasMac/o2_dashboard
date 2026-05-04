@@ -34,8 +34,6 @@ import Owners2UnitTransactions from './pages/Owners2UnitTransactions';
 import HKTransactions from './pages/HKTransactions';
 import HRTransactions from './pages/HRTransactions';
 import EmployeeCashAdmin from './pages/EmployeeCashAdmin';
-import HKTransactionForm from './components/forms/HKTransactionForm';
-import EditHKTransactionForm from './components/forms/EditHKTransactionForm';
 import Reports from './pages/Reports';
 import AccountingRecords from './pages/AccountingRecords';
 import Occupancy from './pages/Occupancy';
@@ -245,8 +243,6 @@ function App() {
               </RoleRoute>
             }
           />
-          <Route path="/hk-transactions/new" element={<HKTransactionForm />} />
-          <Route path="/hk-transactions/edit/:id" element={<EditHKTransactionForm />} />
           <Route path="/hk-results" element={<HKResults />} />
         <Route path="/hk-cleanings" element={<HKCleaningsView />} />
         <Route

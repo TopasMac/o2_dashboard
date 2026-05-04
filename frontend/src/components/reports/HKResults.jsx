@@ -1050,6 +1050,16 @@ export default function HKResults({
                         {fmtMoney(serverSummary?.playa_cleanings?.fixed_hr_cost ?? 0)}
                       </TableCell>
                     </TableRow>
+                    {Number(serverSummary?.playa_cleanings?.external_hr_cost ?? 0) !== 0 && (
+                      <TableRow>
+                        <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                          External HR cost
+                        </TableCell>
+                        <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                          {fmtMoney(serverSummary?.playa_cleanings?.external_hr_cost ?? 0)}
+                        </TableCell>
+                      </TableRow>
+                    )}
 
                     <TableRow>
                       <TableCell colSpan={2} sx={{ borderBottom: 'none', py: 0.6 }}>
@@ -1082,6 +1092,16 @@ export default function HKResults({
                         {fmtMoney(serverSummary?.tulum_cleanings?.paid ?? 0)}
                       </TableCell>
                     </TableRow>
+                    {Number(serverSummary?.tulum_cleanings?.external_hr_cost ?? 0) !== 0 && (
+                      <TableRow>
+                        <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
+                          External HR cost
+                        </TableCell>
+                        <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
+                          {fmtMoney(serverSummary?.tulum_cleanings?.external_hr_cost ?? 0)}
+                        </TableCell>
+                      </TableRow>
+                    )}
 
                     {/* Attention: pending / needs_review cleanings */}
                     <TableRow>
