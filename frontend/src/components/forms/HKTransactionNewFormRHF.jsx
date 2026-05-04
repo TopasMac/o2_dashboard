@@ -181,6 +181,17 @@ export default function HKTransactionNewFormRHF({
     return norm(found?.name) === 'nomina';
   }, [catId, categories]);
 
+  const isPersonalExterno = React.useMemo(() => {
+    const found = categories.find(c => String(c.id) === String(catId));
+    return norm(found?.name).replace(/_/g, ' ') === 'personal externo';
+  }, [catId, categories]);
+
+  React.useEffect(() => {
+    if (!isPersonalExterno) return;
+    setValue('allocationTarget', 'Housekeepers', { shouldValidate: true, shouldDirty: true });
+    setValue('charged', 0, { shouldValidate: true, shouldDirty: true });
+  }, [isPersonalExterno, setValue]);
+
   const descVal = watch('description');
   React.useEffect(() => {
     if (!isNomina) return;
@@ -292,7 +303,7 @@ export default function HKTransactionNewFormRHF({
 
   const onSubmit = (values) => {
     // Normalize allocationTarget to new model
-    let allocationTarget = values.allocationTarget || initAllocationTarget || 'Client';
+    let allocationTarget = isPersonalExterno ? 'Housekeepers' : (values.allocationTarget || initAllocationTarget || 'Client');
     if (allocationTarget === 'Unit') allocationTarget = 'Client';
     if (allocationTarget === 'Housekeepers_Both') allocationTarget = 'Housekeepers';
     if (['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'].includes(allocationTarget)) {
@@ -316,7 +327,7 @@ export default function HKTransactionNewFormRHF({
       description: values.description,
       notes: values.comments || '', // API expects 'notes'
       paid: values.paid === '' || values.paid == null ? null : Number(values.paid),
-      charged: values.charged === '' || values.charged == null ? null : Number(values.charged),
+      charged: isPersonalExterno ? 0 : (values.charged === '' || values.charged == null ? null : Number(values.charged)),
       mirrorToO2: !!values.mirrorToO2,
     };
     if (isNomina && values.description) {
@@ -391,6 +402,7 @@ export default function HKTransactionNewFormRHF({
           getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
           getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
           widthVariant="full"
+          disabled={isPersonalExterno}
         />
       </div>
 
@@ -437,6 +449,7 @@ export default function HKTransactionNewFormRHF({
             isMoney
             widthVariant="full"
             fullWidth
+            disabled={isPersonalExterno}
             sx={{ minWidth: 0, width: '100%' }}
             InputProps={{ sx: { width: '100%' } }}
           />

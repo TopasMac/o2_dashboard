@@ -200,6 +200,17 @@ export default function HKTransactionEditFormRHF({
     return norm(found?.name) === 'nomina';
   }, [catId, categories]);
 
+  const isPersonalExterno = React.useMemo(() => {
+    const found = categories.find(c => String(c.id) === String(catId));
+    return norm(found?.name).replace(/_/g, ' ') === 'personal externo';
+  }, [catId, categories]);
+
+  React.useEffect(() => {
+    if (!isPersonalExterno) return;
+    setValue('allocationTarget', 'Housekeepers', { shouldValidate: true, shouldDirty: true });
+    setValue('charged', 0, { shouldValidate: true, shouldDirty: true });
+  }, [isPersonalExterno, setValue]);
+
   React.useEffect(() => {
     let cancelled = false;
     async function loadHKEmployees() {
@@ -272,7 +283,7 @@ export default function HKTransactionEditFormRHF({
 
   const onSubmit = (values) => {
     // Normalize allocationTarget to new model
-    let allocationTarget = values.allocationTarget || initialValues.allocationTarget || 'Client';
+    let allocationTarget = isPersonalExterno ? 'Housekeepers' : (values.allocationTarget || initialValues.allocationTarget || 'Client');
     if (allocationTarget === 'Unit') allocationTarget = 'Client';
     if (allocationTarget === 'Housekeepers_Both') allocationTarget = 'Housekeepers';
     if (['Housekeepers_Playa', 'Housekeepers_Tulum', 'Housekeepers_General'].includes(allocationTarget)) {
@@ -364,6 +375,7 @@ export default function HKTransactionEditFormRHF({
           getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
           getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
           widthVariant="full"
+          disabled={isPersonalExterno}
         />
       </div>
 
@@ -397,7 +409,7 @@ export default function HKTransactionEditFormRHF({
           <RHFTextField name="paid" label="Paid" isMoney widthVariant="full" fullWidth sx={{ minWidth: 0, width: '100%' }} InputProps={{ sx: { width: '100%' } }} />
         </div>
         <div style={{ ...widthMap.half, minWidth: 0 }}>
-          <RHFTextField name="charged" label="Charged" isMoney widthVariant="full" fullWidth sx={{ minWidth: 0, width: '100%' }} InputProps={{ sx: { width: '100%' } }} />
+        <RHFTextField name="charged" label="Charged" isMoney widthVariant="full" fullWidth disabled={isPersonalExterno} sx={{ minWidth: 0, width: '100%' }} InputProps={{ sx: { width: '100%' } }} />
         </div>
       </div>
       <RHFTextField name="comments" label="Comments" multiline rows={3} widthVariant="full" />

@@ -12,3 +12,4 @@ nelmio_cors:
       allow_origin:
         - 'http://localhost:3000'
         - 'http://127.0.0.1:3000'
+        - 'https://dev.dashboard.owners2.com'
