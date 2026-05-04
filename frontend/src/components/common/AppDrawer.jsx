@@ -169,7 +169,11 @@ export default function AppDrawer({ size = 'default', fullScreenOnMobile = true,
         sx: {
           // Full screen on phones for easier interaction
           width: { xs: isSheet ? '100vw' : (fullScreenOnMobile ? '100vw' : 'min(92vw, 520px)'), sm: preset.sm, md: preset.md },
-          height: { xs: isSheet ? '85vh' : (fullScreenOnMobile ? '100vh' : 'auto'), sm: '100vh' },
+          height: {
+            xs: isSheet ? '85dvh' : (fullScreenOnMobile ? '100dvh' : 'auto'),
+            sm: '100dvh',
+          },
+          maxHeight: '100dvh',
           maxWidth: '100vw',
           boxSizing: 'border-box',
           // Avoid rounded edge seams when full-screen
@@ -262,8 +266,9 @@ export default function AppDrawer({ size = 'default', fullScreenOnMobile = true,
           width: '100%',
           maxWidth: '100%',
           boxSizing: 'border-box',
-          flex: 1,
+          flex: '1 1 auto',
           minHeight: 0,
+          maxHeight: '100%',
           display: 'flex',
           flexDirection: 'column',
           overflowY: 'auto',

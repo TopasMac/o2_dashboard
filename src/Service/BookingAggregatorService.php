@@ -72,10 +72,12 @@ class BookingAggregatorService
             // Explicitly allow back-to-back reservations where edges touch
             ->andWhere('NOT (b.checkIn = :checkOut OR b.checkOut = :checkIn)')
             ->andWhere("COALESCE(b.status, '') NOT LIKE :cancelPrefix")
+            ->andWhere("LOWER(COALESCE(b.status, '')) != :expiredStatus")
             ->setParameter('unitId', $booking->getUnitId())
             ->setParameter('checkIn', $booking->getCheckIn())
             ->setParameter('checkOut', $booking->getCheckOut())
-            ->setParameter('cancelPrefix', 'Cancel%');
+            ->setParameter('cancelPrefix', 'Cancel%')
+            ->setParameter('expiredStatus', 'expired');
 
         if (method_exists($booking, 'getId') && $booking->getId()) {
             $qb->andWhere('b.id != :selfId')->setParameter('selfId', $booking->getId());
