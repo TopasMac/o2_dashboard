@@ -968,7 +968,37 @@ export default function BookingsTimeline() {
               try {
                 const id = selectedBooking?.id;
                 if (!id) throw new Error('Missing booking id');
-                await api.put(`/api/bookings/${id}`, out, {
+                const payload = out.type === 'Block'
+                  ? {
+                      unitId: out.unitId ?? selectedBooking?.unitId ?? null,
+                      unitName: out.unitName ?? selectedBooking?.unitName ?? null,
+                      status: out.status || null,
+                      guestName: out.reason || selectedBooking?.guest || 'Block',
+                      guestType: 'Block',
+                      checkIn: out.start || null,
+                      checkOut: out.end || null,
+                      notes: out.notes || '',
+                      bookingDate: out.bookingDate || selectedBooking?.bookingDate || null,
+                      source: selectedBooking?.source || 'Owners2',
+                    }
+                  : {
+                      unitId: out.unitId ?? selectedBooking?.unitId ?? null,
+                      unitName: out.unitName ?? selectedBooking?.unitName ?? null,
+                      status: out.status || null,
+                      guestName: out.guestName || selectedBooking?.guest || '',
+                      guestType: 'Hold',
+                      checkIn: out.checkIn || null,
+                      checkOut: out.checkOut || null,
+                      payout: out.payout != null && out.payout !== '' ? Number(String(out.payout).replace(/,/g, '.')) : null,
+                      paymentMethod: out.paymentMethod || null,
+                      holdPolicy: out.holdPolicy || '',
+                      holdExpiresAt: out.holdExpiresAt || null,
+                      notes: out.notes || '',
+                      bookingDate: out.bookingDate || selectedBooking?.bookingDate || null,
+                      source: selectedBooking?.source || 'Owners2',
+                    };
+
+                await api.put(`/api/bookings/${id}`, payload, {
                   headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 });
                 await refreshTimeline();

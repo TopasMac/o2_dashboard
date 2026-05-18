@@ -43,7 +43,7 @@ const guessTypeFromRow = (row = {}) => {
   return 'Hold';
 };
 
-export default function BlockCalEditFormRHF({ initialValues, defaultValues, onSubmit, formId = 'block-edit-form' }) {
+export default function BlockCalEditFormRHF({ initialValues, defaultValues, onSubmit, formId = 'block-cal-edit-form' }) {
   const methods = useForm({
     defaultValues: initialValues || defaultValues || {},
   });
@@ -253,7 +253,8 @@ useEffect(() => {
         id={formId}
         noValidate
         autoComplete="off"
-        onSubmit={methods.handleSubmit((vals) => {
+        onSubmit={methods.handleSubmit(
+          (vals) => {
           const out = { ...vals };
 
           // Normalize user-facing status "Cancel" to API "Cancelled"
@@ -317,7 +318,8 @@ useEffect(() => {
           // Do NOT delete out.type (backend needs it)
 
           onSubmit(out);
-        })}
+          }
+        )}
         sx={{ mt: 2 }}
       >
         {/* Hidden input to guarantee type is always posted */}
@@ -346,12 +348,17 @@ useEffect(() => {
               <RHFSelect
                 name="status"
                 label="Status"
-                options={[
-                  { value: 'Active', label: 'Active' },
-                  { value: 'Extend', label: 'Extend' },
-                  { value: 'Confirm', label: 'Confirm' },
-                  { value: 'Cancel', label: 'Cancel' }, // maps to "Cancelled" on submit
-                ]}
+                options={type === 'Block'
+                  ? [
+                      { value: 'Active', label: 'Active' },
+                      { value: 'Cancel', label: 'Cancel' }, // maps to "Cancelled" on submit
+                    ]
+                  : [
+                      { value: 'Active', label: 'Active' },
+                      { value: 'Extend', label: 'Extend' },
+                      { value: 'Confirm', label: 'Confirm' },
+                      { value: 'Cancel', label: 'Cancel' }, // maps to "Cancelled" on submit
+                    ]}
                 fullWidth
               />
             </Grid>
