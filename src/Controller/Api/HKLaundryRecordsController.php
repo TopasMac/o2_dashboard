@@ -24,7 +24,9 @@ class HKLaundryRecordsController extends AbstractController
         $qb = $em->getRepository(HKLaundryRecords::class)
             ->createQueryBuilder('r')
             ->leftJoin('r.unit', 'u')
+            ->leftJoin('r.rate', 'rate')
             ->addSelect('u')
+            ->addSelect('rate')
             ->orderBy('r.laundryDate', 'DESC');
 
         if (!empty($unitId)) {
@@ -54,7 +56,9 @@ class HKLaundryRecordsController extends AbstractController
                 'rateSnapshot' => $r->getRateSnapshot(),
                 'expectedAmount' => $r->getExpectedAmount(),
                 'chargedAmount' => $r->getChargedAmount(),
-                'providerId' => $r->getProviderId(),
+                'providerId' => $r->getProviderId() ?? $r->getRate()?->getProviderId(),
+                'providerName' => $r->getRate()?->getProviderName(),
+                'itemType' => $r->getRate()?->getItemType(),
                 'createdBy' => $r->getCreatedBy(),
                 'updatedBy' => $r->getUpdatedBy(),
                 'notes' => $r->getNotes(),

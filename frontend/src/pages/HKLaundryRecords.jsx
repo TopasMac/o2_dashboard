@@ -1,25 +1,32 @@
 import React from 'react';
 import {
   Box,
-  Typography,
   Button,
   Stack,
 } from '@mui/material';
 import api from '../api';
 import AppDrawer from '../components/common/AppDrawer';
 import HKLaundryRecordNewFormRHF from '../components/forms/HKLaundryRecordNewFormRHF';
+import HKLaundryRecordEditFormRHF from '../components/forms/HKLaundryRecordEditFormRHF';
 import AppShell from '../components/layout/AppShell';
 import PageScaffold from '../components/layout/PageScaffold';
 import TableLite from '../components/layout/TableLite';
+import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 
-const FORM_ID = 'hk-laundry-record-new-form';
+const NEW_FORM_ID = 'hk-laundry-record-new-form';
+const EDIT_FORM_ID = 'hk-laundry-record-edit-form';
+
+const getCurrentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 export default function HKLaundryRecords() {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [editDrawerOpen, setEditDrawerOpen] = React.useState(false);
+  const [selectedRecord, setSelectedRecord] = React.useState(null);
   const [units, setUnits] = React.useState([]);
   const [rates, setRates] = React.useState([]);
   const [records, setRecords] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [yearMonth, setYearMonth] = React.useState(getCurrentYearMonth());
 
   const loadData = React.useCallback(async () => {
     try {
@@ -44,14 +51,11 @@ export default function HKLaundryRecords() {
     loadData();
   }, [loadData]);
 
-  const currentKgRate = React.useMemo(() => {
-    return rates.find((rate) => {
-      const itemType = String(rate.itemType || '').toLowerCase();
-      const city = String(rate.city || '').toLowerCase();
-      const isPlaya = city === 'playa' || city === 'playa del carmen';
-      return rate.isActive !== false && isPlaya && ['kg', 'kilo'].includes(itemType);
-    });
-  }, [rates]);
+
+  const displayRows = React.useMemo(() => {
+    if (!yearMonth) return records;
+    return records.filter((row) => String(row.laundryDate || '').startsWith(yearMonth));
+  }, [records, yearMonth]);
 
   const handleCreate = async (payload) => {
     try {
@@ -63,21 +67,100 @@ export default function HKLaundryRecords() {
     }
   };
 
+  const handleOpenEdit = React.useCallback((record) => {
+    setSelectedRecord(record);
+    setEditDrawerOpen(true);
+  }, []);
+
+  const handleUpdate = async (payload) => {
+    if (!selectedRecord?.id) return;
+
+    try {
+      await api.put(`/api/hk-laundry-records/${selectedRecord.id}`, payload);
+      setEditDrawerOpen(false);
+      setSelectedRecord(null);
+      await loadData();
+    } catch (e) {
+      console.error('Failed updating laundry record', e);
+    }
+  };
+
   const columns = React.useMemo(() => ([
-    { header: 'Date', accessor: 'laundryDate' },
-    { header: 'Unit', accessor: 'unitName' },
+    {
+      header: 'Laundry',
+      accessor: (row) => ({
+        primary: row.unitName || '-',
+        meta: (
+          <Box
+            component="button"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              handleOpenEdit(row);
+            }}
+            sx={{
+              appearance: 'none',
+              border: 0,
+              background: 'transparent',
+              color: 'inherit',
+              font: 'inherit',
+              p: 0,
+              m: 0,
+              cursor: 'pointer',
+              textDecoration: 'none',
+              '&:hover': {
+                textDecoration: 'underline',
+              },
+            }}
+          >
+            {row.laundryDate || '-'}
+          </Box>
+        ),
+      }),
+      twoLineClassName: 'o2-two-line-code',
+      filter: { type: 'select', placeholder: 'Unit', accessor: 'unitName' },
+    },
+    {
+      header: 'Type',
+      accessor: (row) => ({
+        primary: row.itemType || '-',
+        meta: row.rateSnapshot ? `${row.rateSnapshot} MXN` : '-',
+      }),
+      twoLineClassName: 'o2-two-line-code',
+      filter: { type: 'select', placeholder: 'Type', accessor: 'itemType' },
+    },
     { header: 'Amount', accessor: 'quantity', align: 'right' },
-    { header: 'Rate', accessor: 'rateSnapshot', align: 'right' },
-    { header: 'Expected', accessor: 'expectedAmount', align: 'right' },
-    { header: 'Charged', accessor: 'chargedAmount', align: 'right' },
+    {
+      header: 'Paid',
+      accessor: (row) => ({
+        primary: row.chargedAmount ? `${row.chargedAmount} MXN` : '-',
+        meta: row.expectedAmount ? `Expected ${row.expectedAmount} MXN` : 'Expected -',
+      }),
+      twoLineClassName: (row) => {
+        const charged = Number(row.chargedAmount || 0);
+        const expected = Number(row.expectedAmount || 0);
+        return Math.abs(charged - expected) > 0.009
+          ? 'o2-two-line-warning'
+          : 'o2-two-line-code';
+      },
+      align: 'right',
+    },
     { header: 'Created by', accessor: 'createdBy' },
     { header: 'Notes', accessor: 'notes' },
-  ]), []);
+  ]), [handleOpenEdit]);
 
   const headerActions = (
-    <Stack direction="row" spacing={1} alignItems="center">
-      <Button variant="contained" onClick={() => setDrawerOpen(true)}>
-        New Record
+    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+      <YearMonthPicker
+        label="Month"
+        value={yearMonth}
+        onChange={setYearMonth}
+      />
+      <Button variant="outlined" color="success" onClick={() => setDrawerOpen(true)}>
+        + Add
+      </Button>
+      <Button variant="outlined">
+        Units & Fees
       </Button>
     </Stack>
   );
@@ -91,20 +174,10 @@ export default function HKLaundryRecords() {
         stickyHeader={headerActions}
         headerPlacement="inside"
       >
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Current Laundry Rate
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {currentKgRate
-              ? `${currentKgRate.city}: ${currentKgRate.unitPrice} MXN/kg · Effective from ${currentKgRate.effectiveFrom || '-'}`
-              : 'No active Playa kg rate configured yet.'}
-          </Typography>
-        </Box>
 
         <TableLite
           columns={columns}
-          rows={records}
+          rows={displayRows}
           loading={loading}
           enableFilters
           emptyMessage="No laundry records found."
@@ -116,7 +189,7 @@ export default function HKLaundryRecords() {
         onClose={() => setDrawerOpen(false)}
         title="New Laundry Record"
         showActions
-        formId={FORM_ID}
+        formId={NEW_FORM_ID}
         actions={{
           saveLabel: 'Save',
           cancelLabel: 'Cancel',
@@ -124,11 +197,36 @@ export default function HKLaundryRecords() {
         }}
       >
         <HKLaundryRecordNewFormRHF
-          formId={FORM_ID}
+          formId={NEW_FORM_ID}
           units={units}
           rates={rates}
           onSubmit={handleCreate}
         />
+      </AppDrawer>
+      <AppDrawer
+        open={editDrawerOpen}
+        onClose={() => {
+          setEditDrawerOpen(false);
+          setSelectedRecord(null);
+        }}
+        title="Edit Laundry Record"
+        showActions
+        formId={EDIT_FORM_ID}
+        actions={{
+          saveLabel: 'Save',
+          cancelLabel: 'Cancel',
+          showDelete: false,
+        }}
+      >
+        {selectedRecord && (
+          <HKLaundryRecordEditFormRHF
+            formId={EDIT_FORM_ID}
+            record={selectedRecord}
+            units={units}
+            rates={rates}
+            onSubmit={handleUpdate}
+          />
+        )}
       </AppDrawer>
     </AppShell>
   );

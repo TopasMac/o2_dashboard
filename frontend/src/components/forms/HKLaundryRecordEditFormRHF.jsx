@@ -14,28 +14,50 @@ const widthMap = {
   oneThird: { width: '105px' },
 };
 
-export default function HKLaundryRecordNewFormRHF({
+const normalizeItemType = (value) => {
+  const v = String(value || '').toLowerCase();
+  if (v === 'kg' || v === 'kilo') return 'kg';
+  return v;
+};
+
+const normalizeItemTypeForForm = (value) => {
+  const v = String(value || '').toLowerCase();
+  if (v === 'kg' || v === 'kilo') return 'KG';
+  if (v === 'pillow' || v === 'almohada') return 'PILLOW';
+  if (v === 'cushion' || v === 'cojin' || v === 'cojín') return 'CUSHION';
+  return value || 'KG';
+};
+
+const mapInitialValues = (record = {}) => ({
+  laundryDate: record.laundryDate || '',
+  unitId: record.unitId || '',
+  rateId: record.rateId || '',
+  itemType: normalizeItemTypeForForm(record.itemType || 'KG'),
+  quantity: record.quantity || '',
+  rateSnapshot: record.rateSnapshot || '',
+  expectedAmount: record.expectedAmount || '',
+  chargedAmount: record.chargedAmount || record.expectedAmount || '',
+  providerId: record.providerId || '',
+  createdBy: record.createdBy || '',
+  updatedBy: record.updatedBy || '',
+  notes: record.notes || '',
+});
+
+export default function HKLaundryRecordEditFormRHF({
+  record = {},
   units = [],
   rates = [],
   onSubmit,
   onSave,
-  formId = 'hk-laundry-record-new-form',
-  initialValues = {},
+  formId = 'hk-laundry-record-edit-form',
 }) {
-  const [form, setForm] = React.useState({
-    laundryDate: initialValues.laundryDate || '',
-    unitId: initialValues.unitId || '',
-    rateId: initialValues.rateId || '',
-    itemType: initialValues.itemType || 'KG',
-    quantity: initialValues.quantity || initialValues.weightKg || '',
-    rateSnapshot: initialValues.rateSnapshot || initialValues.pricePerKgSnapshot || '',
-    expectedAmount: initialValues.expectedAmount || initialValues.calculatedAmount || '',
-    chargedAmount: initialValues.chargedAmount || initialValues.calculatedAmount || '',
-    providerId: initialValues.providerId || '',
-    createdBy: initialValues.createdBy || '',
-    notes: initialValues.notes || '',
-  });
+  const [form, setForm] = React.useState(() => mapInitialValues(record));
   const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    setForm(mapInitialValues(record));
+    setError('');
+  }, [record]);
 
   const playaActiveUnits = React.useMemo(() => {
     return units.filter((unit) => {
@@ -58,12 +80,6 @@ export default function HKLaundryRecordNewFormRHF({
     return unit.unitName || unit.name || unit.label || unit.unit_id || `Unit #${unit.id}`;
   };
 
-  const normalizeItemType = (value) => {
-    const v = String(value || '').toLowerCase();
-    if (v === 'kg' || v === 'kilo') return 'kg';
-    return v;
-  };
-
   const selectedTypeRate = React.useMemo(() => {
     const selectedType = normalizeItemType(form.itemType);
 
@@ -76,6 +92,30 @@ export default function HKLaundryRecordNewFormRHF({
       return isActive && isPlaya && rateType === selectedType;
     }) || null;
   }, [rates, form.itemType]);
+
+  const recalculateAmounts = React.useCallback((next) => {
+    const fallbackRate = selectedTypeRate?.unitPrice != null ? String(selectedTypeRate.unitPrice) : '';
+    const rateValue = next.rateSnapshot || fallbackRate;
+    const amount = Number(next.quantity);
+    const rate = Number(rateValue);
+
+    if (next.rateSnapshot === '' && fallbackRate !== '') {
+      next.rateSnapshot = fallbackRate;
+    }
+
+    if (!Number.isNaN(amount) && !Number.isNaN(rate) && amount > 0 && rate >= 0) {
+      const expected = (amount * rate).toFixed(2);
+      next.expectedAmount = expected;
+      if (!next.chargedAmount || String(next.chargedAmount) === String(form.expectedAmount)) {
+        next.chargedAmount = expected;
+      }
+    } else {
+      next.expectedAmount = '';
+      if (!next.chargedAmount) next.chargedAmount = '';
+    }
+
+    return next;
+  }, [selectedTypeRate, form.expectedAmount]);
 
   const handleChange = (field) => (event) => {
     const value = event.target.value;
@@ -97,52 +137,11 @@ export default function HKLaundryRecordNewFormRHF({
         next.rateId = matchingRate?.id || '';
         next.rateSnapshot = matchingRate?.unitPrice != null ? String(matchingRate.unitPrice) : '';
         next.providerId = matchingRate?.providerId || '';
-
-        if (next.quantity !== '' && next.rateSnapshot !== '') {
-          const expected = (
-            Number(next.quantity || 0) * Number(next.rateSnapshot || 0)
-          ).toFixed(2);
-          next.expectedAmount = expected;
-          next.chargedAmount = expected;
-        } else {
-          next.expectedAmount = '';
-          next.chargedAmount = '';
-        }
-      }
-
-      if (field === 'rateId') {
-        const selectedRate = rates.find((r) => String(r.id) === String(value));
-        if (selectedRate?.unitPrice != null) {
-          next.rateSnapshot = String(selectedRate.unitPrice);
-          next.providerId = selectedRate.providerId || '';
-          if (next.quantity !== '') {
-            const expected = (
-              Number(next.quantity || 0) * Number(selectedRate.unitPrice || 0)
-            ).toFixed(2);
-            next.expectedAmount = expected;
-            next.chargedAmount = expected;
-          }
-        }
+        return recalculateAmounts(next);
       }
 
       if (field === 'quantity' || field === 'rateSnapshot') {
-        const amount = Number(field === 'quantity' ? value : next.quantity);
-        const fallbackRate = selectedTypeRate?.unitPrice != null ? String(selectedTypeRate.unitPrice) : '';
-        const rateValue = field === 'rateSnapshot' ? value : (next.rateSnapshot || fallbackRate);
-        const rate = Number(rateValue);
-
-        if (next.rateSnapshot === '' && fallbackRate !== '') {
-          next.rateSnapshot = fallbackRate;
-        }
-
-        if (!Number.isNaN(amount) && !Number.isNaN(rate) && amount > 0 && rate >= 0) {
-          const expected = (amount * rate).toFixed(2);
-          next.expectedAmount = expected;
-          next.chargedAmount = expected;
-        } else {
-          next.expectedAmount = '';
-          next.chargedAmount = '';
-        }
+        return recalculateAmounts(next);
       }
 
       return next;
@@ -152,6 +151,11 @@ export default function HKLaundryRecordNewFormRHF({
   const handleSubmit = (event) => {
     event.preventDefault();
     setError('');
+
+    if (!form.laundryDate) {
+      setError('Please select a laundry date.');
+      return;
+    }
 
     if (!form.unitId) {
       setError('Please select a unit.');
@@ -172,7 +176,7 @@ export default function HKLaundryRecordNewFormRHF({
       expectedAmount: form.expectedAmount || null,
       chargedAmount: form.chargedAmount || form.expectedAmount || null,
       providerId: form.providerId ? Number(form.providerId) : null,
-      createdBy: form.createdBy || null,
+      updatedBy: form.updatedBy || null,
       notes: form.notes || null,
     };
 
@@ -272,6 +276,13 @@ export default function HKLaundryRecordNewFormRHF({
           value={form.chargedAmount}
           onChange={handleChange('chargedAmount')}
           inputProps={{ step: '0.01', min: '0' }}
+          fullWidth
+        />
+
+        <TextField
+          label="Updated by"
+          value={form.updatedBy}
+          onChange={handleChange('updatedBy')}
           fullWidth
         />
 
