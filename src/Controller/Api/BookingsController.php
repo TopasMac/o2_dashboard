@@ -148,7 +148,6 @@ class BookingsController extends AbstractController
                ->setParameter('ongoingStatus', 'Ongoing');
 
             $bookings = $qb->getQuery()->getResult();
-            $statusUpdater->updateStatuses($bookings, true);
 
             // Recon payload: keep it small for month notes modal
             // Also enrich Airbnb rows with reservationUrl from ical_events (match by reservation_code, fallback to confirmation_code)
@@ -306,8 +305,6 @@ class BookingsController extends AbstractController
         }
 
         $bookings = $qb->getQuery()->getResult();
-        // Update statuses before returning
-        $statusUpdater->updateStatuses($bookings, true);
 
         return $this->json($bookings);
     }

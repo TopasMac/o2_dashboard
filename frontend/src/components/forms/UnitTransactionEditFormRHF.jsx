@@ -59,7 +59,7 @@ export default function UnitTransactionEditFormRHF({
     }
   });
 
-  const { handleSubmit, watch, setValue } = methods;
+  const { watch, setValue } = methods;
 
   // Populate form for edit mode
   React.useEffect(() => {
@@ -70,21 +70,26 @@ export default function UnitTransactionEditFormRHF({
       // Unit: API may return only unitName (no id). Try id first; if missing, remember name to resolve after options load.
       let unitIdFromSrc = null;
       if (typeof src.unit === 'string') {
-      const maybe = Number(src.unit.split('/').pop());
-      if (!Number.isNaN(maybe)) unitIdFromSrc = maybe;
-    } else if (typeof src.unit === 'object' && src.unit) {
-      const maybe = Number(src.unit.id);
-      if (!Number.isNaN(maybe)) unitIdFromSrc = maybe;
-      if (src.unit.unitName) desiredUnitNameRef.current = String(src.unit.unitName);
-    } else {
-      const maybe = Number(src.unitId || src.unit_id);
-      if (!Number.isNaN(maybe)) unitIdFromSrc = maybe;
-    }
-if (unitIdFromSrc != null) {
-  setValue('unit', unitIdFromSrc);
-} else if (src.unitName) {
-  desiredUnitNameRef.current = String(src.unitName);
-}
+        const maybe = Number(src.unit.split('/').pop());
+        if (!Number.isNaN(maybe)) unitIdFromSrc = maybe;
+      } else if (typeof src.unit === 'object' && src.unit) {
+        const maybe = Number(src.unit.id);
+        if (!Number.isNaN(maybe)) unitIdFromSrc = maybe;
+        const name = src.unit.unitName || src.unit.unit_name || src.unit.name || src.unit.label;
+        if (name) desiredUnitNameRef.current = String(name);
+      } else {
+        const maybe = Number(src.unitId || src.unit_id);
+        if (!Number.isNaN(maybe)) unitIdFromSrc = maybe;
+      }
+      const displayUnitName = src.unitName || src.unit_name || desiredUnitNameRef.current || '';
+      if (unitIdFromSrc != null) {
+        setValue('unit', unitIdFromSrc);
+      } else if (displayUnitName) {
+        desiredUnitNameRef.current = String(displayUnitName);
+      }
+      if (displayUnitName) {
+        setValue('unitName', String(displayUnitName));
+      }
       // Category can be id or IRI
       const catIdFromSrc = typeof src.category === 'string'
         ? Number(src.category.split('/').pop())
@@ -96,7 +101,7 @@ if (unitIdFromSrc != null) {
       if (src.amount != null) setValue('amount', String(Math.abs(Number(src.amount))));
       setValue('comments', src.comments || '');
       // Unit/category display names (if present)
-      if (src.unitName) setValue('unitName', src.unitName);
+      if (displayUnitName) setValue('unitName', String(displayUnitName));
       if (src.categoryName) setValue('categoryName', src.categoryName);
     };
     if (initialData) {
@@ -143,7 +148,9 @@ if (unitIdFromSrc != null) {
     return meta ? meta.label : '';
   }, [categoryWatch, categoryOptions]);
 
-  React.useEffect(() => { setValue('unitName', unitLabel || ''); }, [unitLabel, setValue]);
+  React.useEffect(() => {
+    if (unitLabel) setValue('unitName', unitLabel);
+  }, [unitLabel, setValue]);
   React.useEffect(() => { setValue('categoryName', categoryLabel || ''); }, [categoryLabel, setValue]);
 
   React.useEffect(() => {
@@ -382,7 +389,6 @@ if (unitIdFromSrc != null) {
 
     const txPayload = {
       date: data.date,
-      unit: unitIri,
       category: categoryIri,
       type: data.type || 'Ingreso',
       description: data.description || '',
@@ -390,6 +396,10 @@ if (unitIdFromSrc != null) {
       comments: data.comments || '',
       costCenter: 'Client',
     };
+
+    if (unitIri) {
+      txPayload.unit = unitIri;
+    }
 
     // Compute the numeric category id to use for upload (from form selection, or fallback to prop)
     const finalCategoryId = (data.category != null && data.category !== '')
@@ -514,27 +524,8 @@ if (unitIdFromSrc != null) {
     <RHFForm formId={formId} methods={methods} onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
         <RHFDatePicker name="date" label="Date" widthVariant="half" />
-        {noDropdowns ? (
-          <>
-            <input type="hidden" name="unit" value={unitWatch ?? ''} />
-            <RHFTextField name="unitName" label="Unit" widthVariant="full" disabled />
-          </>
-        ) : (
-          <RHFAutocomplete
-            name="unit"
-            label="Unit"
-            options={unitOptions}
-            placeholder="Search unit..."
-            widthVariant="full"
-            getOptionValue={(o) => (o ? o.id : null)}
-            getOptionLabel={(o) => (o?.label ?? '')}
-            isOptionEqualToValue={(opt, val) => {
-              const left = opt ? Number(opt.id) : null;
-              const right = (val && typeof val === 'object') ? Number(val.id) : Number(val);
-              return left === right;
-            }}
-          />
-        )}
+        <input type="hidden" name="unit" value={unitWatch ?? ''} />
+        <RHFTextField name="unitName" label="Unit" widthVariant="full" disabled />
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
