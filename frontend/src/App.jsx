@@ -32,6 +32,7 @@ import NewCondoForm from './components/forms/NewCondoForm';
 import EditCondoForm from './components/forms/EditCondoForm';
 import Owners2UnitTransactions from './pages/Owners2UnitTransactions';
 import HKTransactions from './pages/HKTransactions';
+import HKLaundryRecords from './pages/HKLaundryRecords';
 import HRTransactions from './pages/HRTransactions';
 import EmployeeCashAdmin from './pages/EmployeeCashAdmin';
 import Reports from './pages/Reports';
@@ -234,6 +235,7 @@ function App() {
           <Route path="/condos/edit/:id" element={<EditCondoForm />} />
           <Route path="/condos/new" element={<NewCondoForm />} />
           <Route path="/hk-transactions" element={<HKTransactions />} />
+          <Route path="/hk-laundry-records" element={<HKLaundryRecords />} />
           <Route path="/hr-transactions" element={<HRTransactions />} />
           <Route
             path="/employee-cash-admin"

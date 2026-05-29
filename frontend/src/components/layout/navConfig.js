@@ -88,6 +88,7 @@ import {
       submenu: [
         { label: 'CheckInOut View', icon: ArrowsRightLeftIcon, to: '/check-in-out' }, // using arrows icon for turnover vibe
         { label: 'Cleanings Table', icon: ReceiptPercentIcon, to: '/hk-cleanings' }, // (you can swap back to Sparkles if you prefer)
+        { label: 'Laundry Records', icon: ClipboardDocumentListIcon, to: '/hk-laundry-records' },
         { 
           label: 'HK Reconciliation', 
           icon: DocumentChartBarIcon, 

@@ -120,6 +120,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     location.pathname.startsWith('/check-in-out') ||
     location.pathname.startsWith('/hk-cleanings') ||
     location.pathname.startsWith('/hk-transactions') ||
+    location.pathname.startsWith('/hk-laundry-records') ||
     location.pathname.startsWith('/inventory')
   );
   const unitsActive = location.pathname.startsWith('/units') || location.pathname.startsWith('/unit-balance');
@@ -381,6 +382,17 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                             onClick={() => {}}
                           />
                         </li>
+                        {isAdmin && (
+                          <li style={{ marginBottom: '8px' }}>
+                            <PanelLink
+                              to="/hk-laundry-records"
+                              label="Laundry Records"
+                              icon={ClipboardDocumentListIcon}
+                              active={location.pathname === '/hk-laundry-records'}
+                              onClick={() => {}}
+                            />
+                          </li>
+                        )}
                         {isAdmin && (
                           <li style={{ marginBottom: '8px' }}>
                             <PanelLink to="/hk-transactions" label="HK Transactions" icon={ReceiptPercentIcon} active={location.pathname === '/hk-transactions'} onClick={() => {}} />
