@@ -1,4 +1,5 @@
 import React from 'react';
+import { toast } from 'react-toastify';
 import {
   Autocomplete,
   Box,
@@ -149,9 +150,23 @@ export default function HKLaundryRecordNewFormRHF({
     });
   };
 
-  const handleSubmit = (event) => {
+  const clearCurrentEntryFields = () => {
+    setForm((prev) => ({
+      ...prev,
+      unitId: '',
+      quantity: '',
+      expectedAmount: '',
+      chargedAmount: '',
+      notes: '',
+    }));
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+
+    const submitterLabel = String(event.nativeEvent?.submitter?.textContent || '').trim().toLowerCase();
+    const shouldAddAnother = submitterLabel === '+ add';
 
     if (!form.unitId) {
       setError('Please select a unit.');
@@ -176,13 +191,22 @@ export default function HKLaundryRecordNewFormRHF({
       notes: form.notes || null,
     };
 
-    if (onSubmit) {
-      onSubmit(payload);
-      return;
-    }
+    try {
+      if (onSubmit) {
+        await onSubmit(payload);
+      } else if (onSave) {
+        await onSave(payload);
+      }
 
-    if (onSave) {
-      onSave(payload);
+      if (shouldAddAnother) {
+        toast.success('Added');
+        clearCurrentEntryFields();
+      } else {
+        toast.success('Saved');
+      }
+    } catch (e) {
+      setError('Failed saving record');
+      toast.error('Failed saving record');
     }
   };
 

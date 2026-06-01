@@ -16,8 +16,6 @@ import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 const NEW_FORM_ID = 'hk-laundry-record-new-form';
 const EDIT_FORM_ID = 'hk-laundry-record-edit-form';
 
-const getCurrentYearMonth = () => new Date().toISOString().slice(0, 7);
-
 export default function HKLaundryRecords() {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [editDrawerOpen, setEditDrawerOpen] = React.useState(false);
@@ -26,18 +24,28 @@ export default function HKLaundryRecords() {
   const [rates, setRates] = React.useState([]);
   const [records, setRecords] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
-  const [yearMonth, setYearMonth] = React.useState(getCurrentYearMonth());
+  const [yearMonth, setYearMonth] = React.useState('');
+  const [page, setPage] = React.useState(0);
+  const pageSize = 25;
+  const [newFormSubmitMode, setNewFormSubmitMode] = React.useState('close');
 
   const loadData = React.useCallback(async () => {
     try {
       setLoading(true);
       const [unitsRes, ratesRes, recordsRes] = await Promise.all([
-        api.get('/api/units'),
+        api.get('/api/units/options'),
         api.get('/api/hk-laundry-rates'),
         api.get('/api/hk-laundry-records'),
       ]);
 
-      setUnits(Array.isArray(unitsRes.data) ? unitsRes.data : []);
+      setUnits(
+        Array.isArray(unitsRes.data)
+          ? unitsRes.data.map((u) => ({
+              ...u,
+              unitName: u.unitName || u.unit_name,
+            }))
+          : []
+      );
       setRates(Array.isArray(ratesRes.data) ? ratesRes.data : []);
       setRecords(Array.isArray(recordsRes.data) ? recordsRes.data : []);
     } catch (e) {
@@ -53,17 +61,41 @@ export default function HKLaundryRecords() {
 
 
   const displayRows = React.useMemo(() => {
-    if (!yearMonth) return records;
-    return records.filter((row) => String(row.laundryDate || '').startsWith(yearMonth));
+    const filtered = yearMonth
+      ? records.filter((row) => String(row.laundryDate || '').startsWith(yearMonth))
+      : records;
+
+    return [...filtered].sort((a, b) => {
+      const dateCompare = String(b.laundryDate || '').localeCompare(String(a.laundryDate || ''));
+      if (dateCompare !== 0) return dateCompare;
+      return Number(b.id || 0) - Number(a.id || 0);
+    });
   }, [records, yearMonth]);
+
+  const pagedRows = React.useMemo(() => {
+    const start = page * pageSize;
+    return displayRows.slice(start, start + pageSize);
+  }, [displayRows, page, pageSize]);
+
+  React.useEffect(() => {
+    setPage(0);
+  }, [yearMonth]);
 
   const handleCreate = async (payload) => {
     try {
       await api.post('/api/hk-laundry-records', payload);
-      setDrawerOpen(false);
+
+      if (newFormSubmitMode === 'close') {
+        setDrawerOpen(false);
+      }
+
       await loadData();
+      return true;
     } catch (e) {
       console.error('Failed creating laundry record', e);
+      throw e;
+    } finally {
+      setNewFormSubmitMode('close');
     }
   };
 
@@ -154,7 +186,10 @@ export default function HKLaundryRecords() {
       <YearMonthPicker
         label="Month"
         value={yearMonth}
-        onChange={setYearMonth}
+        onChange={(value) => {
+          setYearMonth(value || '');
+          setPage(0);
+        }}
       />
       <Button variant="outlined" color="success" onClick={() => setDrawerOpen(true)}>
         + Add
@@ -177,16 +212,23 @@ export default function HKLaundryRecords() {
 
         <TableLite
           columns={columns}
-          rows={displayRows}
+          rows={pagedRows}
           loading={loading}
           enableFilters
           emptyMessage="No laundry records found."
+          page={page}
+          pageSize={pageSize}
+          total={displayRows.length}
+          onPageChange={setPage}
         />
       </PageScaffold>
 
       <AppDrawer
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setNewFormSubmitMode('close');
+          setDrawerOpen(false);
+        }}
         title="New Laundry Record"
         showActions
         formId={NEW_FORM_ID}
@@ -195,6 +237,23 @@ export default function HKLaundryRecords() {
           cancelLabel: 'Cancel',
           showDelete: false,
         }}
+        extraActions={(
+          <Button
+            type="submit"
+            form={NEW_FORM_ID}
+            variant="contained"
+            sx={{
+              ml: 'auto',
+              bgcolor: '#00897b',
+              '&:hover': {
+                bgcolor: '#00796b',
+              },
+            }}
+            onClick={() => setNewFormSubmitMode('add')}
+          >
+            + Add
+          </Button>
+        )}
       >
         <HKLaundryRecordNewFormRHF
           formId={NEW_FORM_ID}
