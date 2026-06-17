@@ -136,23 +136,13 @@ SQL;
 SELECT COALESCE(SUM(amount), 0) AS movements
 FROM unit_balance_ledger
 WHERE unit_id = :unit
-  AND (
-        (
-          entry_type IN ('O2 Report Payment', 'Client Report Payment')
-          AND yearmonth = :ym
-        )
-        OR
-        (
-          entry_type IN ('O2 Partial Payment', 'Client Partial Payment')
-          AND txn_date >= :monthStart
-          AND txn_date < :nextMonth
-        )
-  )
+  AND entry_type IN ('O2 Partial Payment', 'Client Partial Payment')
+  AND txn_date >= :monthStart
+  AND txn_date < :nextMonth
 SQL;
 
                 $val = $this->db->fetchOne($sqlMovements, [
                     'unit' => $unitId,
-                    'ym' => $yearMonth,
                     'monthStart' => $monthStart,
                     'nextMonth' => $nextMonth,
                 ]);
@@ -1113,54 +1103,43 @@ SQL;
 
         // --- Final enforcement of opening/closing using ledger chronology ---
         // Business rules:
-        // - If a Month Report ledger row exists for the selected month, its balance_after is the source of truth.
-        // - Opening Balance is derived backwards from that row: closing - month result - balance movements.
-        // - This prevents double-counting partial payments that happened inside the report month.
-        // - If no Month Report exists yet, Opening Balance is the latest ledger balance before the next month.
+        // - Normal report payments settle a report balance, but should not appear as Balance Movements.
+        // - Opening Balance is the latest ledger balance before this report's posting date.
+        // - The selected month's Month Report row itself must be excluded so stale reports do not control the preview.
+        // - Closing Balance is recalculated from opening + monthly result + partial balance movements.
         try {
             $dt = \DateTimeImmutable::createFromFormat('Y-m', $yearMonth);
             if ($dt !== false) {
-                $nextMonthStart = $dt->modify('first day of next month')->setTime(0, 0, 0)->format('Y-m-d 00:00:00');
+                $monthStart = $dt->setTime(0, 0, 0)->format('Y-m-01 00:00:00');
+                $reportTxnDate = $dt->modify('first day of next month')->setTime(0, 0, 0)->format('Y-m-d 00:00:00');
 
-                $sqlCurrentReport = <<<SQL
+                $sqlOpening = <<<SQL
 SELECT balance_after
 FROM unit_balance_ledger
 WHERE unit_id = :unit
-  AND yearmonth = :ym
-  AND entry_type = 'Month Report'
+  AND NOT (yearmonth = :ym AND entry_type = 'Month Report')
+  AND NOT (
+    entry_type IN ('O2 Partial Payment', 'Client Partial Payment')
+    AND txn_date >= :monthStart
+    AND txn_date < :reportTxnDate
+  )
+  AND COALESCE(txn_date, created_at) < :reportTxnDate
 ORDER BY COALESCE(txn_date, created_at) DESC, id DESC
 LIMIT 1
 SQL;
 
-                $currentReportRow = $this->db->fetchAssociative($sqlCurrentReport, [
+                $openingRow = $this->db->fetchAssociative($sqlOpening, [
                     'unit' => $unitId,
                     'ym' => $yearMonth,
+                    'monthStart' => $monthStart,
+                    'reportTxnDate' => $reportTxnDate,
                 ]);
 
-                if (is_array($currentReportRow) && isset($currentReportRow['balance_after'])) {
-                    $closing = (float) $currentReportRow['balance_after'];
-                    $opening = $closing - $monthly - $balanceMovements;
-                } else {
-                    $sqlOpening = <<<SQL
-SELECT balance_after
-FROM unit_balance_ledger
-WHERE unit_id = :unit
-  AND COALESCE(txn_date, created_at) < :nextMonthStart
-ORDER BY COALESCE(txn_date, created_at) DESC, id DESC
-LIMIT 1
-SQL;
+                $opening = is_array($openingRow) && isset($openingRow['balance_after'])
+                    ? (float) $openingRow['balance_after']
+                    : 0.0;
 
-                    $openingRow = $this->db->fetchAssociative($sqlOpening, [
-                        'unit' => $unitId,
-                        'nextMonthStart' => $nextMonthStart,
-                    ]);
-
-                    $opening = is_array($openingRow) && isset($openingRow['balance_after'])
-                        ? (float) $openingRow['balance_after']
-                        : 0.0;
-
-                    $closing = $opening + $monthly + $balanceMovements;
-                }
+                $closing = $opening + $monthly + $balanceMovements;
             }
         } catch (\Throwable $e) {
             // Keep previously computed values if the ledger lookup fails.
@@ -1251,7 +1230,11 @@ SQL;
         $data = $this->build($unitId, $yearMonth);
         $openingBalance = (float) ($data['openingBalance'] ?? 0.0);
         $monthlyResult  = (float) ($data['monthlyResult'] ?? 0.0);        // Month Result (delta)
-        $closingBalance = (float) ($data['closingBalance'] ?? ($openingBalance + $monthlyResult));
+        $balanceMovements = (float) ($data['balanceMovements'] ?? 0.0);   // Partial balance movements only
+
+        // Always derive the report posting balance from the same formula shown in the cards.
+        // This prevents stale or pre-existing Month Report rows from controlling balance_after.
+        $closingBalance = $openingBalance + $monthlyResult + $balanceMovements;
 
         // Ledger semantics:
         // - amount is the MONTHLY delta (monthlyResult)
