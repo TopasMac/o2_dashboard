@@ -459,6 +459,28 @@ class HKCleaningManager
      */
     public function markDoneAndCreateTransaction(HKCleanings $hk): array
     {
+        // Fast idempotency guard: if the ledger transaction already exists, return before touching/persisting HKCleanings.
+        // This avoids Doctrine flush issues in batch status updates for old DONE cleanings.
+        $hkId = (int)(method_exists($hk, 'getId') ? ($hk->getId() ?? 0) : 0);
+        if ($hkId > 0) {
+            try {
+                $existingTxId = $this->conn->fetchOne(
+                    'SELECT id FROM hktransactions WHERE hk_cleaning_id = :hk_cleaning_id LIMIT 1',
+                    ['hk_cleaning_id' => $hkId]
+                );
+                if ($existingTxId) {
+                    $existingTx = $this->em->getRepository(HKTransactions::class)->find((int)$existingTxId);
+                    return [
+                        'id' => $existingTx instanceof HKTransactions && method_exists($existingTx, 'getId') ? $existingTx->getId() : (int)$existingTxId,
+                        'transactionCode' => $existingTx instanceof HKTransactions && method_exists($existingTx, 'getTransactionCode') ? $existingTx->getTransactionCode() : null,
+                        'alreadyExisted' => true,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // Continue with normal creation flow if the direct lookup fails.
+            }
+        }
+
         // 1) At the very beginning: ensure doneAt is set if missing
         $now = new \DateTimeImmutable('now', new DateTimeZone('America/Cancun'));
         if (
@@ -534,17 +556,35 @@ class HKCleaningManager
             $billTo = $hk->getBillTo();
         }
 
-        // 5) Idempotency: always try to find tx by ['hkCleaning' => $hk] if not found by getHkTransaction
+        // 5) Idempotency: find an existing tx without relying only on the HKCleanings entity object.
+        // In batch/command contexts Doctrine may consider relation objects detached; using the scalar
+        // hk_cleaning_id first avoids "Entity ... is not managed" crashes during status updates.
         $txRepo = $this->em->getRepository(HKTransactions::class);
         $existingTx = null;
+
+        if ($hkId > 0) {
+            try {
+                $existingTxId = $this->conn->fetchOne(
+                    'SELECT id FROM hktransactions WHERE hk_cleaning_id = :hk_cleaning_id LIMIT 1',
+                    ['hk_cleaning_id' => $hkId]
+                );
+                if ($existingTxId) {
+                    $existingTx = $txRepo->find((int)$existingTxId);
+                }
+            } catch (\Throwable $e) {
+                // Fall back to ORM relation checks below.
+            }
+        }
+
         // Fast-path: check inverse/bidirectional relation if present on HKCleanings
-        if (method_exists($hk, 'getHkTransaction')) {
+        if (!$existingTx && method_exists($hk, 'getHkTransaction')) {
             $maybeTx = $hk->getHkTransaction();
             if ($maybeTx instanceof HKTransactions) {
                 $existingTx = $maybeTx;
             }
         }
-        // Always try repo lookup by hkCleaning
+
+        // Final fallback: repo lookup by relation only when scalar lookup did not find anything.
         if (!$existingTx) {
             $existingTx = $txRepo->findOneBy(['hkCleaning' => $hk]);
         }
@@ -770,14 +810,31 @@ class HKCleaningManager
         $txRepo = $this->em->getRepository(HKTransactions::class);
 
         $existingTx = null;
+        $hkId = (int)(method_exists($hk, 'getId') ? ($hk->getId() ?? 0) : 0);
+
+        if ($hkId > 0) {
+            try {
+                $existingTxId = $this->conn->fetchOne(
+                    'SELECT id FROM hktransactions WHERE hk_cleaning_id = :hk_cleaning_id LIMIT 1',
+                    ['hk_cleaning_id' => $hkId]
+                );
+                if ($existingTxId) {
+                    $existingTx = $txRepo->find((int)$existingTxId);
+                }
+            } catch (\Throwable $e) {
+                // Fall back to ORM relation checks below.
+            }
+        }
+
         // Fast-path: check inverse/bidirectional relation if present on HKCleanings
-        if (method_exists($hk, 'getHkTransaction')) {
+        if (!$existingTx && method_exists($hk, 'getHkTransaction')) {
             $maybeTx = $hk->getHkTransaction();
             if ($maybeTx instanceof HKTransactions) {
                 $existingTx = $maybeTx;
             }
         }
-        // Repo lookup by hkCleaning
+
+        // Final fallback: repo lookup by relation only when scalar lookup did not find anything.
         if (!$existingTx) {
             $existingTx = $txRepo->findOneBy(['hkCleaning' => $hk]);
         }
