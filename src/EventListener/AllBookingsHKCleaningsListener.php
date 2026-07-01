@@ -6,6 +6,7 @@ use App\Entity\AllBookings;
 use App\Service\HKCleaningManager;
 use Doctrine\Common\EventSubscriber;
 use Doctrine\ORM\Events;
+use Doctrine\ORM\Event\PostUpdateEventArgs;
 use Doctrine\Persistence\Event\LifecycleEventArgs;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 
@@ -44,11 +45,19 @@ class AllBookingsHKCleaningsListener implements EventSubscriber
         }
     }
 
-    public function postUpdate(LifecycleEventArgs $args): void
+    public function postUpdate(PostUpdateEventArgs $args): void
     {
         try {
             $entity = $args->getObject();
             if (!$entity instanceof AllBookings) {
+                return;
+            }
+
+            $changeSet = $args->getObjectManager()
+                ->getUnitOfWork()
+                ->getEntityChangeSet($entity);
+
+            if (!$this->hasHousekeepingRelevantChange($changeSet)) {
                 return;
             }
 
@@ -57,5 +66,29 @@ class AllBookingsHKCleaningsListener implements EventSubscriber
         } catch (\Throwable $e) {
             // Do not block booking updates on HK sync issues
         }
+    }
+
+    private function hasHousekeepingRelevantChange(array $changeSet): bool
+    {
+        $relevantFields = [
+            'checkOut',
+            'unit',
+            'unitId',
+            'unitName',
+            'city',
+            'guestType',
+            'confirmationCode',
+            'reservationCode',
+            'notes',
+            'status',
+        ];
+
+        foreach ($relevantFields as $field) {
+            if (array_key_exists($field, $changeSet)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

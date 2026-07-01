@@ -229,9 +229,10 @@ class BookingIcalReconcileService
             $bookingReservationUrl = $canonicalHm ? ('https://www.airbnb.com/hosting/reservations/details/' . $canonicalHm) : null;
 
             $source = $this->safeGet($b, 'getSource');
+            $sourceNorm = is_string($source) ? strtolower(trim($source)) : '';
 
             // For diagnostics
-            $matchMethod = 'none'; // 'code' | 'overlap' | 'none'
+            $matchMethod = 'none'; // 'code' | 'overlap' | 'linked' | 'none'
             $warnings    = [];
             $usedOverlap = false;
             $suppressDateSummary = false;
@@ -455,7 +456,7 @@ class BookingIcalReconcileService
 
                 // Precedence: if Airbnb booking HM code differs from iCal event HM code…
                 $eventRc = $event->getReservationCode();
-                if (($source === 'Airbnb') && $canonicalHm && $eventRc && ($canonicalHm !== $eventRc)) {
+                if (($sourceNorm === 'airbnb') && $canonicalHm && $eventRc && ($canonicalHm !== $eventRc)) {
                     // If this is an adjacent handoff (Airbnb checkout = private check-in), do NOT flag as suspected cancelled.
                     // Treat as matched/conflict solely based on dates.
                     if ($handoffOk === true) {
@@ -543,7 +544,11 @@ class BookingIcalReconcileService
                 $matchMethod = 'none';
                 $warnings = [];
                 // $bookingReservationUrl is already defined above using $canonicalHm
-                if (($source === 'Airbnb') && $bookingHm) {
+                // No current iCal event was found. Clear any obsolete linked event first;
+                // otherwise stale conflict state can remain visible on the dashboard.
+                $linked += $this->unlinkIfChanged($b);
+
+                if (($sourceNorm === 'airbnb') && $bookingHm) {
                     if ($checkOut >= $gracePastCutoff) {
                         $this->setDateSyncStatus($b, 'suspected_cancelled');
                         $summary[] = 'Airbnb: booking code ' . $bookingHm . ' not found in iCal — likely cancelled.';
@@ -553,11 +558,16 @@ class BookingIcalReconcileService
                         $this->setDateSyncStatus($b, 'matched');
                         $matched++;
                     }
+                } else {
+                    // Non-Airbnb rows, or Airbnb rows without an HM code, cannot be compared
+                    // against a reservation event. Do not leave an old conflict flag behind.
+                    $this->setDateSyncStatus($b, 'matched');
+                    $matched++;
                 }
             }
 
             // Private booking vs Airbnb reservation overlap detection (calendar double-booking)
-            if ($source === 'Private') {
+            if ($sourceNorm === 'private') {
                 try {
                     // Use preloaded Airbnb reservation events for this unit when available (avoid per-booking query)
                     $airbnbOver = $reservationEventsByUnit[$unitIdVal] ?? null;
@@ -700,7 +710,7 @@ class BookingIcalReconcileService
         }
 
         if ($flush) {
-            $this->em->flush();
+            $this->persistReconcileUpdatesWithDbal($bookings);
         }
 
         return [
@@ -713,6 +723,84 @@ class BookingIcalReconcileService
             'items' => $items,
         ];
     }
+
+    /**
+     * Persist reconcile-only fields directly through DBAL.
+     *
+     * This command updates iCal metadata only; using DBAL avoids triggering booking lifecycle
+     * listeners during a large reconcile run, which can otherwise create detached Doctrine
+     * entity issues at flush time.
+     *
+     * @param AllBookings[] $bookings
+     */
+    private function persistReconcileUpdatesWithDbal(array $bookings): void
+    {
+        foreach ($bookings as $b) {
+            if (!$b instanceof AllBookings) {
+                continue;
+            }
+
+            $id = $this->getId($b);
+            if (!$id) {
+                continue;
+            }
+
+            $icalEventId = null;
+            if (method_exists($b, 'getIcalEvent')) {
+                $event = $b->getIcalEvent();
+                if ($event instanceof IcalEvent) {
+                    $icalEventId = $event->getId();
+                }
+            }
+
+            $lastSync = null;
+            if (method_exists($b, 'getLastIcalSyncAt')) {
+                $last = $b->getLastIcalSyncAt();
+                if ($last instanceof \DateTimeInterface) {
+                    $lastSync = $last->format('Y-m-d H:i:s');
+                }
+            }
+
+            $overlapWarning = null;
+            if (method_exists($b, 'isOverlapWarning')) {
+                $overlapWarning = $b->isOverlapWarning() ? 1 : 0;
+            } elseif (method_exists($b, 'getOverlapWarning')) {
+                $overlapWarning = $b->getOverlapWarning() ? 1 : 0;
+            }
+
+            $lastUpdatedAt = null;
+            if (method_exists($b, 'getLastUpdatedAt')) {
+                $updatedAt = $b->getLastUpdatedAt();
+                if ($updatedAt instanceof \DateTimeInterface) {
+                    $lastUpdatedAt = $updatedAt->format('Y-m-d H:i:s');
+                }
+            }
+
+            $lastUpdatedVia = method_exists($b, 'getLastUpdatedVia') ? $b->getLastUpdatedVia() : null;
+
+            $this->db->executeStatement(
+                'UPDATE all_bookings
+                 SET ical_event_id = :ical_event_id,
+                     date_sync_status = :date_sync_status,
+                     last_ical_sync_at = :last_ical_sync_at,
+                     overlap_warning = COALESCE(:overlap_warning, overlap_warning),
+                     last_updated_at = COALESCE(:last_updated_at, last_updated_at),
+                     last_updated_via = COALESCE(:last_updated_via, last_updated_via)
+                 WHERE id = :id',
+                [
+                    'ical_event_id' => $icalEventId,
+                    'date_sync_status' => $this->getDateSyncStatus($b),
+                    'last_ical_sync_at' => $lastSync,
+                    'overlap_warning' => $overlapWarning,
+                    'last_updated_at' => $lastUpdatedAt,
+                    'last_updated_via' => $lastUpdatedVia,
+                    'id' => $id,
+                ]
+            );
+        }
+    }
+
+
 
     // --------------------------- helpers --------------------------- //
 
@@ -874,6 +962,20 @@ class BookingIcalReconcileService
             $current = $b->getIcalEvent();
             if ($current?->getId() !== $e->getId()) {
                 $b->setIcalEvent($e);
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+
+    /** Clear obsolete linked event if present; returns 1 if changed, else 0. */
+    private function unlinkIfChanged(AllBookings $b): int
+    {
+        if (method_exists($b, 'getIcalEvent') && method_exists($b, 'setIcalEvent')) {
+            $current = $b->getIcalEvent();
+            if ($current !== null) {
+                $b->setIcalEvent(null);
                 return 1;
             }
         }

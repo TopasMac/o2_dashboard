@@ -30,14 +30,26 @@ class ReconcileBookingsCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $unit = $input->getOption('unit');
-        $from = $this->parseDateOpt($input->getOption('from'));
-        $to   = $this->parseDateOpt($input->getOption('to'));
+        $fromInput = $input->getOption('from');
+        $toInput = $input->getOption('to');
+
+        $from = $this->parseDateOpt($fromInput);
+        $to   = $this->parseDateOpt($toInput);
         $dry  = (bool)$input->getOption('dry-run');
+
+        // Operational default: reconcile only recent/current/future bookings.
+        // Full historical reconciliation remains available by passing --from explicitly.
+        if (!$from) {
+            $from = (new \DateTimeImmutable('first day of previous month'))->setTime(0, 0, 0);
+        }
+        if (!$to) {
+            $to = (new \DateTimeImmutable('+18 months'))->setTime(23, 59, 59);
+        }
 
         $output->writeln('<info>Reconciling bookings with iCal events...</info>');
         if ($unit) $output->writeln(" - Unit: <comment>{$unit}</comment>");
-        if ($from) $output->writeln(' - From: <comment>'.$from->format('Y-m-d').'</comment>');
-        if ($to)   $output->writeln(' - To:   <comment>'.$to->format('Y-m-d').'</comment>');
+        $output->writeln(' - From: <comment>'.$from->format('Y-m-d').($fromInput ? '' : ' (default)').'</comment>');
+        $output->writeln(' - To:   <comment>'.$to->format('Y-m-d').($toInput ? '' : ' (default)').'</comment>');
         if ($dry)  $output->writeln(' - Mode: <comment>DRY RUN</comment>');
 
         $res = $this->service->reconcile(
