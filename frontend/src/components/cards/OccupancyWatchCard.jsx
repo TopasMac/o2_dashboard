@@ -333,7 +333,7 @@ export default function OccupancyWatchCard() {
     <div
       className="ow-card"
       style={{
-        width:'100%', minWidth:360, maxWidth:800,
+        width:'100%', minWidth:360, maxWidth:650,
         border:'1px solid #e5e7eb', borderRadius:8, background:'#fff',
         boxShadow:'0 2px 4px rgba(0,0,0,0.05)',
         height:600, display:'flex', flexDirection:'column'
@@ -375,7 +375,8 @@ export default function OccupancyWatchCard() {
             borderBottom:'1px solid #eee'
           }}
         >
-          <div style={{ display:'flex', gap:16, alignItems:'center', padding:'16px 12px', minHeight:30 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, padding:'14px 12px 12px', minHeight:30 }}>
+            <div style={{ display:'flex', gap:16, alignItems:'center', width:'100%' }}>
             {/* Period */}
             <div style={{ position:'relative', width:170 }}>
               <label style={{ position:'absolute', top:-8, left:12, background:'#fff', padding:'0 4px', fontSize:11, color:'#2E645F' }}>Period</label>
@@ -446,6 +447,9 @@ export default function OccupancyWatchCard() {
                 <option value="All" />
               </datalist>
             </div>
+            </div>
+
+            <div style={{ display:'flex', gap:16, alignItems:'center', width:'100%' }}>
 
             {/* Updated sort */}
             <div style={{ position:'relative', width:90 }}>
@@ -539,7 +543,6 @@ export default function OccupancyWatchCard() {
               )}
             </div>
 
-            <div style={{ flex:1 }} />
             {/* reset icon */}
             <button
               type="button"
@@ -553,6 +556,7 @@ export default function OccupancyWatchCard() {
                 <path d="M21 3v6h-6" />
               </svg>
             </button>
+            </div>
           </div>
         </div>
 
@@ -565,15 +569,13 @@ export default function OccupancyWatchCard() {
         >
           <div style={{
             display:'grid',
-            gridTemplateColumns:'minmax(140px,180px) 70px 70px 165px 70px 70px 50px 70px',
+            gridTemplateColumns:'minmax(130px,160px) 55px 165px 70px 50px 70px',
             gap:12, padding:'8px 10px', fontWeight:600
           }}>
             <div>Unit</div>
-            <div>City</div>
             <div>Occ %</div>
             <div>Progress</div>
             <div>Booked</div>
-            <div>Status</div>
             <div>Notes</div>
             <div>Updated</div>
           </div>
@@ -619,20 +621,24 @@ export default function OccupancyWatchCard() {
                       key={`${r.unitId}-${r.period}`}
                       style={{
                         display:'grid',
-                        gridTemplateColumns:'minmax(140px,180px) 70px 70px 165px 70px 70px 50px 70px',
+                        gridTemplateColumns:'minmax(130px,160px) 55px 165px 70px 50px 70px',
                         gap:12, padding:'8px 10px', borderBottom:'1px solid #f1f1f1', alignItems:'center'
                       }}
                     >
-                      <div style={{ fontWeight:600, whiteSpace:'nowrap', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis' }}>{r.unitName || `#${r.unitId}`}</div>
-                      <div style={{ maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {r.city === 'Playa del Carmen' ? 'Playa' : (r.city || '—')}
+                      <div style={{ maxWidth:160, overflow:'hidden' }}>
+                        <div style={{ fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.unitName || `#${r.unitId}`}</div>
+                        <div style={{ marginTop:2, color:'#6b7280', fontSize:12, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                          {r.city === 'Playa del Carmen' ? 'Playa del Carmen' : (r.city || '—')}
+                        </div>
                       </div>
-                      <div>{pct(r.occupancyPercent)}</div>
+                      <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-start', gap:3 }}>
+                        <div>{pct(r.occupancyPercent)}</div>
+                        <StatusChip value={r.status} />
+                      </div>
                       <div>
                         <Bar value={r.occupancyPercent} low={r.lowThreshold} high={r.highThreshold} forceOk={isCurrentLate} />
                       </div>
                       <div>{(r.bookedDays ?? 0)} / {(r.totalDays ?? 0)}</div>
-                      <div style={{ maxWidth:70, overflow:'hidden' }}><StatusChip value={r.status} /></div>
                       <div style={{ display:'flex', alignItems:'center' }}>
                         {(() => {
                           const ym = String(r.period).slice(0,7);

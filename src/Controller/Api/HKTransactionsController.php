@@ -27,6 +27,8 @@ class HKTransactionsController extends AbstractController
         $units = $em->getRepository('App\\Entity\\Unit')
             ->createQueryBuilder('u')
             ->select('u.id AS id', 'u.unitName AS unitName', 'u.city AS city')
+            ->where('LOWER(TRIM(COALESCE(u.status, \'\'))) NOT IN (:excludedStatuses)')
+            ->setParameter('excludedStatuses', ['inactive', 'alor'])
             ->orderBy('u.unitName', 'ASC')
             ->getQuery()
             ->getArrayResult();

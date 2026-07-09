@@ -7,7 +7,7 @@
 // and displays the returned periods horizontally (e.g. previous, current,
 // next, YTD). This isolates all Month Summary UI logic into a reusable card.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../api';
 
 // --- Helpers ---------------------------------------------------------------
@@ -256,6 +256,9 @@ const MonthSummaryCard = ({ yearMonth: propsYearMonth }) => {
   const [openOccupancyKey, setOpenOccupancyKey] = useState(null);
   const [openReviewsKey, setOpenReviewsKey] = useState(null);
 
+  const periodsScrollerRef = useRef(null);
+  const currentPeriodRef = useRef(null);
+
   // If parent ever passes a different yearMonth, sync it.
   useEffect(() => {
     if (propsYearMonth) {
@@ -302,6 +305,24 @@ const MonthSummaryCard = ({ yearMonth: propsYearMonth }) => {
     return Object.values(raw);
   }, [data]);
 
+  useEffect(() => {
+    if (loading || error || periods.length === 0) return;
+
+    const scroller = periodsScrollerRef.current;
+    const currentCard = currentPeriodRef.current;
+    if (!scroller || !currentCard) return;
+
+    const nextScrollLeft =
+      currentCard.offsetLeft -
+      scroller.clientWidth / 2 +
+      currentCard.clientWidth / 2;
+
+    scroller.scrollTo({
+      left: Math.max(0, nextScrollLeft),
+      behavior: 'auto',
+    });
+  }, [loading, error, periods, yearMonth]);
+
   return (
     <div
       style={{
@@ -339,6 +360,7 @@ const MonthSummaryCard = ({ yearMonth: propsYearMonth }) => {
 
       {!loading && !error && periods.length > 0 && (
         <div
+          ref={periodsScrollerRef}
           style={{
             display: 'flex',
             gap: 24,
@@ -424,6 +446,7 @@ const MonthSummaryCard = ({ yearMonth: propsYearMonth }) => {
             return (
               <div
                 key={rowKey}
+                ref={isCurrentMonth ? currentPeriodRef : null}
                 style={{
                   minWidth: 210,
                   fontSize: 13,

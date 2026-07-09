@@ -1,8 +1,8 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import RHFForm, { RHFTextField, RHFSelect, RHFDatePicker, RHFFile, RHFCheckbox } from './rhf/RHFForm';
-import { Box, Button } from '@mui/material';
+import { Autocomplete, Box, Button, TextField } from '@mui/material';
 import api from '../../api';
 import { widthMap } from './rhf/widthMap';
 
@@ -76,7 +76,7 @@ export default function HKTransactionNewFormRHF({
     },
     mode: 'onChange',
   });
-  const { handleSubmit, setValue, watch } = methods;
+  const { control, handleSubmit, setValue, watch } = methods;
 
   const [units, setUnits] = React.useState(unitOptions || []);
   const [categories, setCategories] = React.useState(categoryOptions || []);
@@ -351,13 +351,32 @@ export default function HKTransactionNewFormRHF({
       </Box>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <div style={widthMap.twoThirds}>
-          <RHFSelect
+          <Controller
             name="unitId"
-            label="Unit"
-            options={units}
-            getOptionLabel={(o) => o?.unitName ?? o?.label ?? ''}
-            getOptionValue={(o) => o?.id}
-            widthVariant="full"
+            control={control}
+            render={({ field, fieldState }) => {
+              const selectedOption = units.find((u) => String(u.id) === String(field.value)) || null;
+              return (
+                <Autocomplete
+                  options={units}
+                  value={selectedOption}
+                  onChange={(_, option) => field.onChange(option?.id ?? '')}
+                  onBlur={field.onBlur}
+                  getOptionLabel={(option) => option?.unitName ?? option?.label ?? ''}
+                  isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
+                  autoHighlight
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Unit"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message}
+                      fullWidth
+                    />
+                  )}
+                />
+              );
+            }}
           />
         </div>
         <div style={widthMap.oneThird}>

@@ -92,6 +92,7 @@ class BookingsTimelineController extends AbstractController
               LEFT JOIN unit u ON u.id = b.unit_id
               WHERE b.source IN ('Airbnb','Private','Owners2')
                 AND b.status <> 'Cancelled'
+                AND LOWER(TRIM(COALESCE(u.status, ''))) <> 'inactive'
                 {$unitWhere}
                 {$dateWhere}
                 {$statusWhere}
@@ -132,6 +133,7 @@ class BookingsTimelineController extends AbstractController
               FROM all_bookings b
               LEFT JOIN unit u ON u.id = b.unit_id
               WHERE LOWER(b.guest_type) IN ('hold','block')
+                AND LOWER(TRIM(COALESCE(u.status, ''))) <> 'inactive'
                 AND (
                   LOWER(b.guest_type) = 'block'
                   OR (
@@ -233,6 +235,7 @@ class BookingsTimelineController extends AbstractController
             FROM all_bookings b
             LEFT JOIN unit u ON u.id = b.unit_id
             WHERE b.unit_id = :unitId
+              AND LOWER(TRIM(COALESCE(u.status, ''))) <> 'inactive'
               AND b.check_in <= :end
               AND b.check_out >= :start
               $statusWhere

@@ -87,6 +87,12 @@ class DashboardAlertsService
                 continue;
             }
 
+            // Do not generate service-payment alerts for inactive units.
+            $unitStatus = method_exists($unit, 'getStatus') ? strtolower(trim((string) ($unit->getStatus() ?? ''))) : '';
+            if ($unitStatus === 'inactive') {
+                continue;
+            }
+
             $unitId = $unit->getId();
             $unitName = null;
             if (method_exists($unit, 'getName')) {

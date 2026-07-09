@@ -6,7 +6,6 @@ import AlertCenter from '../components/cards/AlertCenter';
 
 import ActivityCard from '../components/cards/ActivityCard';
 import NotificationsCard from '../components/cards/NotificationsCard';
-import TaskNotificationsCard from '../components/cards/TaskNotificationsCard';
 import OccupancyWatchCard from '../components/cards/OccupancyWatchCard';
 import DashboardAlertCenterCard from '../components/cards/DashboardAlertCenterCard';
 import MonthSummaryCard from '../components/cards/MonthSummaryCard';
@@ -54,10 +53,6 @@ const Dashboard = () => {
   });
   // Alerts/Notifications server state
   const [alertsServer, setAlertsServer] = useState([]);
-  const [taskNotifications, setTaskNotifications] = useState([]);
-  const [taskNotificationsLoading, setTaskNotificationsLoading] = useState(true);
-  const [taskView, setTaskView] = useState('notifications');
-  const [taskReloadKey, setTaskReloadKey] = useState(0);
   const { alerts, dismissAlert } = useAlerts({
     serverAlerts: (Array.isArray(alertsServer) && alertsServer.length > 0) ? alertsServer : null,
     autoFetch: !(Array.isArray(alertsServer) && alertsServer.length > 0)
@@ -217,64 +212,7 @@ const Dashboard = () => {
     })();
   }, []);
 
-  // Fetch task notifications for the dashboard card, respecting the active view
-  useEffect(() => {
-    let mounted = true;
-    setTaskNotificationsLoading(true);
-    (async () => {
-      try {
-        const res = await api.get(`/api/employee-tasks/notifications?view=${encodeURIComponent(taskView)}`);
-        if (!mounted) return;
-        const items = Array.isArray(res?.data?.items) ? res.data.items : [];
-        setTaskNotifications(items);
-      } catch (e) {
-        console.error('Failed to load task notifications:', e);
-        if (mounted) {
-          setTaskNotifications([]);
-        }
-      } finally {
-        if (mounted) {
-          setTaskNotificationsLoading(false);
-        }
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [taskView, taskReloadKey]);
 
-  const handleOpenTaskFromCard = async (item) => {
-    if (!item || !item.id) return;
-
-    const isMaintenance = item.isMaintenance === true;
-    const isCompleted = (item.status || '') === 'completed';
-    const notes = (typeof item.notes === 'string') ? item.notes.trim() : '';
-
-    // Admin rule: completed maintenance with no notes -> archive on click
-    if (isMaintenance && isCompleted && notes.length === 0) {
-      try {
-        // Use dedicated status endpoint (Symfony controller)
-        await api.patch(`/api/employee-tasks/${item.id}/status`, { status: 'archived' });
-        setTaskReloadKey((k) => k + 1);
-      } catch (e) {
-        console.error('Failed to archive task from dashboard card:', e);
-      }
-      return;
-    }
-
-    // Admin/Manager rule: completed maintenance WITH notes -> open in EmployeeTasks drawer
-    if (isMaintenance && isCompleted && notes.length > 0) {
-      navigate('/employee-tasks', {
-        state: {
-          openTaskId: item.id,
-          openTaskSource: 'dashboard-notifications',
-        },
-      });
-      return;
-    }
-
-    // Otherwise: no-op on dashboard.
-  };
 
   // Helpers for extra months
   const ymToBounds = (ymStr) => {
@@ -758,39 +696,24 @@ const Dashboard = () => {
       <PageScaffold>
         <MonthSummaryCard />
 
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-          <div style={{ maxWidth: 520, width: '100%' }}>
-            <DashboardAlertCenterCard />
-          </div>
-          <div style={{ maxWidth: 420, width: '100%' }}>
-            <TaskNotificationsCard
-              title="Mis tareas"
-              items={taskNotifications}
-              loading={taskNotificationsLoading}
-              mode="manager"
-              view={taskView}
-              onChangeView={setTaskView}
-              onOpenTask={handleOpenTaskFromCard}
-            />
-          </div>
-          <div style={{ maxWidth: 500, width: '100%' }}>
-            <ActivityCard activity={activity} />
-          </div>
-        </div>
+        <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: '1rem',
+              alignItems: 'flex-start',
+            }}
+          >
+            <div style={{ flex: '0 0 440px', maxWidth: 440 }}>
+              <DashboardAlertCenterCard />
+            </div>
 
-        {/* Occupancy Watch (left) + Alerts (right) in one row */}
-        <div
-          style={{
-            marginTop: '1rem',
-            display: 'flex',
-            gap: '0.75rem',
-            alignItems: 'stretch',
-            flexWrap: 'wrap',
-            minHeight: 0
-          }}
-        >
-          {/* Left: Occupancy Watch */}
-          <div style={{ flex: '0 1 820px', maxWidth: 820, minWidth: 360, minHeight: OW_CARD_HEIGHT }}>
+            <div style={{ flex: '0 0 500px', maxWidth: 500 }}>
+              <ActivityCard activity={activity} />
+            </div>
+          </div>
+
+          <div style={{ maxWidth: 650, minHeight: OW_CARD_HEIGHT }}>
             <OccupancyWatchCard />
           </div>
         </div>
