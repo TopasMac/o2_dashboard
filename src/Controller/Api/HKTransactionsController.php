@@ -2,18 +2,21 @@
 
 namespace App\Controller\Api;
 
-use App\Entity\HKTransactions;
 use App\Entity\Employee;
-use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
-use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\Routing\Annotation\Route;
+use App\Entity\HKTransactions;
 use App\Entity\UnitDocument;
 use App\Entity\UnitDocumentAttachment;
-use App\Service\Document\DocumentUploadService;
 use App\Service\Document\AttachOptions;
+use App\Service\Document\DocumentUploadService;
+use App\Service\Document\UploadRequestDTO;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Serializer\SerializerInterface;
 
 #[Route('/api/hk-transactions', name: 'api_hk_transactions_')]
 class HKTransactionsController extends AbstractController
@@ -97,41 +100,80 @@ class HKTransactionsController extends AbstractController
                 } catch (\Throwable $e) {
                     // keep row as-is if anything goes wrong
                 }
-                // Add attachments URLs from UnitDocumentAttachment (targetType = hk_transaction)
-                $files = [];
-                try {
-                    $attachments = $attachmentRepo->findBy([
-                        'targetType' => 'hk_transaction',
-                        'targetId'   => $transactions[$i]->getId(),
-                    ]);
+        // Add attachment URLs from both:
+        // 1) UnitDocumentAttachment (reused/shared documents)
+        // 2) UnitDocument.hkTransaction (new direct uploads)
+        $files = [];
 
-                    foreach ($attachments as $att) {
-                        if (method_exists($att, 'getDocument') && $att->getDocument()) {
-                            $doc = $att->getDocument();
+        try {
+            $attachments = $attachmentRepo->findBy([
+                'targetType' => 'hk_transaction',
+                'targetId'   => $transactions[$i]->getId(),
+            ]);
 
-                            $url = null;
-                            if (method_exists($doc, 'getUrl') && $doc->getUrl()) {
-                                $url = $doc->getUrl();
-                            } elseif (method_exists($doc, 'getS3Url') && $doc->getS3Url()) {
-                                $url = $doc->getS3Url();
-                            } elseif (method_exists($doc, 'getDocumentUrl') && $doc->getDocumentUrl()) {
-                                $url = $doc->getDocumentUrl();
-                            } elseif (method_exists($doc, 'getFilepath') && $doc->getFilepath()) {
-                                $url = $doc->getFilepath();
-                            }
+            foreach ($attachments as $att) {
+                if (method_exists($att, 'getDocument') && $att->getDocument()) {
+                    $doc = $att->getDocument();
 
-                            $files[] = [
-                                'id'       => method_exists($doc, 'getId') ? $doc->getId() : null,
-                                'url'      => $url,
-                                'category' => method_exists($att, 'getCategory') ? $att->getCategory() : null,
-                            ];
-                        }
+                    $url = null;
+                    if (method_exists($doc, 'getUrl') && $doc->getUrl()) {
+                        $url = $doc->getUrl();
+                    } elseif (method_exists($doc, 'getS3Url') && $doc->getS3Url()) {
+                        $url = $doc->getS3Url();
+                    } elseif (method_exists($doc, 'getDocumentUrl') && $doc->getDocumentUrl()) {
+                        $url = $doc->getDocumentUrl();
+                    } elseif (method_exists($doc, 'getFilepath') && $doc->getFilepath()) {
+                        $url = $doc->getFilepath();
                     }
-                } catch (\Throwable $e) {
-                    // If anything goes wrong when resolving attachments, leave them empty
+
+                    $files[] = [
+                        'id'       => method_exists($doc, 'getId') ? $doc->getId() : null,
+                        'url'      => $url,
+                        'category' => method_exists($att, 'getCategory') ? $att->getCategory() : null,
+                    ];
+                }
+            }
+
+            $directDocuments = $em->getRepository(UnitDocument::class)->findBy([
+                'hkTransaction' => $transactions[$i],
+            ]);
+
+            foreach ($directDocuments as $doc) {
+                $alreadyAdded = false;
+
+                foreach ($files as $file) {
+                    if (($file['id'] ?? null) === $doc->getId()) {
+                        $alreadyAdded = true;
+                        break;
+                    }
                 }
 
-                $row['attachments'] = $files;
+                if ($alreadyAdded) {
+                    continue;
+                }
+
+                $url = null;
+                if (method_exists($doc, 'getUrl') && $doc->getUrl()) {
+                    $url = $doc->getUrl();
+                } elseif (method_exists($doc, 'getS3Url') && $doc->getS3Url()) {
+                    $url = $doc->getS3Url();
+                } elseif (method_exists($doc, 'getDocumentUrl') && $doc->getDocumentUrl()) {
+                    $url = $doc->getDocumentUrl();
+                } elseif (method_exists($doc, 'getFilepath') && $doc->getFilepath()) {
+                    $url = $doc->getFilepath();
+                }
+
+                $files[] = [
+                    'id'       => method_exists($doc, 'getId') ? $doc->getId() : null,
+                    'url'      => $url,
+                    'category' => method_exists($doc, 'getCategory') ? $doc->getCategory() : null,
+                ];
+            }
+        } catch (\Throwable $e) {
+            // If anything goes wrong when resolving attachments, leave them empty
+        }
+
+        $row['attachments'] = $files;
             }
             unset($row);
         }
@@ -232,6 +274,75 @@ class HKTransactionsController extends AbstractController
         }
 
         return $this->json($transaction, 201, [], ['groups' => ['hktransactions:read']]);
+    }
+
+    #[Route('/{id}/documents/upload', name: 'upload_hk_transaction_document', methods: ['POST'])]
+    public function uploadDocument(
+        int $id,
+        Request $request,
+        EntityManagerInterface $em,
+        DocumentUploadService $uploader
+    ): JsonResponse
+    {
+        $tx = $em->getRepository(HKTransactions::class)->find($id);
+        if (!$tx) {
+            return $this->json(['message' => 'Transaction not found'], 404);
+        }
+
+        /** @var UploadedFile|null $file */
+        $file = $request->files->get('file');
+        if (!$file) {
+            throw new BadRequestHttpException('Missing file');
+        }
+
+        $categoryId = $request->request->getInt('category_id', 0) ?: null;
+        $category = $request->request->get('category');
+        $txType = $request->request->get('tx_type');
+
+        $dateForNameStr = $request->request->get('date');
+        $dateForName = null;
+
+        if ($dateForNameStr) {
+            try {
+                $dateForName = new \DateTimeImmutable($dateForNameStr);
+            } catch (\Exception $e) {
+                $dateForName = null;
+            }
+        }
+
+        $unit = $tx->getUnit();
+        $costCentre = $tx->getCostCentre();
+
+        $dto = new UploadRequestDTO(
+            unitId: $unit ? $unit->getId() : null,
+            transactionId: $tx->getId(),
+            transactionType: 'hk',
+            category: $category,
+            description: $request->request->get('description'),
+            customToken: null,
+            dateForName: $dateForName ?: $tx->getDate(),
+            bytes: null,
+            mime: null,
+            originalName: $file->getClientOriginalName(),
+            file: $file,
+            costCentre: $costCentre,
+            categoryId: $categoryId,
+            txType: $txType
+        );
+
+        $doc = $uploader->upload($dto);
+
+        return $this->json([
+            'id' => $doc->getId(),
+            'filename' => method_exists($doc, 'getFilename') ? $doc->getFilename() : null,
+            'documentUrl' => method_exists($doc, 'getDocumentUrl') ? $doc->getDocumentUrl() : null,
+            's3Url' => method_exists($doc, 'getS3Url') ? $doc->getS3Url() : null,
+            's3_url' => method_exists($doc, 'getS3Url') ? $doc->getS3Url() : null,
+            'category' => method_exists($doc, 'getCategory') ? $doc->getCategory() : null,
+            'label' => method_exists($doc, 'getLabel') ? $doc->getLabel() : null,
+            'transactionType' => 'hk',
+            'costCentre' => $costCentre,
+        ], 201);
     }
 
     #[Route('/{id}', name: 'get', methods: ['GET'])]

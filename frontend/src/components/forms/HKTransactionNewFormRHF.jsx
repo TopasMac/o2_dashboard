@@ -301,7 +301,7 @@ export default function HKTransactionNewFormRHF({
     return () => { cancelled = true; };
   }, [paidVal, allocationTargetVal, catId, categories, setValue]);
 
-  const onSubmit = (values) => {
+  const onSubmit = async (values) => {
     // Normalize allocationTarget to new model
     let allocationTarget = isPersonalExterno ? 'Housekeepers' : (values.allocationTarget || initAllocationTarget || 'Client');
     if (allocationTarget === 'Unit') allocationTarget = 'Client';
@@ -336,12 +336,49 @@ export default function HKTransactionNewFormRHF({
 
     // Prefer explicit onSubmit prop (used by allocation flows),
     // fall back to legacy onSave when present.
+    let result = null;
+
     if (typeof onSubmitProp === 'function') {
-      return onSubmitProp(payload);
+      result = await onSubmitProp(payload);
+    } else if (typeof onSave === 'function') {
+      result = await onSave(payload);
     }
-    if (typeof onSave === 'function') {
-      return onSave(payload);
+
+    const resolveFile = (value) => {
+      if (!value) return null;
+      if (value instanceof File) return value;
+      if (value instanceof FileList) return value.item(0);
+      if (Array.isArray(value)) return value[0] || null;
+      if (value?.file instanceof File) return value.file;
+      return null;
+    };
+
+    const files = [
+      resolveFile(values.doc1),
+      resolveFile(values.doc2),
+    ].filter(Boolean);
+
+    const transactionId = result?.id;
+
+    if (files.length > 0 && !transactionId) {
+      throw new Error('HK transaction was created, but no transaction ID was returned.');
     }
+
+    for (const file of files) {
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      formData.append('category_id', String(values.categoryId || effectiveInitial.categoryId || ''));
+      formData.append('description', values.description || '');
+      formData.append('date', values.date || '');
+      formData.append('tx_type', values.type || '');
+
+      await api.post(
+        `/api/hk-transactions/${transactionId}/documents/upload`,
+        formData
+      );
+    }
+
+    return result;
   };
 
   return (

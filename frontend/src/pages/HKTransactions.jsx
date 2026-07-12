@@ -447,7 +447,7 @@ const HKTransactions = () => {
       headerStyle: { textAlign: 'right' },
     },
     {
-      header: 'Documents',
+      header: 'Docs',
       accessor: 'documentLinks',
       width: 100,
       cellStyle: { py: 1, px: 1.5 },
@@ -463,7 +463,7 @@ const HKTransactions = () => {
                 className="table-link"
                 title={doc.fileName}
                 onClick={(e) => e.stopPropagation()}
-                style={{ marginRight: '4px' }}
+                style={{ marginRight: '4px', textDecoration: 'none' }}
               >
                 📎
               </a>
@@ -627,25 +627,31 @@ const HKTransactions = () => {
           formId="hk-tx-form"
           actions={{ saveLabel: 'Save', cancelLabel: 'Cancel', showDelete: false }}
         >
-          <HKTransactionNewFormRHF
-            formId="hk-tx-form"
-            onSave={async (payload) => {
-              try {
-                // Persist via API; form does not POST by itself
-                const { data } = await api.post('/api/hk-transactions', payload);
-                // Success → close and refresh
-                setCreateOpen(false);
-                fetchData();
-              } catch (err) {
-                console.error('Failed to create HK transaction:', err);
-                // Keep drawer open so the user can fix inputs; surface a basic alert for now
-                alert('Could not save the transaction. Please review the fields and try again. Check console/network for details.');
-              }
-            }}
-            onClose={() => setCreateOpen(false)}
-            unitOptions={formOptions.units}
-            categoryOptions={formOptions.categories}
-          />
+         <HKTransactionNewFormRHF
+          formId="hk-tx-form"
+          onSave={async (payload) => {
+            try {
+            // Persist via API; form does not POST by itself
+            const { data } = await api.post('/api/hk-transactions', payload);
+
+            // Success → close and refresh
+            setCreateOpen(false);
+            fetchData();
+
+            return data;
+          } catch (err) {
+            console.error('Failed to create HK transaction:', err);
+
+            // Keep drawer open so the user can fix inputs
+            alert('Could not save the transaction. Please review the fields and try again. Check console/network for details.');
+
+            throw err;
+          }
+        }}
+        onClose={() => setCreateOpen(false)}
+        unitOptions={formOptions.units}
+        categoryOptions={formOptions.categories}
+      />
         </AppDrawer>
 
         <AppDrawer
