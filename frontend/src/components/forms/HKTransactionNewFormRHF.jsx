@@ -176,6 +176,26 @@ export default function HKTransactionNewFormRHF({
   };
 
   const catId = watch('categoryId');
+  const defaultsToHousekeepersCategory = ['11', '12', '16', '24'].includes(String(catId));
+  const selectedUnit = React.useMemo(
+    () => units.find((unit) => String(unit.id) === String(selectedUnitId)),
+    [selectedUnitId, units]
+  );
+  const shouldDefaultToHousekeepers = (
+    norm(selectedUnit?.unitName ?? selectedUnit?.label) === 'housekeepers'
+    && defaultsToHousekeepersCategory
+  );
+  const previouslyMatchedHousekeepersDefaultRef = React.useRef(false);
+
+  React.useEffect(() => {
+    // Apply this as a default when the combination first becomes active. The
+    // user can still choose another allocation target afterward.
+    if (shouldDefaultToHousekeepers && !previouslyMatchedHousekeepersDefaultRef.current) {
+      setValue('allocationTarget', 'Housekeepers', { shouldValidate: true, shouldDirty: true });
+    }
+    previouslyMatchedHousekeepersDefaultRef.current = shouldDefaultToHousekeepers;
+  }, [shouldDefaultToHousekeepers, setValue]);
+
   const isNomina = React.useMemo(() => {
     const found = categories.find(c => String(c.id) === String(catId));
     return norm(found?.name) === 'nomina';
