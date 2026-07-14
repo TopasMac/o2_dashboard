@@ -77,13 +77,14 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
   const selectedCleaningType = form.watch('cleaning_type');
   const selectedUnitId = form.watch('unit_id');
 
-  const selectedUnitCity = useMemo(() => {
+  const selectedUnit = useMemo(() => {
     if (!selectedUnitId) return null;
-    const u = (Array.isArray(units) ? units : []).find(
+    return (Array.isArray(units) ? units : []).find(
       (row) => String(row.unit_id ?? row.id) === String(selectedUnitId)
     );
-    return u?.city || u?.unit_city || null;
   }, [units, selectedUnitId]);
+
+  const selectedUnitCity = selectedUnit?.city || selectedUnit?.unit_city || null;
 
   // Auto-default bill_to based on cleaning_type rules
   useEffect(() => {
@@ -106,6 +107,18 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
       return;
     }
   }, [selectedCleaningType, selectedUnitCity, form]);
+
+  // Mid-stay price defaults to the unit's guest/client cleaning fee and remains editable.
+  useEffect(() => {
+    if (selectedCleaningType !== 'midstay' || !selectedUnit) return;
+
+    const cleaningFee = selectedUnit.unit_cleaning_fee
+      ?? selectedUnit.cleaning_fee
+      ?? selectedUnit.cleaningFee;
+    if (cleaningFee === null || cleaningFee === undefined || cleaningFee === '') return;
+
+    form.setValue('o2_collected_fee', cleaningFee, { shouldDirty: true });
+  }, [selectedCleaningType, selectedUnit, form]);
 
   const unitOptions = useMemo(() => {
     return (Array.isArray(units) ? units : [])
@@ -145,13 +158,8 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
     const unit = units.find(u => String(u.unit_id ?? u.id) === String(values.unit_id));
     const city = unit?.city || unit?.unit_city || null;
 
-    // Determine report_status based on rules
-    let reportStatus = 'pending';
-    if (city && city.toLowerCase().includes('playa') && values.status === 'done') {
-      reportStatus = 'reported';
-    } else if (city && city.toLowerCase().includes('tulum')) {
-      reportStatus = 'pending';
-    }
+    // Reconciliation is explicitly reported by the user after entering actual costs.
+    const reportStatus = 'pending';
 
     const payload = {
       id: null,

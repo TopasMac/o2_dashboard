@@ -3,7 +3,7 @@
 namespace App\Command;
 
 use Doctrine\ORM\EntityManagerInterface;
-use App\Entity\HKCleanings;
+use App\Entity\AllBookings;
 use App\Service\HKCleaningManager;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -73,48 +73,48 @@ class UpdateBookingStatusCommand extends Command
             ['today' => $today]
         );
 
-        // Keep existing booking status SQL logic intact, then sync eligible HK cleanings.
-        // For Playa/Tulum reservations that are already past and not cancelled, pending checkout cleanings
-        // should be considered performed and moved to DONE. markDoneAndCreateTransaction() also creates
-        // the HK transaction and, for Tulum, the reconciliation snapshot row.
-        $hkDone = 0;
+        // Apply the idempotent booking -> cleaning policy only from the cutoff onward.
+        // Upcoming/Ongoing => Pending, Past => Done + reconciliation, Cancelled => remove cleaning.
+        // This policy deliberately does not create hktransactions rows.
+        $hkSynced = 0;
+        $hkCreated = 0;
+        $hkRemoved = 0;
         $hkErrors = 0;
 
-        $pendingCleaningIds = $connection->fetchFirstColumn(
-            "SELECT hc.id
-             FROM hk_cleanings hc
-             INNER JOIN all_bookings b ON b.id = hc.booking_id
-             LEFT JOIN unit u ON u.id = hc.unit_id
-             WHERE b.source <> 'Owners2'
-               AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'canceled')
-               AND b.check_out < :today
-               AND LOWER(COALESCE(hc.status, '')) = 'pending'
-               AND LOWER(COALESCE(hc.cleaning_type, '')) = 'checkout'
-               AND LOWER(TRIM(COALESCE(hc.city, u.city, ''))) IN ('tulum', 'playa del carmen')",
-            ['today' => $today]
+        $bookingIds = $connection->fetchFirstColumn(
+            "SELECT id
+             FROM all_bookings
+             WHERE check_out >= :cutoff
+               AND LOWER(COALESCE(status, '')) IN ('upcoming', 'ongoing', 'past', 'cancelled', 'canceled')
+             ORDER BY id ASC",
+            ['cutoff' => HKCleaningManager::RECONCILIATION_POLICY_START],
         );
 
-        foreach ($pendingCleaningIds as $hkId) {
+        foreach ($bookingIds as $bookingId) {
             try {
-                $hk = $this->entityManager->getRepository(HKCleanings::class)->find((int)$hkId);
-                if (!$hk instanceof HKCleanings) {
+                $booking = $this->entityManager->getRepository(AllBookings::class)->find((int)$bookingId);
+                if (!$booking instanceof AllBookings) {
                     continue;
                 }
 
-                $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
-                $hkDone++;
+                $result = $this->hkCleaningManager->syncCheckoutCleaningForBooking($booking);
+                $hkSynced++;
+                $hkCreated += (int)($result['created'] ?? 0);
+                $hkRemoved += (int)($result['removed'] ?? 0);
             } catch (\Throwable $e) {
                 $hkErrors++;
             }
         }
 
         $output->writeln(sprintf(
-            'Booking statuses updated successfully. Past: %d, Upcoming: %d, Ongoing: %d, Done blocks: %d, HK done: %d, HK errors: %d.',
+            'Booking statuses updated successfully. Past: %d, Upcoming: %d, Ongoing: %d, Done blocks: %d, HK synced: %d, HK created: %d, HK removed: %d, HK errors: %d.',
             $past,
             $upcoming,
             $ongoing,
             $doneBlocks,
-            $hkDone,
+            $hkSynced,
+            $hkCreated,
+            $hkRemoved,
             $hkErrors
         ));
 

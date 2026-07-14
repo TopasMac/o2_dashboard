@@ -36,6 +36,7 @@ class HKCleanings
     public const REPORT_STATUS_PENDING      = 'pending';
     public const REPORT_STATUS_REPORTED     = 'reported';
     public const REPORT_STATUS_NEEDS_REVIEW = 'needs_review';
+    public const RECONCILIATION_POLICY_START = '2026-06-01';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -368,12 +369,17 @@ class HKCleanings
             }
         }
 
-        // Default report_status:
-        // - Playa del Carmen: if the cleaning is already DONE at creation time, assume it's reported
-        // - Tulum (and others): default pending
+        // Legacy default before 2026-06-01:
+        // - Playa del Carmen DONE rows were assumed reported.
+        // New policy from the cutoff onward: every reconciliation starts pending.
         if ($this->reportStatus === null) {
             $city = strtolower(trim((string)($this->city ?? '')));
-            if ($city === strtolower('Playa del Carmen') && $this->status === self::STATUS_DONE) {
+            $usesLegacyReporting = !isset($this->checkoutDate)
+                || $this->checkoutDate->format('Y-m-d') < self::RECONCILIATION_POLICY_START;
+            if ($usesLegacyReporting
+                && $city === strtolower('Playa del Carmen')
+                && $this->status === self::STATUS_DONE
+            ) {
                 $this->reportStatus = self::REPORT_STATUS_REPORTED;
             } else {
                 $this->reportStatus = self::REPORT_STATUS_PENDING;
@@ -386,9 +392,12 @@ class HKCleanings
     {
         $this->updatedAt = new \DateTimeImmutable('now');
 
-        // Playa del Carmen convenience: when a cleaning becomes DONE,
-        // auto-mark report_status as REPORTED unless it was explicitly set to NEEDS_REVIEW.
-        if ($this->reportStatus === null || $this->reportStatus === self::REPORT_STATUS_PENDING) {
+        // Preserve the legacy Playa auto-report behavior only before the policy cutoff.
+        $usesLegacyReporting = !isset($this->checkoutDate)
+            || $this->checkoutDate->format('Y-m-d') < self::RECONCILIATION_POLICY_START;
+        if ($usesLegacyReporting
+            && ($this->reportStatus === null || $this->reportStatus === self::REPORT_STATUS_PENDING)
+        ) {
             $city = strtolower(trim((string)($this->city ?? '')));
             if ($city === strtolower('Playa del Carmen') && $this->status === self::STATUS_DONE) {
                 $this->reportStatus = self::REPORT_STATUS_REPORTED;

@@ -3,7 +3,7 @@ import { Controller } from 'react-hook-form';
 import { DatePicker } from '@mui/x-date-pickers';
 import { widthMap } from './widthMap';
 
-export default function RHFDatePicker({ name, control, label, widthVariant = 'full', sx, ...rest }) {
+export default function RHFDatePicker({ name, control, rules, label, widthVariant = 'full', sx, ...rest }) {
   const widthSx = widthMap[widthVariant] || widthMap.full;
 
   // Build a consistent text field style that matches MUI TextField (outlined/medium)
@@ -32,6 +32,7 @@ export default function RHFDatePicker({ name, control, label, widthVariant = 'fu
     <Controller
       name={name}
       control={control}
+      rules={rules}
       render={({ field, fieldState }) => (
         <DatePicker
           label={label}

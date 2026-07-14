@@ -18,14 +18,23 @@ class HKCleaningsReconcileController extends AbstractController
     public function list(Request $request, HKReconcileService $reconcileService): JsonResponse
     {
         $month = (string) $request->query->get('month', '');
-        $city  = (string) $request->query->get('city', 'Tulum');
+        $city  = trim((string) $request->query->get('city', 'Tulum'));
+        $citiesParam = trim((string) $request->query->get('cities', ''));
+
+        $cities = $citiesParam !== ''
+            ? array_values(array_unique(array_filter(array_map('trim', explode(',', $citiesParam)))))
+            : [$city !== '' ? $city : 'Tulum'];
+
+        if ($cities === []) {
+            return $this->json(['error' => 'At least one city is required'], 400);
+        }
 
         if ($month === '' || !preg_match('/^\d{4}-\d{2}$/', $month)) {
             return $this->json(['error' => 'Invalid or missing month (YYYY-MM)'], 400);
         }
 
         try {
-            $view = $reconcileService->getMonthView($month, $city);
+            $view = $reconcileService->getMonthView($month, $cities);
         } catch (\InvalidArgumentException $e) {
             return $this->json(['error' => $e->getMessage()], 400);
         } catch (\Throwable $e) {
@@ -35,7 +44,8 @@ class HKCleaningsReconcileController extends AbstractController
         return $this->json([
             'ok' => true,
             'month' => $month,
-            'city' => $city,
+            'city' => count($cities) === 1 ? $cities[0] : null,
+            'cities' => $cities,
             // keep payload backward-compatible for the current frontend page:
             // `data` is the table rows.
             'data' => $view['rows'] ?? [],
@@ -195,12 +205,16 @@ class HKCleaningsReconcileController extends AbstractController
             $hk->setLaundryCost($lc);
         }
 
-        // Default behavior on save:
+        $checkoutForPolicy = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
+        $usesNewPolicy = $checkoutForPolicy instanceof \DateTimeInterface
+            && $checkoutForPolicy->format('Y-m-d') >= HKCleanings::RECONCILIATION_POLICY_START;
+
+        // Legacy default behavior before the policy cutoff:
         // - Tulum: pending -> reported
         // - If user explicitly sets needs_review, keep it.
         // - If current is needs_review and user didn't change it, do NOT override it.
         // - Playa: handled below (DONE implies reported)
-        if ($normalizedReportStatus === null && method_exists($hk, 'getCity')) {
+        if (!$usesNewPolicy && $normalizedReportStatus === null && method_exists($hk, 'getCity')) {
             $hkCityLower = strtolower(trim((string)($hk->getCity() ?? '')));
             if ($hkCityLower === 'tulum') {
                 $curRs = method_exists($hk, 'getReportStatus') ? strtolower((string)($hk->getReportStatus() ?? '')) : '';
@@ -215,7 +229,8 @@ class HKCleaningsReconcileController extends AbstractController
         if ($normalizedReportStatus !== null && method_exists($hk, 'setReportStatus')) {
             $hk->setReportStatus($normalizedReportStatus);
         }
-        if ($normalizedReportStatus === null
+        if (!$usesNewPolicy
+            && $normalizedReportStatus === null
             && method_exists($hk, 'setReportStatus')
             && method_exists($hk, 'getCity')
         ) {
@@ -237,11 +252,12 @@ class HKCleaningsReconcileController extends AbstractController
             }
         }
 
-        // Pre-flight guard: for Tulum we need checkout_date to build report_month/service_date
+        // Reconciliation snapshots need checkout_date to build report_month/service_date.
         $hkCityLower2 = method_exists($hk, 'getCity') ? strtolower(trim((string)($hk->getCity() ?? ''))) : '';
         $checkoutDate = null;
-        if ($hkCityLower2 === 'tulum') {
-            $d = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
+        $isSupportedCity = in_array($hkCityLower2, ['tulum', 'playa del carmen'], true);
+        if ($isSupportedCity) {
+            $d = $checkoutForPolicy;
             if (!$d instanceof \DateTimeInterface) {
                 return $this->json([
                     'ok' => false,
@@ -259,9 +275,10 @@ class HKCleaningsReconcileController extends AbstractController
             $em->persist($hk);
             $em->flush();
 
-        // For Tulum only: persist a snapshot row into hk_cleanings_reconcile (idempotent upsert)
-        // and keep hktransactions in sync.
-        if ($hkCityLower2 === 'tulum') {
+        // Legacy snapshots were Tulum-only. From the cutoff onward, persist both Tulum and Playa.
+        $shouldPersistReconcile = $hkCityLower2 === 'tulum'
+            || ($usesNewPolicy && $hkCityLower2 === 'playa del carmen');
+        if ($shouldPersistReconcile) {
 
             $serviceDate = $checkoutDate->format('Y-m-d');
             $reportMonth = $checkoutDate->format('Y-m');
@@ -294,7 +311,7 @@ class HKCleaningsReconcileController extends AbstractController
                 ,
                 [
                     'unit_id' => method_exists($hk, 'getUnit') && $hk->getUnit() ? $hk->getUnit()->getId() : null,
-                    'city' => 'Tulum',
+                    'city' => method_exists($hk, 'getCity') ? (string)$hk->getCity() : '',
                     'report_month' => $reportMonth,
                     'service_date' => $serviceDate,
                     'cleaning_cost' => $ccNum,
@@ -305,25 +322,25 @@ class HKCleaningsReconcileController extends AbstractController
                 ]
             );
 
-            // Sync hktransactions (paid/charged + notes) for the linked cleaning transaction
-            // paid = cleaning_cost + laundry_cost
-            // charged = o2_collected_fee (0 if null)
-            $chargedNum = 0.0;
-            if (method_exists($hk, 'getO2CollectedFee')) {
-                $chargedNum = (float)($hk->getO2CollectedFee() ?? 0);
-            }
-            $paidNum = (float)($ccNum ?? 0) + (float)$lcNum;
+            if (!$usesNewPolicy) {
+                // Preserve the legacy pre-cutoff transaction synchronization.
+                $chargedNum = 0.0;
+                if (method_exists($hk, 'getO2CollectedFee')) {
+                    $chargedNum = (float)($hk->getO2CollectedFee() ?? 0);
+                }
+                $paidNum = (float)($ccNum ?? 0) + (float)$lcNum;
 
-            $conn->executeStatement(
-                'UPDATE hktransactions
-                 SET paid = :paid, charged = :charged
-                 WHERE hk_cleaning_id = :hk_cleaning_id',
-                [
-                    'paid' => $paidNum,
-                    'charged' => $chargedNum,
-                    'hk_cleaning_id' => $hk->getId(),
-                ]
-            );
+                $conn->executeStatement(
+                    'UPDATE hktransactions
+                     SET paid = :paid, charged = :charged
+                     WHERE hk_cleaning_id = :hk_cleaning_id',
+                    [
+                        'paid' => $paidNum,
+                        'charged' => $chargedNum,
+                        'hk_cleaning_id' => $hk->getId(),
+                    ]
+                );
+            }
         }
             $conn->commit();
         } catch (\Throwable $e) {

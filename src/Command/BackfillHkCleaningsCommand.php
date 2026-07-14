@@ -85,7 +85,7 @@ class BackfillHkCleaningsCommand extends Command
         $bookings = $qb->getQuery()->getResult();
         $total = \count($bookings);
 
-        $created = 0; $skipped = 0; $errors = 0;
+        $created = 0; $removed = 0; $skipped = 0; $errors = 0;
 
         foreach ($bookings as $b) {
             if (!$b instanceof AllBookings) { continue; }
@@ -93,6 +93,10 @@ class BackfillHkCleaningsCommand extends Command
             // Only process bookings with accepted statuses
             $status = method_exists($b, 'getStatus') ? (string)$b->getStatus() : '';
             $accepted = ['upcoming','ongoing','past'];
+            if ($syncCancelled) {
+                $accepted[] = 'cancelled';
+                $accepted[] = 'canceled';
+            }
             if (!in_array(strtolower($status), $accepted, true)) {
                 $skipped++;
                 $io->writeln(sprintf('Skip non-accepted booking (status=%s) id=%s code=%s',
@@ -113,10 +117,11 @@ class BackfillHkCleaningsCommand extends Command
 
             if ($dryRun) {
                 // For dry-run, don’t write anything; just show what would be synced.
-                $io->writeln(sprintf('[DRY] would sync HK cleaning for booking id=%s code=%s checkout=%s',
+                $io->writeln(sprintf('[DRY] would sync HK cleaning for booking id=%s code=%s checkout=%s status=%s',
                     method_exists($b, 'getId') ? $b->getId() : 'n/a',
                     $reservationCode !== '' ? $reservationCode : 'n/a',
-                    $checkOut->format('Y-m-d')
+                    $checkOut->format('Y-m-d'),
+                    $status,
                 ));
                 continue;
             }
@@ -125,6 +130,7 @@ class BackfillHkCleaningsCommand extends Command
                 // Single source of truth for booking-driven checkout/owner cleanings
                 $res = $this->hkManager->syncCheckoutCleaningForBooking($b);
                 $created += (int)($res['created'] ?? 0);
+                $removed += (int)($res['removed'] ?? 0);
                 $skipped += (int)($res['skipped'] ?? 0);
             } catch (\Throwable $e) {
                 $errors++;
@@ -132,7 +138,7 @@ class BackfillHkCleaningsCommand extends Command
             }
         }
 
-        $io->success(sprintf('Scanned %d bookings. Created: %d, Skipped: %d, Errors: %d', $total, $created, $skipped, $errors));
+        $io->success(sprintf('Scanned %d bookings. Created: %d, Removed: %d, Skipped/updated: %d, Errors: %d', $total, $created, $removed, $skipped, $errors));
         return Command::SUCCESS;
     }
 }

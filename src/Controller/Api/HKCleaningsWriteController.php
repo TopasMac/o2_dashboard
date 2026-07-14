@@ -974,6 +974,55 @@ public function markDoneBy(Request $request): JsonResponse
         ]);
     }
 
+
+    /**
+     * Permanently delete a cleaning and its directly dependent workflow rows.
+     */
+    #[Route('/api/hk-cleanings/{id<\d+>}', name: 'api_hk_cleanings_delete', methods: ['DELETE'])]
+    public function deleteCleaning(int $id): JsonResponse
+    {
+        $hk = $this->em->getRepository(HKCleanings::class)->find($id);
+        if (!$hk) {
+            return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $conn = $this->em->getConnection();
+        try {
+            $conn->transactional(function () use ($conn, $hk, $id): void {
+                // Checklist files cascade from their checklist rows.
+                $conn->executeStatement(
+                    'DELETE FROM hk_cleaning_checklist WHERE cleaning_id = :id',
+                    ['id' => $id],
+                );
+                $conn->executeStatement(
+                    'DELETE FROM hk_cleanings_recon_notes WHERE hk_cleaning_id = :id',
+                    ['id' => $id],
+                );
+                $conn->executeStatement(
+                    'DELETE FROM hk_cleanings_reconcile WHERE hk_cleaning_id = :id',
+                    ['id' => $id],
+                );
+                $conn->executeStatement(
+                    'DELETE FROM hktransactions WHERE hk_cleaning_id = :id',
+                    ['id' => $id],
+                );
+
+                $this->em->remove($hk);
+                $this->em->flush();
+            });
+        } catch (\Throwable $e) {
+            return $this->json([
+                'ok' => false,
+                'error' => 'Failed to delete cleaning',
+                'detail' => $e->getMessage(),
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return $this->json([
+            'ok' => true,
+            'data' => ['id' => $id, 'deleted' => true],
+        ]);
+    }
     /**
      * Save a checklist draft (no submission) + optional photos.
      *

@@ -129,6 +129,12 @@ class BookingAggregatorService
                 return;
             }
 
+            // From the policy cutoff onward, the Doctrine listener + HKCleaningManager
+            // are the only booking-driven creation path. Avoid bypassing status rules here.
+            if ($co->format('Y-m-d') >= HKCleaningManager::RECONCILIATION_POLICY_START) {
+                return;
+            }
+
             // Use date-only for checkout_date
             $checkoutDate = new \DateTimeImmutable($co->format('Y-m-d'));
 

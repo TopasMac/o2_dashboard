@@ -1226,7 +1226,10 @@ export default function UnitMonthlyReport() {
   const selectedHKRow = useMemo(() => {
     if (!selectedHKTransactionId) return null;
     const rows = Array.isArray(previewData?.housekeeping?.rows) ? previewData.housekeeping.rows : [];
-    return rows.find(r => Number(r?.id) === Number(selectedHKTransactionId)) || null;
+    return rows.find(r =>
+      r?.sourceType !== 'HK_CLEANING'
+      && Number(r?.id) === Number(selectedHKTransactionId)
+    ) || null;
   }, [selectedHKTransactionId, previewData]);
 
   // Sums for CLIENT logic
@@ -2317,7 +2320,7 @@ export default function UnitMonthlyReport() {
                 description: r.description || '',
                 comments: r.notes ?? null,
                 amount: Number(r.charged ?? 0),
-                source: 'HK',
+                source: r.sourceType === 'HK_CLEANING' ? 'HK_CLEANING' : 'HK',
                 categoryId: r.categoryId ?? null,
                 categoryName: r.categoryName ?? null,
               })),

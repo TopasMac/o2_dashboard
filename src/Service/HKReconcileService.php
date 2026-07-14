@@ -23,20 +23,36 @@ class HKReconcileService
     /**
      * @return array{
      *   month: string,
-     *   city: string,
+     *   city: string|null,
+     *   cities: array<int, string>,
      *   rows: array<int, array<string, mixed>>,
      *   totals: array{expected: string, charged: string, diff: string}
      * }
      */
-    public function getMonthView(string $month, string $city): array
+    public function getMonthView(string $month, string|array $city): array
     {
+        $cities = is_array($city) ? $city : [$city];
+        $cities = array_values(array_unique(array_filter(array_map(
+            static fn ($value): string => trim((string) $value),
+            $cities,
+        ))));
+        if ($cities === []) {
+            throw new \InvalidArgumentException('At least one city is required');
+        }
+
         // Normalize month to first day.
         $asOf = \DateTimeImmutable::createFromFormat('Y-m-d', $month . '-01');
         if (!$asOf) {
             throw new \InvalidArgumentException('Invalid month (YYYY-MM)');
         }
 
-        $expectedByUnitId = $this->loadExpectedCostsByUnitId($city, $asOf);
+        $expectedByUnitId = [];
+        foreach ($cities as $viewCity) {
+            $expectedByUnitId = array_replace(
+                $expectedByUnitId,
+                $this->loadExpectedCostsByUnitId($viewCity, $asOf),
+            );
+        }
 
         // Load DONE hk_cleanings rows for this month + city.
         // NOTE: Reconciliation is now a view/editor over hk_cleanings (single source of truth).
@@ -44,7 +60,13 @@ class HKReconcileService
         $end   = $asOf->format('Y-m-t');
 
         // Row-level note data (optional): hk_cleaning_id => ['resolution' => ?, 'status' => ?]
-        $rowNotesByCleaningId = $this->loadRowNoteDataByCleaningId($city, $month);
+        $rowNotesByCleaningId = [];
+        foreach ($cities as $viewCity) {
+            $rowNotesByCleaningId = array_replace(
+                $rowNotesByCleaningId,
+                $this->loadRowNoteDataByCleaningId($viewCity, $month),
+            );
+        }
 
         /** @var HKCleanings[] $cleanings */
         $cleanings = $this->em->createQueryBuilder()
@@ -52,10 +74,10 @@ class HKReconcileService
             ->from(HKCleanings::class, 'hc')
             ->leftJoin('hc.unit', 'u')
             // city may be stored on hk_cleanings or unit; prefer unit when present
-            ->andWhere('COALESCE(u.city, hc.city) = :c')
+            ->andWhere('COALESCE(u.city, hc.city) IN (:cities)')
             ->andWhere('hc.checkoutDate BETWEEN :d1 AND :d2')
             ->andWhere('LOWER(COALESCE(hc.status, \'\')) = \'done\'')
-            ->setParameter('c', $city)
+            ->setParameter('cities', $cities)
             ->setParameter('d1', new \DateTimeImmutable($start))
             ->setParameter('d2', new \DateTimeImmutable($end))
             ->orderBy('hc.checkoutDate', 'ASC')
@@ -69,6 +91,10 @@ class HKReconcileService
         $rows = [];
         foreach ($cleanings as $hc) {
             $unitId = $hc->getUnit()?->getId();
+            $rowCity = $hc->getUnit()?->getCity();
+            if (($rowCity === null || $rowCity === '') && method_exists($hc, 'getCity')) {
+                $rowCity = $hc->getCity();
+            }
 
             $expected = ($unitId && array_key_exists($unitId, $expectedByUnitId))
                 ? $expectedByUnitId[$unitId]
@@ -104,6 +130,7 @@ class HKReconcileService
                 // core display fields
                 'unit_id'       => $unitId,
                 'unit_name'     => $hc->getUnit()?->getUnitName(),
+                'city'          => $rowCity,
                 'service_date'  => $serviceDate?->format('Y-m-d'),
                 'cleaning_type' => method_exists($hc, 'getCleaningType') ? $hc->getCleaningType() : null,
 
@@ -134,7 +161,8 @@ class HKReconcileService
 
         return [
             'month' => $month,
-            'city' => $city,
+            'city' => count($cities) === 1 ? $cities[0] : null,
+            'cities' => $cities,
             'rows' => $rows,
             'totals' => [
                 'expected' => $this->fmt2(0.0),

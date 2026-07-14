@@ -104,7 +104,11 @@ class O2MonthlyResultsController extends AbstractController
             $hrAmount = $hrSalary + $hrAdvances;
 
             // Playa cleaning results (fixed HR cost for Cleaners only; salary + deduction; ignore advances)
-            $playaCharged = 0.0;
+            $playaCharged = $hkSvc->getCompletedCleaningChargesByMonth(
+                $yearOut,
+                $monthOut,
+                'Playa del Carmen'
+            );
             $playaLaundry = 0.0;
             $playaExternalHrCost = 0.0;
             foreach ($rows as $r) {
@@ -113,15 +117,12 @@ class O2MonthlyResultsController extends AbstractController
 
                 $catId = (int)($r['category_id'] ?? 0);
                 if ($isPlaya) {
-                    if ($catId === 7 || $catId === 8) {
-                        $playaCharged += (float)($r['charged'] ?? 0);
-                    }
                     if ($catId === 14) {
                         $playaLaundry += (float)($r['paid'] ?? 0);
                     }
-                    if ($catId === 24 && ($r['cost_centre'] ?? '') === 'HK_Playa') {
-                        $playaExternalHrCost += (float)($r['paid'] ?? 0);
-                    }
+                }
+                if ($catId === 24 && ($r['cost_centre'] ?? '') === 'HK_Playa') {
+                    $playaExternalHrCost += (float)($r['paid'] ?? 0);
                 }
             }
 
@@ -156,6 +157,30 @@ class O2MonthlyResultsController extends AbstractController
             }
             $tulumResult = $tulumCharged - $tulumPaid - $tulumExternalHrCost;
 
+            $checkoutCleaningTotals = $hkSvc->getCompletedCleaningTotalsByTypeMonth(
+                $yearOut,
+                $monthOut,
+                'checkout'
+            );
+
+            $ownerCleaningTotals = $hkSvc->getCompletedCleaningTotalsByTypeMonth(
+                $yearOut,
+                $monthOut,
+                'owner'
+            );
+
+            $midStayCleaningTotals = $hkSvc->getCompletedCleaningTotalsByTypeMonth(
+                $yearOut,
+                $monthOut,
+                'Mid-stay'
+            );
+
+            $refreshCleaningTotals = $hkSvc->getCompletedCleaningTotalsByTypeMonth(
+                $yearOut,
+                $monthOut,
+                'Refresh'
+            );
+
             return [
                 'data' => $rows,
                 'hr' => [
@@ -175,6 +200,16 @@ class O2MonthlyResultsController extends AbstractController
                     'hr_amount' => round($hrAmount, 2),
                     'hr_salary' => round($hrSalary, 2),
                     'hr_advances' => round($hrAdvances, 2),
+                    'cleanings' => [
+                        'checkout' => round($checkoutCleaningTotals['charged'], 2),
+                        'checkout_paid' => round($checkoutCleaningTotals['paid'], 2),
+                        'owner' => round($ownerCleaningTotals['charged'], 2),
+                        'owner_paid' => round($ownerCleaningTotals['paid'], 2),
+                        'mid_stay' => round($midStayCleaningTotals['charged'], 2),
+                        'mid_stay_paid' => round($midStayCleaningTotals['paid'], 2),
+                        'refresh' => round($refreshCleaningTotals['charged'], 2),
+                        'refresh_paid' => round($refreshCleaningTotals['paid'], 2),
+                    ],
                     'playa_cleanings' => [
                         'charged' => round($playaCharged, 2),
                         'laundry' => round($playaLaundry, 2),

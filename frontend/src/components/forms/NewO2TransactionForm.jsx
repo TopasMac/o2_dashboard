@@ -467,7 +467,7 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, width: '100%', maxWidth: '640px', minWidth: 0 }}>
       {/* Cost Centre */}
       <div className="form-row" style={{ minWidth: 0 }}>
-        <label>Cost Centre</label>
+        <label>Centre</label>
         <select
           name="costCentre"
           value={formData.costCentre}

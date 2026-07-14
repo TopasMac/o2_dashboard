@@ -13,6 +13,7 @@ import {
   Divider,
   FormControl,
   InputLabel,
+  InputAdornment,
   MenuItem,
   Paper,
   Popover,
@@ -93,17 +94,42 @@ const normalizeBookingField = (b, keys, fallback = '') => {
   return fallback;
 };
 
+const RECON_CITIES = ['Tulum', 'Playa del Carmen'];
+const PLAYA_LAUNDRY_RATE_PER_KG = 18;
+
+const isPlayaCleaning = (row) =>
+  String(row?.city ?? row?.unit_city ?? row?.unitCity ?? '')
+    .toLowerCase()
+    .includes('playa');
+
+const laundryWeightFromCost = (value) => {
+  const raw = (value ?? '').toString().trim();
+  if (raw === '') return '';
+  const cost = Number(raw.replace(',', '.'));
+  if (!Number.isFinite(cost)) return '';
+  return String(Number((cost / PLAYA_LAUNDRY_RATE_PER_KG).toFixed(6)));
+};
+
+const laundryCostFromWeight = (value) => {
+  const raw = (value ?? '').toString().trim();
+  if (raw === '') return '';
+  const weight = Number(raw.replace(',', '.'));
+  if (!Number.isFinite(weight) || weight < 0) return null;
+  return (weight * PLAYA_LAUNDRY_RATE_PER_KG).toFixed(2);
+};
 
 export default function HKCleaningsRecon() {
   const [month, setMonth] = useState(ymNow());
-  const city = 'Tulum';
+  const city = RECON_CITIES[0];
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+  const [savingStatusRowId, setSavingStatusRowId] = useState(null);
 
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [editingCleaning, setEditingCleaning] = useState(null);
+  const [cityFilter, setCityFilter] = useState(''); // '' = All
   const [statusFilter, setStatusFilter] = useState(''); // '' = All
 
   const [unitFilter, setUnitFilter] = useState(null); // string unit_name or null
@@ -115,6 +141,7 @@ export default function HKCleaningsRecon() {
   const [monthNotesAllDone, setMonthNotesAllDone] = useState(false);
   const [monthNotesOpenCount, setMonthNotesOpenCount] = useState(0);
   const [monthNotesFocusCleaningId, setMonthNotesFocusCleaningId] = useState(null);
+  const [monthNotesCity, setMonthNotesCity] = useState(city);
 
   const [rowNotesByCleaningId, setRowNotesByCleaningId] = useState({}); // { [hk_cleaning_id]: resolution }
 
@@ -335,6 +362,10 @@ export default function HKCleaningsRecon() {
   const rowsToRender = useMemo(() => {
     let out = rows;
 
+    if (cityFilter) {
+      out = out.filter((r) => (r.city ?? '').toString() === cityFilter);
+    }
+
     if (statusFilter) {
       out = out.filter((r) => {
         const s = normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending';
@@ -352,7 +383,7 @@ export default function HKCleaningsRecon() {
     }
 
     return out;
-  }, [rows, statusFilter, unitFilter, overExpectedOnly]);
+  }, [rows, cityFilter, statusFilter, unitFilter, overExpectedOnly]);
 
   const canSave = useMemo(() => rows.length > 0, [rows.length]);
 
@@ -397,7 +428,7 @@ export default function HKCleaningsRecon() {
     setLoading(true);
     setErr(null);
     try {
-      const q = new URLSearchParams({ month, city }).toString();
+      const q = new URLSearchParams({ month, cities: RECON_CITIES.join(',') }).toString();
       const res = await api.get(`/api/hk-reconcile?${q}`);
       const json = res?.data;
       const arr = Array.isArray(json?.data) ? json.data : [];
@@ -407,9 +438,11 @@ export default function HKCleaningsRecon() {
           const cc = (r?.cleaning_cost ?? '').toString();
           const lc = (r?.laundry_cost ?? '').toString();
           const rs = normalizeReportStatus(r?.report_status ?? r?.reportStatus) || 'pending';
+          const laundryWeight = isPlayaCleaning(r) ? laundryWeightFromCost(lc) : '';
 
           return {
             ...r,
+            __laundryWeight: laundryWeight,
             __notesSaved: n,
             __notesDirty: false,
             __cleaningCostSaved: cc,
@@ -424,15 +457,21 @@ export default function HKCleaningsRecon() {
     } finally {
       setLoading(false);
     }
-  }, [month, city]);
+  }, [month]);
 
   const refreshMonthNotesSummary = useCallback(async () => {
     setMonthNotesLoading(true);
     try {
-      const q = new URLSearchParams({ month, city }).toString();
-      const res = await api.get(`/api/hk-reconcile/notes?${q}`);
-      const json = res?.data;
-      const items = Array.isArray(json?.data) ? json.data : [];
+      const responses = await Promise.all(
+        RECON_CITIES.map((noteCity) => {
+          const q = new URLSearchParams({ month, city: noteCity }).toString();
+          return api.get(`/api/hk-reconcile/notes?${q}`);
+        }),
+      );
+      const items = responses.flatMap((res) => {
+        const data = res?.data?.data;
+        return Array.isArray(data) ? data : [];
+      });
       // Build a quick lookup of resolution text per hk_cleaning_id
       // If multiple notes exist for the same cleaning, prefer the most recent (last in list)
       const byId = {};
@@ -463,7 +502,7 @@ export default function HKCleaningsRecon() {
     } finally {
       setMonthNotesLoading(false);
     }
-  }, [month, city]);
+  }, [month]);
 
   useEffect(() => {
     load();
@@ -503,12 +542,6 @@ export default function HKCleaningsRecon() {
   };
 
 
-  const isNonEmpty = (v) => {
-    if (v === null || v === undefined) return false;
-    const s = String(v).trim();
-    return s !== '' && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined';
-  };
-
   const normalizeNoteStatus = (v) => {
     const raw = (v ?? '').toString().toLowerCase().trim();
     if (raw === 'open') return 'open';
@@ -521,17 +554,7 @@ export default function HKCleaningsRecon() {
     // Highest precedence: open notes => needs_review
     if (noteStatus === 'open') return 'needs_review';
 
-    const hasPaid = isNonEmpty(row.cleaning_cost);
-    const hasLaundry = isNonEmpty(row.laundry_cost);
-    const hasCosts = hasPaid && hasLaundry;
-
-    const inlineNotesEmpty = ((row.notes ?? '').toString().trim() === '');
-
-    if (hasCosts && (inlineNotesEmpty || noteStatus === 'done')) {
-      return 'reported';
-    }
-
-    // otherwise keep current
+    // Reporting is explicit: entering costs alone must not mark the row as reported.
     return normalizeReportStatus(row.report_status ?? row.reportStatus) || 'pending';
   };
 
@@ -553,8 +576,10 @@ export default function HKCleaningsRecon() {
 
     const unitId = row.unit_id ?? row.unitId ?? null;
 
+    const rowCity = row.city || city;
+
     await api.post('/api/hk-reconcile/notes', {
-      city,
+      city: rowCity,
       month,
       hk_cleaning_id: Number(hkCleaningId),
       unit_id: unitId != null ? Number(unitId) : null,
@@ -571,13 +596,21 @@ export default function HKCleaningsRecon() {
       if (s === '' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') return '0';
       return s;
     };
+    const rowCity = row.city || city;
+    const laundryCost = isPlayaCleaning(row)
+      ? laundryCostFromWeight(row.__laundryWeight ?? laundryWeightFromCost(row.laundry_cost))
+      : row.laundry_cost;
+    if (laundryCost === null) {
+      throw new Error('Laundry weight must be a valid non-negative number.');
+    }
+
     const payload = {
       month,
-      city,
+      city: rowCity,
       unit_id: Number(row.unit_id),
       service_date: row.service_date,
       cleaning_cost: toMoneyStr(row.cleaning_cost),
-      laundry_cost: toMoneyStr(row.laundry_cost),
+      laundry_cost: toMoneyStr(laundryCost),
       report_status: deriveReportStatusForSave(row) || null,
       notes: row.notes ?? null,
     };
@@ -589,7 +622,7 @@ export default function HKCleaningsRecon() {
       throw new Error('Service date is required');
     }
 
-    const q = new URLSearchParams({ month, city }).toString();
+    const q = new URLSearchParams({ month, city: rowCity }).toString();
     if (row.__isNew) {
       await api.post(`/api/hk-reconcile?${q}`, payload);
       await load();
@@ -620,8 +653,9 @@ export default function HKCleaningsRecon() {
     updateRow(row.id, {
       // reflect derived status in UI immediately
       report_status: derivedStatus,
+      laundry_cost: laundryCost,
       __cleaningCostSaved: (row.cleaning_cost ?? '').toString(),
-      __laundryCostSaved: (row.laundry_cost ?? '').toString(),
+      __laundryCostSaved: (laundryCost ?? '').toString(),
       __reportStatusSaved: derivedStatus,
       __rowDirty: false,
     });
@@ -629,12 +663,33 @@ export default function HKCleaningsRecon() {
     await load();
   };
 
+  const changeReportStatus = async (row, reportStatus) => {
+    const nextRow = { ...row, report_status: reportStatus };
+    updateRow(row.id, { report_status: reportStatus });
+    setSavingStatusRowId(row.id);
+    setErr(null);
+
+    try {
+      await saveRow(nextRow);
+    } catch (e) {
+      const message = e?.response?.data?.message
+        || e?.response?.data?.error
+        || e?.message
+        || String(e);
+      await load();
+      setErr(message);
+    } finally {
+      setSavingStatusRowId(null);
+    }
+  };
+
   const deleteRow = async (row) => {
     if (row.__isNew) {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       return;
     }
-    const q = new URLSearchParams({ month, city }).toString();
+    const rowCity = row.city || city;
+    const q = new URLSearchParams({ month, city: rowCity }).toString();
     await api.delete(`/api/hk-reconcile/${row.id}?${q}`);
     await load();
   };
@@ -674,6 +729,25 @@ export default function HKCleaningsRecon() {
               size="small"
               sx={{ width: 180 }}
             />
+
+            <FormControl size="small" sx={{ width: 180 }}>
+              <InputLabel id="hk-recon-city">City</InputLabel>
+              <Select
+                labelId="hk-recon-city"
+                value={cityFilter}
+                label="City"
+                onChange={(e) => setCityFilter(e.target.value)}
+              >
+                <MenuItem value="">
+                  <Typography variant="body2" color="text.secondary">All</Typography>
+                </MenuItem>
+                {RECON_CITIES.map((cityOption) => (
+                  <MenuItem key={cityOption} value={cityOption}>
+                    <Typography variant="body2">{cityOption}</Typography>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             <FormControl size="small" sx={{ width: 160 }}>
               <InputLabel id="hk-recon-status">Status</InputLabel>
@@ -739,6 +813,7 @@ export default function HKCleaningsRecon() {
               variant={monthNotesHasValue ? 'contained' : 'outlined'}
               size="small"
               onClick={async () => {
+                setMonthNotesCity(city);
                 await refreshMonthNotesSummary();
                 setMonthNotesOpen(true);
               }}
@@ -932,6 +1007,7 @@ export default function HKCleaningsRecon() {
                 const formattedDate = r.service_date
                   ? r.service_date.split('-').reverse().join('-')
                   : '—';
+                const playaLaundryByWeight = isPlayaCleaning(r);
 
                 // Compute charged, total, diff, and color
                 const chargedVal = Number(r.charged_cost ?? (dirtyTotal ? total : (r.total_cost ?? total)) ?? 0);
@@ -1081,11 +1157,31 @@ export default function HKCleaningsRecon() {
                     {/* Laundry */}
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'center' }}>
                       <TextField
-                        value={r.laundry_cost ?? ''}
-                        onChange={(e) => updateRow(r.id, { laundry_cost: e.target.value })}
+                        value={playaLaundryByWeight
+                          ? (r.__laundryWeight ?? laundryWeightFromCost(r.laundry_cost))
+                          : (r.laundry_cost ?? '')}
+                        onChange={(e) => {
+                          if (playaLaundryByWeight) {
+                            updateRow(r.id, { __laundryWeight: e.target.value });
+                          } else {
+                            updateRow(r.id, { laundry_cost: e.target.value });
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!playaLaundryByWeight) return;
+                          const laundryCost = laundryCostFromWeight(r.__laundryWeight);
+                          if (laundryCost === null) {
+                            setErr('Laundry weight must be a valid non-negative number.');
+                            return;
+                          }
+                          updateRow(r.id, { laundry_cost: laundryCost });
+                        }}
                         size="small"
                         variant="outlined"
-                        sx={{ width: 96, mx: 'auto' }}
+                        sx={{ width: playaLaundryByWeight ? 110 : 96, mx: 'auto' }}
+                        InputProps={playaLaundryByWeight ? {
+                          endAdornment: <InputAdornment position="end">kg</InputAdornment>,
+                        } : undefined}
                         inputProps={{ inputMode: 'decimal', style: { textAlign: 'center' } }}
                       />
                     </TableCell>
@@ -1157,6 +1253,7 @@ export default function HKCleaningsRecon() {
                               InputProps={{ readOnly: true }}
                               onClick={async () => {
                                 setMonthNotesFocusCleaningId(hkId ? Number(hkId) : null);
+                                setMonthNotesCity(r.city || city);
                                 await refreshMonthNotesSummary();
                                 setMonthNotesOpen(true);
                               }}
@@ -1182,7 +1279,8 @@ export default function HKCleaningsRecon() {
                         <Select
                           size="small"
                           value={normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending'}
-                          onChange={(e) => updateRow(r.id, { report_status: e.target.value })}
+                          onChange={(e) => changeReportStatus(r, e.target.value)}
+                          disabled={loading || savingStatusRowId === r.id}
                           sx={{
                             width: 110,
                             color: statusColor(normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending'),
@@ -1254,10 +1352,11 @@ export default function HKCleaningsRecon() {
               onClose={async () => {
                 setMonthNotesOpen(false);
                 setMonthNotesFocusCleaningId(null);
+                setMonthNotesCity(city);
                 await refreshMonthNotesSummary();
               }}
               title="Month notes"
-              city={city}
+              city={monthNotesCity}
               month={month}
               focusHkCleaningId={monthNotesFocusCleaningId}
               onChanged={async () => {

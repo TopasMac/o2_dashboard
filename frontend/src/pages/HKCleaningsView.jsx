@@ -464,7 +464,11 @@ const HKCleaningsView = () => {
       accessor: 'status',
       width: 110,
       cellStyle: { py: 1, px: 1.5, maxWidth: 110 },
-      render: (value) => {
+      render: (value, row) => {
+        const reportStatus = String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim();
+        if (reportStatus === 'reported') {
+          return <Box component="span" sx={{ color: 'primary.main' }}>Reported</Box>;
+        }
         if (!value) return '';
         const v = String(value).toLowerCase();
         if (v === 'pending') {
@@ -478,14 +482,21 @@ const HKCleaningsView = () => {
         }
         return value;
       },
-      filterType: 'select',
-      filterOptions: [
-        { label: 'All', value: '' },
-        { label: 'Pending', value: 'pending' },
-        { label: 'Done', value: 'done' },
-        { label: 'Cancelled', value: 'cancelled' },
-      ],
-      inlineFilter: true,
+      filter: {
+        type: 'select',
+        inline: true,
+        options: [
+          { label: 'All', value: '' },
+          { label: 'Pending', value: 'pending' },
+          { label: 'Done', value: 'done' },
+          { label: 'Reported', value: 'reported' },
+          { label: 'Cancelled', value: 'cancelled' },
+        ],
+        valueAccessor: (row) => {
+          const reportStatus = String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim();
+          return reportStatus === 'reported' ? 'reported' : row?.status;
+        },
+      },
     },
     {
       header: 'Type',
@@ -547,13 +558,8 @@ const HKCleaningsView = () => {
 
         const cityRaw = String(row?.unit_city || row?.unitCity || row?.city || '').toLowerCase();
 
-        // 1) Playa del Carmen units: Cost = null (render blank)
-        if (cityRaw.includes('playa')) {
-          return '';
-        }
-
-        // 2) Tulum units: Cost depends on report status
-        if (cityRaw.includes('tulum')) {
+        // Tulum and Playa del Carmen units: Cost depends on report status
+        if (cityRaw.includes('tulum') || cityRaw.includes('playa')) {
           const reportStatusRaw = String(row?.report_status || row?.reportStatus || '').toLowerCase();
 
           // Pending / Needs review -> cleaning_cost

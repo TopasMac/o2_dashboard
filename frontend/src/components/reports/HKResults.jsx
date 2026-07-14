@@ -309,6 +309,16 @@ export default function HKResults({
       const catName = (r.category_name != null && String(r.category_name).trim() !== '')
         ? String(r.category_name)
         : (catId && categoryIdToName[catId] ? categoryIdToName[catId] : null);
+      const isPlayaExternalHr = catId === '24' && (r.cost_centre || '') === 'HK_Playa';
+      const isHiddenCleaningCategory = catId === '8' || catId === '14';
+      if (isPlayaExternalHr || isHiddenCleaningCategory) {
+        const paid = Number(r.paid || 0) || 0;
+        const charged = Number(r.charged || 0) || 0;
+        out.totals.paid += paid;
+        out.totals.charged += charged;
+        out.totals.rows += 1;
+        continue;
+      }
 
       const cat = catId ? `id:${catId}` : 'uncategorized';
 
@@ -369,6 +379,9 @@ export default function HKResults({
       const isHr = r?._kind === 'hr';
       if (isHr) continue;
       const catId = r.category_id != null && r.category_id !== '' ? String(r.category_id) : null;
+      const isPlayaExternalHr = catId === '24' && (r.cost_centre || '') === 'HK_Playa';
+      const isHiddenCleaningCategory = catId === '8' || catId === '14';
+      if (isPlayaExternalHr || isHiddenCleaningCategory) continue;
       const cat = catId ? `id:${catId}` : 'uncategorized';
       if (!out[cat]) out[cat] = [];
       out[cat].push(r);
@@ -378,6 +391,18 @@ export default function HKResults({
 
   // ===== Helpers to read server-side summary blocks =====
   const serverSummary = report?.summary && typeof report.summary === 'object' ? report.summary : null;
+  const playaExternalHrCost = Number(serverSummary?.playa_cleanings?.external_hr_cost ?? 0) || 0;
+  const checkoutCleaningCharged = Number(serverSummary?.cleanings?.checkout ?? 0) || 0;
+  const checkoutCleaningPaid = Number(serverSummary?.cleanings?.checkout_paid ?? 0) || 0;
+  const ownerCleaningCharged = Number(serverSummary?.cleanings?.owner ?? 0) || 0;
+  const ownerCleaningPaid = Number(serverSummary?.cleanings?.owner_paid ?? 0) || 0;
+  const midStayCleaningCharged = Number(serverSummary?.cleanings?.mid_stay ?? 0) || 0;
+  const midStayCleaningPaid = Number(serverSummary?.cleanings?.mid_stay_paid ?? 0) || 0;
+  const refreshCleaningCharged = Number(serverSummary?.cleanings?.refresh ?? 0) || 0;
+  const refreshCleaningPaid = Number(serverSummary?.cleanings?.refresh_paid ?? 0) || 0;
+  const cleaningsChargedTotal = checkoutCleaningCharged + ownerCleaningCharged + midStayCleaningCharged + refreshCleaningCharged;
+  const cleaningsPaidTotal = checkoutCleaningPaid + ownerCleaningPaid + midStayCleaningPaid + refreshCleaningPaid;
+  const cleaningsBalance = cleaningsChargedTotal - cleaningsPaidTotal;
   const serverCleaningSummary = report?.cleaning_summary && typeof report.cleaning_summary === 'object' ? report.cleaning_summary : null;
   const serverByCity = Array.isArray(report?.by_city) ? report.by_city : [];
   const monthResultCityOptions = useMemo(() => {
@@ -804,13 +829,14 @@ export default function HKResults({
                     </TableRow>
 
                     {/* HR (nested): HR expands to Salaries/Advances, each expands to employees */}
-                    {hrAgg.totalRows > 0 && (() => {
+                    {(hrAgg.totalRows > 0 || playaExternalHrCost !== 0) && (() => {
                       const hrKey = 'cat::hr';
                       const openHr = !!expanded[hrKey];
                       const salKey = 'cat::hr:salary';
                       const advKey = 'cat::hr:advance';
                       const openSal = !!expanded[salKey];
                       const openAdv = !!expanded[advKey];
+                      const hrTotalPaid = hrAgg.totalPaid + playaExternalHrCost;
 
                       return (
                         <React.Fragment>
@@ -824,13 +850,13 @@ export default function HKResults({
                               HR
                             </TableCell>
                             <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                              {fmtMoney(hrAgg.totalPaid)}
+                              {fmtMoney(hrTotalPaid)}
                             </TableCell>
                             <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
                               {fmtMoney(0)}
                             </TableCell>
                             <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
-                              {fmtMoney(0 - (hrAgg.totalPaid || 0))}
+                              {fmtMoney(0 - hrTotalPaid)}
                             </TableCell>
                           </TableRow>
 
@@ -915,6 +941,89 @@ export default function HKResults({
                                   </TableCell>
                                 </TableRow>
                               ))}
+
+                              {/* External */}
+                              <TableRow>
+                                <TableCell sx={{ borderBottom: 'none', pl: 6, color: 'text.secondary' }}>
+                                  External
+                                </TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(playaExternalHrCost)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(0)}</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(0 - playaExternalHrCost)}</TableCell>
+                              </TableRow>
+                            </>
+                          )}
+                        </React.Fragment>
+                      );
+                    })()}
+
+                    {/* Cleanings */}
+                    {(() => {
+                      const cleaningsKey = 'cat::cleanings';
+                      const openCleanings = !!expanded[cleaningsKey];
+                      return (
+                        <React.Fragment>
+                          <TableRow hover onClick={() => toggleExpanded(cleaningsKey)} sx={{ cursor: 'pointer' }}>
+                            <TableCell sx={{ borderBottom: 'none', pl: 2, color: 'text.secondary' }}>
+                              {openCleanings ? (
+                                <ExpandLessIcon fontSize="small" style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                              ) : (
+                                <ExpandMoreIcon fontSize="small" style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                              )}
+                              Limpezas
+                            </TableCell>
+                            <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(cleaningsPaidTotal)}</TableCell>
+                            <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(cleaningsChargedTotal)}</TableCell>
+                            <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(cleaningsBalance)}</TableCell>
+                          </TableRow>
+
+                          {openCleanings && (
+                            <>
+                              <TableRow>
+                                <TableCell sx={{ borderBottom: 'none', pl: 6, color: 'text.secondary' }}>CheckOut</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(checkoutCleaningPaid)}</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(checkoutCleaningCharged)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(checkoutCleaningCharged - checkoutCleaningPaid)}
+                                </TableCell>
+                              </TableRow>
+
+                              <TableRow>
+                                <TableCell sx={{ borderBottom: 'none', pl: 6, color: 'text.secondary' }}>Client</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(ownerCleaningPaid)}</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(ownerCleaningCharged)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(ownerCleaningCharged - ownerCleaningPaid)}
+                                </TableCell>
+                              </TableRow>
+
+                              <TableRow>
+                                <TableCell sx={{ borderBottom: 'none', pl: 6, color: 'text.secondary' }}>Mid-Stay</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(midStayCleaningPaid)}</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(midStayCleaningCharged)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(midStayCleaningCharged - midStayCleaningPaid)}
+                                </TableCell>
+                              </TableRow>
+
+                              <TableRow>
+                                <TableCell sx={{ borderBottom: 'none', pl: 6, color: 'text.secondary' }}>Refresh</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>{fmtMoney(refreshCleaningPaid)}</TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(refreshCleaningCharged)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ borderBottom: 'none', color: 'text.secondary' }}>
+                                  {fmtMoney(refreshCleaningCharged - refreshCleaningPaid)}
+                                </TableCell>
+                              </TableRow>
                             </>
                           )}
                         </React.Fragment>
@@ -1028,7 +1137,7 @@ export default function HKResults({
                     </TableRow>
                     <TableRow>
                       <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
-                        Charged (cat 7 + 8)
+                        Charged
                       </TableCell>
                       <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
                         {fmtMoney(serverSummary?.playa_cleanings?.charged ?? 0)}

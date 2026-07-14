@@ -73,6 +73,57 @@ class HKMonthlySummaryService
         return $this->db->fetchAllAssociative($sql, $params);
     }
 
+    /**
+     * Sum the amount charged for completed cleanings in a city for a month.
+     *
+     * Reported cleanings are included because reporting does not replace the
+     * underlying Done cleaning status.
+     */
+    public function getCompletedCleaningChargesByMonth(int $year, int $month, string $city): float
+    {
+        $start = sprintf('%04d-%02d-01', $year, $month);
+
+        $sql = <<<'SQL'
+            SELECT COALESCE(SUM(COALESCE(hc.o2_collected_fee, 0)), 0)
+            FROM hk_cleanings hc
+            INNER JOIN unit u ON u.id = hc.unit_id
+            WHERE DATE(hc.checkout_date) BETWEEN :start AND LAST_DAY(:start)
+              AND LOWER(TRIM(COALESCE(u.city, ''))) = LOWER(:city)
+              AND LOWER(TRIM(COALESCE(hc.status, ''))) = 'done'
+              AND UPPER(TRIM(COALESCE(hc.bill_to, ''))) IN ('OWNERS2', 'CLIENT', 'GUEST')
+        SQL;
+
+        return (float) $this->db->fetchOne($sql, ['start' => $start, 'city' => $city]);
+    }
+
+    /**
+     * Return completed cleaning charges and costs for one cleaning type in a month.
+     */
+    public function getCompletedCleaningTotalsByTypeMonth(int $year, int $month, string $cleaningType): array
+    {
+        $start = sprintf('%04d-%02d-01', $year, $month);
+
+        $sql = <<<'SQL'
+            SELECT
+              COALESCE(SUM(COALESCE(hc.o2_collected_fee, 0)), 0) AS charged,
+              COALESCE(SUM(COALESCE(hc.cleaning_cost, 0) + COALESCE(hc.laundry_cost, 0)), 0) AS paid
+            FROM hk_cleanings hc
+            WHERE DATE(hc.checkout_date) BETWEEN :start AND LAST_DAY(:start)
+              AND LOWER(TRIM(COALESCE(hc.status, ''))) = 'done'
+              AND LOWER(TRIM(COALESCE(hc.cleaning_type, ''))) = LOWER(:cleaning_type)
+        SQL;
+
+        $row = $this->db->fetchAssociative($sql, [
+            'start' => $start,
+            'cleaning_type' => $cleaningType,
+        ]);
+
+        return [
+            'charged' => (float) ($row['charged'] ?? 0),
+            'paid' => (float) ($row['paid'] ?? 0),
+        ];
+    }
+
 
     /**
      * Return HR ledger rows (salary + advance, optionally deduction) for HK cost centres for a month.

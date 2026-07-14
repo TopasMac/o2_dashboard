@@ -27,8 +27,13 @@ class BookingStatusUpdaterService
             // Respect explicit Cancelled/Canceled first
             $currentStatus = strtolower((string)$booking->getStatus());
             if (in_array($currentStatus, ['cancelled','canceled'], true)) {
-                // Sync housekeeping row status to cancelled when a booking is cancelled
-                $this->syncHousekeepingCancelled($booking);
+                $checkOut = method_exists($booking, 'getCheckOut') ? $booking->getCheckOut() : null;
+                if ($checkOut instanceof \DateTimeInterface && $this->hkCleaningManager->usesReconciliationPolicy($checkOut)) {
+                    $this->hkCleaningManager->syncCheckoutCleaningForBooking($booking);
+                } else {
+                    // Preserve the legacy cancellation behavior before the policy cutoff.
+                    $this->syncHousekeepingCancelled($booking);
+                }
                 // Skip further status recomputation for cancelled bookings
                 continue;
             }
@@ -63,7 +68,10 @@ class BookingStatusUpdaterService
 
             // If a non-cancelled reservation has checked out, mark the HK cleaning as done (Playa + Tulum).
             $nowCancun = new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun'));
-            if ($checkOut instanceof \DateTimeInterface && $checkOut < $nowCancun) {
+            if ($checkOut instanceof \DateTimeInterface
+                && !$this->hkCleaningManager->usesReconciliationPolicy($checkOut)
+                && $checkOut < $nowCancun
+            ) {
                 $this->syncHousekeepingDoneForPlayaOrTulum($booking);
             }
 
@@ -79,6 +87,10 @@ class BookingStatusUpdaterService
             if ($booking->getStatus() !== $status) {
                 $booking->setStatus($status);
                 $this->entityManager->persist($booking);
+            }
+
+            if ($checkOut instanceof \DateTimeInterface && $this->hkCleaningManager->usesReconciliationPolicy($checkOut)) {
+                $this->hkCleaningManager->syncCheckoutCleaningForBooking($booking);
             }
         }
 

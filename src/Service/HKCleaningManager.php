@@ -21,6 +21,8 @@ use App\Entity\AllBookings;
 
 class HKCleaningManager
 {
+    public const RECONCILIATION_POLICY_START = HKCleanings::RECONCILIATION_POLICY_START;
+
     private EntityManagerInterface $em;
     private Connection $conn;
     private HKCleaningRateResolver $rateResolver;
@@ -103,6 +105,13 @@ class HKCleaningManager
             return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
         }
 
+        $checkoutDt = $checkOut instanceof \DateTimeImmutable
+            ? $checkOut
+            : \DateTimeImmutable::createFromInterface($checkOut);
+        if (!$this->usesReconciliationPolicy($checkoutDt)) {
+            return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
+
         // Resolve unit + city (prefer relation; fall back to scalar fields)
         $unit = method_exists($booking, 'getUnit') ? $booking->getUnit() : null;
         $unitId = null;
@@ -122,6 +131,37 @@ class HKCleaningManager
 
         if (!$unitId) {
             return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
+        if (!$unit instanceof Unit) {
+            $unit = $this->em->getRepository(Unit::class)->find($unitId);
+            if (!$unit instanceof Unit) {
+                return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+            }
+            $cityRaw = (string)($unit->getCity() ?? $cityRaw);
+        }
+
+        $bookingStatus = strtolower(trim((string)(
+            method_exists($booking, 'getStatus') ? ($booking->getStatus() ?? '') : ''
+        )));
+        $reservationCode = method_exists($booking, 'getConfirmationCode') ? $booking->getConfirmationCode() : null;
+        if (($reservationCode === null || $reservationCode === '') && method_exists($booking, 'getReservationCode')) {
+            $reservationCode = $booking->getReservationCode();
+        }
+
+        if (in_array($bookingStatus, ['cancelled', 'canceled'], true)) {
+            $removed = $this->removeCleaningsForCancelledBooking(
+                $booking,
+                $unit,
+                $checkoutDt,
+                $reservationCode,
+            );
+
+            return [
+                'created' => 0,
+                'skipped' => $removed > 0 ? 0 : 1,
+                'removed' => $removed,
+                'ledgerCreated' => 0,
+            ];
         }
 
         // Normalize + validate guest type
@@ -147,16 +187,40 @@ class HKCleaningManager
         $guestType = $guestTypeRaw;
 
         $city = $this->normalizeCity($cityRaw);
-        $checkoutYmd = ($checkOut instanceof \DateTimeImmutable)
-            ? $checkOut->format('Y-m-d')
-            : \DateTimeImmutable::createFromInterface($checkOut)->format('Y-m-d');
+        $checkoutYmd = $checkoutDt->format('Y-m-d');
 
-        $reservationCode = method_exists($booking, 'getConfirmationCode') ? $booking->getConfirmationCode() : null;
         $notes = method_exists($booking, 'getNotes') ? (string)($booking->getNotes() ?? '') : '';
+
+        if (!in_array($bookingStatus, ['upcoming', 'ongoing', 'past'], true)) {
+            return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
 
         // Explicit defaults (bulkCreate also defaults these, but we send them to keep behavior consistent)
         $billTo = $this->billToFromGuestType($guestType);
         $costCentre = $this->costCentreFromCity($city);
+        $cleaningType = $guestType === 'owner' ? HKCleanings::TYPE_OWNER : HKCleanings::TYPE_CHECKOUT;
+
+        $cleaningStatus = $bookingStatus === 'past'
+            ? HKCleanings::STATUS_DONE
+            : HKCleanings::STATUS_PENDING;
+        $existingBeforeSync = $this->findBookingCleaning(
+            $booking,
+            $unit,
+            $checkoutDt,
+            $cleaningType,
+            $reservationCode,
+        );
+        $resetLegacyAutoReported = false;
+        if ($cleaningStatus === HKCleanings::STATUS_DONE && $existingBeforeSync instanceof HKCleanings) {
+            $existingCity = $this->normalizeCity((string)($existingBeforeSync->getCity() ?? $city));
+            $reportStatus = strtolower(trim((string)($existingBeforeSync->getReportStatus() ?? '')));
+            $cleaningCost = $existingBeforeSync->getCleaningCost();
+            $laundryCost = $existingBeforeSync->getLaundryCost();
+            $resetLegacyAutoReported = $existingCity === 'Playa del Carmen'
+                && $reportStatus === HKCleanings::REPORT_STATUS_REPORTED
+                && ($cleaningCost === null || trim((string)$cleaningCost) === '')
+                && ($laundryCost === null || trim((string)$laundryCost) === '');
+        }
 
         $payload = [
             'unitId'          => $unitId,
@@ -165,13 +229,133 @@ class HKCleaningManager
             'guestType'       => $guestType,
             'bookingId'       => method_exists($booking, 'getId') ? $booking->getId() : null,
             'reservationCode' => $reservationCode,
-            'status'          => HKCleanings::STATUS_PENDING,
+            'status'          => $cleaningStatus,
             'notes'           => $notes,
             'bill_to'         => $billTo,
             'cost_centre'     => $costCentre,
         ];
 
-        return $this->bulkCreate([$payload]);
+        $result = $this->bulkCreate([$payload]);
+
+        $cleaning = $this->findBookingCleaning(
+            $booking,
+            $unit,
+            $checkoutDt,
+            $cleaningType,
+            $reservationCode,
+        );
+        if ($cleaning instanceof HKCleanings) {
+            if ($cleaningStatus === HKCleanings::STATUS_DONE) {
+                if ($resetLegacyAutoReported) {
+                    $cleaning->setReportStatus(HKCleanings::REPORT_STATUS_PENDING);
+                    $this->em->persist($cleaning);
+                    $this->em->flush();
+                }
+                $this->deleteTransactionForCleaning($cleaning);
+                $this->ensureReconcileRowExistsForDoneCleaning($cleaning);
+            } else {
+                $this->removePostCutoffAccountingArtifacts($cleaning);
+            }
+        }
+
+        return $result;
+    }
+
+    public function usesReconciliationPolicy(\DateTimeInterface $checkoutDate): bool
+    {
+        return $checkoutDate->format('Y-m-d') >= self::RECONCILIATION_POLICY_START;
+    }
+
+    private function findBookingCleaning(
+        AllBookings $booking,
+        Unit $unit,
+        \DateTimeImmutable $checkoutDate,
+        string $cleaningType,
+        ?string $reservationCode,
+    ): ?HKCleanings {
+        $repo = $this->em->getRepository(HKCleanings::class);
+        $bookingId = (int)($booking->getId() ?? 0);
+
+        if ($bookingId > 0) {
+            $cleaning = $repo->findOneBy([
+                'bookingId' => $bookingId,
+                'cleaningType' => $cleaningType,
+            ]);
+            if ($cleaning instanceof HKCleanings) {
+                return $cleaning;
+            }
+        }
+
+        if ($reservationCode !== null && trim($reservationCode) !== '') {
+            $cleaning = $repo->findOneBy([
+                'reservationCode' => $reservationCode,
+                'cleaningType' => $cleaningType,
+            ]);
+            if ($cleaning instanceof HKCleanings) {
+                return $cleaning;
+            }
+        }
+
+        $cleaning = $repo->findOneBy([
+            'unit' => $unit,
+            'checkoutDate' => $checkoutDate,
+            'cleaningType' => $cleaningType,
+        ]);
+
+        return $cleaning instanceof HKCleanings ? $cleaning : null;
+    }
+
+    private function removeCleaningsForCancelledBooking(
+        AllBookings $booking,
+        Unit $unit,
+        \DateTimeImmutable $checkoutDate,
+        ?string $reservationCode,
+    ): int {
+        $repo = $this->em->getRepository(HKCleanings::class);
+        $bookingId = (int)($booking->getId() ?? 0);
+        $cleanings = $bookingId > 0 ? $repo->findBy(['bookingId' => $bookingId]) : [];
+
+        if ($cleanings === [] && $reservationCode !== null && trim($reservationCode) !== '') {
+            $cleanings = $repo->findBy(['reservationCode' => $reservationCode]);
+        }
+        $removed = 0;
+        foreach ($cleanings as $cleaning) {
+            if (!$cleaning instanceof HKCleanings) {
+                continue;
+            }
+
+            $this->removePostCutoffAccountingArtifacts($cleaning);
+
+            $cleaningId = (int)($cleaning->getId() ?? 0);
+            if ($cleaningId > 0) {
+                $this->conn->executeStatement(
+                    'DELETE FROM hk_cleanings_recon_notes WHERE hk_cleaning_id = :id',
+                    ['id' => $cleaningId],
+                );
+            }
+
+            $this->em->remove($cleaning);
+            $removed++;
+        }
+
+        if ($removed > 0) {
+            $this->em->flush();
+        }
+
+        return $removed;
+    }
+
+    private function removePostCutoffAccountingArtifacts(HKCleanings $cleaning): void
+    {
+        $this->deleteTransactionForCleaning($cleaning);
+
+        $cleaningId = (int)($cleaning->getId() ?? 0);
+        if ($cleaningId > 0) {
+            $this->conn->executeStatement(
+                'DELETE FROM hk_cleanings_reconcile WHERE hk_cleaning_id = :id',
+                ['id' => $cleaningId],
+            );
+        }
     }
 
     /**
@@ -189,6 +373,8 @@ class HKCleaningManager
         $ledgerCreated = 0;
         /** @var HKCleanings[] $toFinalize */
         $toFinalize = [];
+        /** @var HKCleanings[] $toReconcileOnly */
+        $toReconcileOnly = [];
 
         foreach ($items as $data) {
             if (empty($data['unitId']) || empty($data['checkoutDate'])) {
@@ -266,11 +452,10 @@ class HKCleaningManager
             }
 
             if ($existing) {
-                // If booking checkout date changed, update checkoutDate ONLY when report_status is pending.
-                // status does not matter.
+                // New-policy bookings always follow the booking checkout date. Legacy reported rows stay fixed.
                 try {
-                    $canMove = true;
-                    if (method_exists($existing, 'getReportStatus')) {
+                    $canMove = $this->usesReconciliationPolicy($checkoutDt);
+                    if (!$canMove && method_exists($existing, 'getReportStatus')) {
                         $rs = (string)($existing->getReportStatus() ?? '');
                         $canMove = (strtolower(trim($rs)) === 'pending');
                     }
@@ -306,7 +491,11 @@ class HKCleaningManager
                     $existing->setStatus($status);
                     // If bulkCreate marks an existing row as DONE, also create the hktransactions ledger row.
                     if (strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
-                        $toFinalize[] = $existing;
+                        if ($this->usesReconciliationPolicy($checkoutDt)) {
+                            $toReconcileOnly[] = $existing;
+                        } else {
+                            $toFinalize[] = $existing;
+                        }
                     }
                 }
                 // If cleaning_cost is empty, resolve it now
@@ -423,7 +612,11 @@ class HKCleaningManager
 
             // If bulkCreate inserts a row already marked DONE, also create the hktransactions ledger row.
             if (strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
-                $toFinalize[] = $hk;
+                if ($this->usesReconciliationPolicy($checkoutDt)) {
+                    $toReconcileOnly[] = $hk;
+                } else {
+                    $toFinalize[] = $hk;
+                }
             }
             $this->em->persist($hk);
             $created++;
@@ -439,6 +632,15 @@ class HKCleaningManager
             } catch (\Throwable $e) {
                 // Do not fail bulkCreate for a single ledger issue; keep creating remaining rows.
                 // (Logger not injected here; silent fail by design.)
+            }
+        }
+
+        foreach ($toReconcileOnly as $hkDone) {
+            try {
+                $this->deleteTransactionForCleaning($hkDone);
+                $this->ensureReconcileRowExistsForDoneCleaning($hkDone);
+            } catch (\Throwable $e) {
+                // Reconciliation is best-effort here; callers can safely retry the idempotent sync.
             }
         }
 
@@ -459,6 +661,29 @@ class HKCleaningManager
      */
     public function markDoneAndCreateTransaction(HKCleanings $hk): array
     {
+        $checkoutDate = method_exists($hk, 'getCheckoutDate') ? $hk->getCheckoutDate() : null;
+        if ($checkoutDate instanceof \DateTimeInterface && $this->usesReconciliationPolicy($checkoutDate)) {
+            $now = new \DateTimeImmutable('now', new DateTimeZone('America/Cancun'));
+            if (method_exists($hk, 'getDoneAt') && method_exists($hk, 'setDoneAt') && empty($hk->getDoneAt())) {
+                $hk->setDoneAt($now);
+            }
+            if (method_exists($hk, 'setStatus')) {
+                $hk->setStatus(HKCleanings::STATUS_DONE);
+            }
+
+            $this->em->persist($hk);
+            $this->em->flush();
+            $this->deleteTransactionForCleaning($hk);
+            $this->ensureReconcileRowExistsForDoneCleaning($hk);
+
+            return [
+                'id' => null,
+                'transactionCode' => null,
+                'alreadyExisted' => false,
+                'transactionSuppressed' => true,
+            ];
+        }
+
         // Fast idempotency guard: if the ledger transaction already exists, return before touching/persisting HKCleanings.
         // This avoids Doctrine flush issues in batch status updates for old DONE cleanings.
         $hkId = (int)(method_exists($hk, 'getId') ? ($hk->getId() ?? 0) : 0);
@@ -1275,7 +1500,7 @@ class HKCleaningManager
      * Create (idempotently) a hk_cleanings_reconcile row for a DONE cleaning.
      *
      * Current design:
-     * - We keep reconciliation rows for **Tulum only**.
+     * - We keep reconciliation rows for Tulum and Playa del Carmen.
      * - One reconcile row per hk_cleanings row (unique by hk_cleaning_id).
      * - This table is a historical snapshot store (rates can change over time).
      */
@@ -1305,8 +1530,8 @@ class HKCleaningManager
             $city = (string)($unit->getCity() ?? '');
         }
 
-        // Tulum only
-        if (strtolower(trim($city)) !== 'tulum') {
+        $city = $this->normalizeCity($city);
+        if (!in_array($city, ['Tulum', 'Playa del Carmen'], true)) {
             return;
         }
 
@@ -1323,7 +1548,7 @@ class HKCleaningManager
         }
         if (($cleaningCostStr === null || $cleaningCostStr === '') && method_exists($unit, 'getId')) {
             try {
-                $resolved = $this->rateResolver->resolveAmountForDateStr((int)$unit->getId(), 'Tulum', $serviceDate);
+                $resolved = $this->rateResolver->resolveAmountForDateStr((int)$unit->getId(), $city, $serviceDate);
                 if ($resolved !== null && trim((string)$resolved) !== '') {
                     $cleaningCostStr = number_format((float)$resolved, 2, '.', '');
                 }
@@ -1349,13 +1574,23 @@ class HKCleaningManager
         // Some schemas may not have hk_cleanings.notes; so we default to NULL.
         $notes = null;
 
-        // Idempotency: if row already exists for this hk_cleaning_id, do nothing.
+        // Preserve snapshot costs, but keep booking-derived metadata synchronized.
         try {
             $exists = $this->conn->fetchOne(
                 'SELECT 1 FROM hk_cleanings_reconcile WHERE hk_cleaning_id = :cid LIMIT 1',
                 ['cid' => $hkId]
             );
             if ($exists) {
+                $this->conn->executeStatement(
+                    'UPDATE hk_cleanings_reconcile SET unit_id = :unit_id, city = :city, report_month = :report_month, service_date = :service_date, updated_at = NOW() WHERE hk_cleaning_id = :cid AND (unit_id <> :unit_id OR city <> :city OR report_month <> :report_month OR service_date <> :service_date)',
+                    [
+                        'unit_id' => (int)$unit->getId(),
+                        'city' => $city,
+                        'report_month' => $reportMonth,
+                        'service_date' => $serviceDate,
+                        'cid' => $hkId,
+                    ],
+                );
                 return;
             }
         } catch (\Throwable) {
@@ -1373,7 +1608,7 @@ class HKCleaningManager
                     (:unit_id, :city, :report_month, :service_date, :cleaning_cost, :real_cleaning_cost, :laundry_cost, :notes, NOW(), NOW(), :hk_cleaning_id)',
                 [
                     'unit_id' => (int)$unit->getId(),
-                    'city' => 'Tulum',
+                    'city' => $city,
                     'report_month' => $reportMonth,
                     'service_date' => $serviceDate,
                     'cleaning_cost' => (float)$cleaningCostStr,

@@ -461,7 +461,10 @@ SQL;
             'totals' => $expensesTotals,
         ];
 
-        // --- Housekeeping Transactions (HK) --- (client-billed only: allocation_target = 'Client')
+        // --- Housekeeping expenses ---
+        // Legacy rows come from hktransactions. DONE, Client-billed hk_cleanings are the
+        // source of truth when linked, and are also included directly when transactions
+        // are suppressed by the post-2026-06-01 reconciliation policy.
         $sqlHK = <<<SQL
 SELECT
   hk.id,
@@ -475,13 +478,46 @@ SELECT
   hk.paid,
   tc.name AS category_name,
   tc.allow_unit AS category_allow_unit,
-  tc.allow_hk   AS category_allow_hk
+  tc.allow_hk   AS category_allow_hk,
+  'HK_TRANSACTION' AS source_type
 FROM hktransactions hk
 LEFT JOIN transaction_category tc ON tc.id = hk.category_id
 WHERE hk.unit_id = :unit
   AND hk.allocation_target = 'Client'
   AND DATE_FORMAT(hk.date, '%Y-%m') = :ym
-ORDER BY hk.date ASC, hk.id ASC
+  AND NOT EXISTS (
+    SELECT 1
+    FROM hk_cleanings linked_cleaning
+    WHERE linked_cleaning.id = hk.hk_cleaning_id
+      AND UPPER(TRIM(COALESCE(linked_cleaning.bill_to, ''))) = 'CLIENT'
+      AND LOWER(TRIM(COALESCE(linked_cleaning.status, ''))) = 'done'
+  )
+
+UNION ALL
+
+SELECT
+  hc.id,
+  hc.unit_id,
+  hc.checkout_date AS date,
+  CASE WHEN LOWER(TRIM(hc.cleaning_type)) = 'checkout' THEN 7 ELSE 8 END AS category_id,
+  'Client' AS allocation_target,
+  CONCAT(COALESCE(NULLIF(hc.cleaning_type, ''), 'Cleaning'), ' cleaning') AS description,
+  hc.assign_notes AS notes,
+  COALESCE(hc.o2_collected_fee, 0) AS charged,
+  0 AS paid,
+  tc.name AS category_name,
+  tc.allow_unit AS category_allow_unit,
+  tc.allow_hk AS category_allow_hk,
+  'HK_CLEANING' AS source_type
+FROM hk_cleanings hc
+LEFT JOIN transaction_category tc
+  ON tc.id = CASE WHEN LOWER(TRIM(hc.cleaning_type)) = 'checkout' THEN 7 ELSE 8 END
+WHERE hc.unit_id = :unit
+  AND UPPER(TRIM(COALESCE(hc.bill_to, ''))) = 'CLIENT'
+  AND LOWER(TRIM(COALESCE(hc.status, ''))) = 'done'
+  AND DATE_FORMAT(hc.checkout_date, '%Y-%m') = :ym
+
+ORDER BY date ASC, id ASC
 SQL;
 
         $hkRowsRaw = $this->db->fetchAllAssociative($sqlHK, [
@@ -498,6 +534,7 @@ SQL;
         foreach ($hkRowsRaw as $hr) {
             $row = [
                 'id'          => $hr['id'] ?? null,
+                'sourceType'  => $hr['source_type'] ?? 'HK_TRANSACTION',
                 'unitId'      => $hr['unit_id'] ?? null,
                 'date'        => $hr['date'] ?? null,
                 'categoryId'  => $hr['category_id'] ?? null,
