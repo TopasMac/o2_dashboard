@@ -63,29 +63,51 @@ class BookingAggregatorService
         );
         error_log($cand);
 
-        $qb = $this->entityManager->getRepository(AllBookings::class)
-            ->createQueryBuilder('b')
-            ->where('b.unitId = :unitId')
-            // Overlap check with half-open interval semantics [checkIn, checkOut)
-            ->andWhere('b.checkIn < :checkOut')
-            ->andWhere('b.checkOut > :checkIn')
-            // Explicitly allow back-to-back reservations where edges touch
-            ->andWhere('NOT (b.checkIn = :checkOut OR b.checkOut = :checkIn)')
-            ->andWhere("COALESCE(b.status, '') NOT LIKE :cancelPrefix")
-            ->andWhere("LOWER(COALESCE(b.status, '')) != :expiredStatus")
-            ->setParameter('unitId', $booking->getUnitId())
-            ->setParameter('checkIn', $booking->getCheckIn())
-            ->setParameter('checkOut', $booking->getCheckOut())
-            ->setParameter('cancelPrefix', 'Cancel%')
-            ->setParameter('expiredStatus', 'expired');
+        $checkInDate = $booking->getCheckIn()?->format('Y-m-d');
+        $checkOutDate = $booking->getCheckOut()?->format('Y-m-d');
 
-        if (method_exists($booking, 'getId') && $booking->getId()) {
-            $qb->andWhere('b.id != :selfId')->setParameter('selfId', $booking->getId());
+        if ($checkInDate === null || $checkOutDate === null) {
+            return;
         }
 
-        $overlaps = $qb->getQuery()->getResult();
+        $candidates = $this->entityManager->getRepository(AllBookings::class)->findBy(['unitId' => $booking->getUnitId()]);
+        $overlaps = [];
 
-        error_log(sprintf('[OverlapCheck] overlaps_count=%d', is_countable($overlaps) ? count($overlaps) : -1));
+        foreach ($candidates as $candidate) {
+            if (!$candidate instanceof AllBookings) {
+                continue;
+            }
+
+            if (method_exists($booking, 'getId') && $booking->getId() && $candidate->getId() === $booking->getId()) {
+                continue;
+            }
+
+            $status = (string) (method_exists($candidate, 'getStatus') ? $candidate->getStatus() : '');
+            if (str_starts_with(strtoupper($status), 'CANCEL')) {
+                continue;
+            }
+            if (strtolower($status) === 'expired') {
+                continue;
+            }
+
+            $candidateCheckInDate = $candidate->getCheckIn()?->format('Y-m-d');
+            $candidateCheckOutDate = $candidate->getCheckOut()?->format('Y-m-d');
+
+            if ($candidateCheckInDate === null || $candidateCheckOutDate === null) {
+                continue;
+            }
+
+            // Overlap check with half-open interval semantics on DATE values: [checkIn, checkOut)
+            $hasOverlap = $candidateCheckInDate < $checkOutDate && $candidateCheckOutDate > $checkInDate;
+            // Explicitly allow back-to-back reservations where edges touch on dates
+            $isBackToBack = $candidateCheckInDate === $checkOutDate || $candidateCheckOutDate === $checkInDate;
+
+            if ($hasOverlap && !$isBackToBack) {
+                $overlaps[] = $candidate;
+            }
+        }
+
+        error_log(sprintf('[OverlapCheck] overlaps_count=%d', count($overlaps)));
 
         if (!empty($overlaps)) {
             foreach ($overlaps as $o) {
@@ -406,7 +428,7 @@ class BookingAggregatorService
         } elseif ($booking->getCheckIn() > $now) {
             $booking->setStatus('Upcoming');
         } else {
-            $booking->setStatus('Current');
+            $booking->setStatus('Ongoing');
         }
 
         // Ensure any other required numeric fields are not null
@@ -533,7 +555,7 @@ class BookingAggregatorService
         } elseif ($booking->getCheckIn() > $now) {
             $booking->setStatus('Upcoming');
         } else {
-            $booking->setStatus('Current');
+            $booking->setStatus('Ongoing');
         }
 
         // Ensure any other required numeric fields are not null
@@ -754,7 +776,7 @@ class BookingAggregatorService
                 } elseif ($booking->getCheckIn() > $now) {
                     $booking->setStatus('Upcoming');
                 } else {
-                    $booking->setStatus('Current');
+                    $booking->setStatus('Ongoing');
                 }
             }
         }

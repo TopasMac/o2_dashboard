@@ -168,7 +168,7 @@ export default function useUnitCalendarAvailability({
    * shouldDisableStartDate (check-in)
    *
    * For check-in selection we allow choosing a date that equals an existing event's END date.
-   * So we treat hard blocks as [start, end) for disabling purposes.
+   * Calendar events are returned with an inclusive end date, so we disable [start, end] here.
    */
   const shouldDisableStartDate = useCallback(
     (day) => {
@@ -187,8 +187,8 @@ export default function useUnitCalendarAvailability({
         const hard = ev.hardBlock === false ? false : true; // default hard if missing
         if (!hard) return false;
 
-        // Disable if ymd is within [start, end) (end is allowed)
-        return ymd >= ev.start && ymd < ev.end;
+        // Disable if ymd is within [start, end] (end is not allowed for check-in)
+        return ymd >= ev.start && ymd <= ev.end;
       });
     },
     [unitId, unitCalendarEvents],

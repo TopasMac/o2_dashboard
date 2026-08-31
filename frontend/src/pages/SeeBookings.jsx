@@ -1281,7 +1281,7 @@ const SeeBookings = () => {
           setDrawerOpen(true);
         }}
       >
-        + New Booking
+        New Booking
       </Button>
       <Button
         variant="outlined"
@@ -1374,13 +1374,14 @@ const SeeBookings = () => {
             : 'New Booking'}
           showActions
           formId={selectedBooking
-            ? (isSoftBooking(selectedBooking) ? 'block-edit-form' : 'booking-edit-form')
+            ? (isSoftBooking(selectedBooking) ? 'block-cal-edit-form' : 'booking-edit-form')
             : 'booking-new-form'}
         >
           {drawerOpen && (
             selectedBooking ? (
               isSoftBooking(selectedBooking) ? (
                 <BlockCalEditFormRHF
+                  formId="block-cal-edit-form"
                   initialValues={softInitial || getSoftInitialValues(selectedBooking)}
                   unitOptions={softUnits}
                   loadingUnits={false}
@@ -1501,7 +1502,7 @@ const SeeBookings = () => {
 
                       await api.put(`/api/soft-reservations/${id}`, clean, {
                         headers: { 'Content-Type': 'application/json', ...buildAuthHeaders() }
-        }).filter(Boolean);
+                      });
 
                       const idToHighlight = id;
                       setHighlightId(idToHighlight);

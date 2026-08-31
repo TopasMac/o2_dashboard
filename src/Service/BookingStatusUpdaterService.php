@@ -21,7 +21,7 @@ class BookingStatusUpdaterService
 
     public function updateStatuses(iterable $bookings, bool $flush = false): void
     {
-        $now = new \DateTimeImmutable();
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun'));
 
         foreach ($bookings as $booking) {
             // Respect explicit Cancelled/Canceled first
@@ -76,12 +76,18 @@ class BookingStatusUpdaterService
             }
 
             $status = $booking->getStatus();
-            if ($checkOut < $now) {
+            if ($checkOut instanceof \DateTimeInterface && $checkOut < $now) {
                 $status = 'Past';
-            } elseif ($checkIn > $now) {
+            } elseif ($checkIn instanceof \DateTimeInterface && $checkIn > $now) {
                 $status = 'Upcoming';
-            } else {
+            } elseif ($checkIn instanceof \DateTimeInterface && $checkOut instanceof \DateTimeInterface) {
                 $status = 'Ongoing';
+            } elseif ($checkOut instanceof \DateTimeInterface && $checkOut >= $now) {
+                $status = 'Ongoing';
+            } elseif ($checkIn instanceof \DateTimeInterface && $checkIn <= $now) {
+                $status = 'Ongoing';
+            } else {
+                $status = $booking->getStatus() ?: 'Upcoming';
             }
 
             if ($booking->getStatus() !== $status) {

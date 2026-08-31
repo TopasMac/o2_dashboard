@@ -306,6 +306,14 @@ class BookingsController extends AbstractController
 
         $bookings = $qb->getQuery()->getResult();
 
+        if (!empty($bookings)) {
+            try {
+                $statusUpdater->updateStatuses($bookings, true);
+            } catch (\Throwable $e) {
+                // Best-effort: keep returning bookings even if status refresh fails.
+            }
+        }
+
         return $this->json($bookings);
     }
 
