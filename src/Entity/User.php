@@ -113,7 +113,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    #[ORM\OneToOne(targetEntity: \App\Entity\Employee::class, inversedBy: "user")]
+    #[ORM\OneToOne(targetEntity: \App\Entity\Employee::class)]
     #[ORM\JoinColumn(name: "employee_id", referencedColumnName: "id", nullable: true, onDelete: "SET NULL")]
     private ?\App\Entity\Employee $employee = null;
 

@@ -1,0 +1,14 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: false
+
+  App\EventListener\UnitMediaUpdateListener:
+    arguments:
+      $bucketName: 'owners2-local-disabled'
+      $cdnBase: 'http://127.0.0.1:9000'
+      $originPrefix: 'local'
+
+  App\EventListener\UnitMediaDeleteListener:
+    arguments:
+      $bucketName: 'owners2-local-disabled'
