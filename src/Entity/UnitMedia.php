@@ -34,7 +34,7 @@ class UnitMedia
     #[Groups(['unitMedia:read'])]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(targetEntity: Unit::class)]
+    #[ORM\ManyToOne(targetEntity: Unit::class, inversedBy: 'unitMedia')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     #[Groups(['unitMedia:read','unitMedia:write'])]
     private ?Unit $unit = null;
