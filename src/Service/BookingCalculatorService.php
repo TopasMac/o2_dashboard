@@ -8,6 +8,10 @@ use App\Entity\BookingConfig;
 
 class BookingCalculatorService
 {
+    public function __construct(private readonly BookingNightCalculator $nightCalculator)
+    {
+    }
+
     public function recalculate(AllBookings $booking, ?Unit $unit, BookingConfig $config): AllBookings
     {
         // Ensure required numeric fields are initialized to defaults if null
@@ -60,7 +64,7 @@ class BookingCalculatorService
 
         $checkIn = $booking->getCheckIn();
         $checkOut = $booking->getCheckOut();
-        $days = $checkIn && $checkOut ? $checkIn->diff($checkOut)->days : 0;
+        $days = $this->nightCalculator->calculate($checkIn, $checkOut);
 
         if ($isCancelled) {
             // Preserve tax values exactly as entered before cancellation
@@ -169,6 +173,7 @@ class BookingCalculatorService
         $booking->setTaxPercent($taxPercent)
             ->setTaxAmount($taxAmount)
             ->setNetPayout($netPayout)
+            ->setDays($days)
             ->setCommissionBase($commissionBase)
             // ->setCommissionPercent($commissionPercent) // Removed redundant assignment
             ->setCommissionValue($commissionValue)
