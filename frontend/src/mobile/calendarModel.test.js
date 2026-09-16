@@ -3,6 +3,8 @@ import {
   buildCalendarSegments,
   bookingCoversDate,
   bookingFormToApi,
+  bookingsTouchingDate,
+  canCreateRecordOnDate,
   getBookingKind,
   normalizeBookings,
 } from './calendarModel';
@@ -22,6 +24,30 @@ describe('Mobile V2 calendar model', () => {
     expect(bookingCoversDate(booking, '2026-09-10')).toBe(true);
     expect(bookingCoversDate(booking, '2026-09-11')).toBe(true);
     expect(bookingCoversDate(booking, '2026-09-12')).toBe(false);
+  });
+
+  test('shows a departing booking card on its checkout day', () => {
+    const bookings = [{ id: 1, checkIn: '2026-09-14', checkOut: '2026-09-17' }];
+
+    expect(bookingsTouchingDate(bookings, '2026-09-17')).toEqual(bookings);
+  });
+
+  test('allows creation on an empty or checkout-only day, but not an occupied night', () => {
+    const bookings = [{ id: 1, checkIn: '2026-09-14', checkOut: '2026-09-17' }];
+
+    expect(canCreateRecordOnDate([], '2026-09-17')).toBe(true);
+    expect(canCreateRecordOnDate(bookings, '2026-09-16')).toBe(false);
+    expect(canCreateRecordOnDate(bookings, '2026-09-17')).toBe(true);
+  });
+
+  test('does not allow creation when a checkout and another check-in share the day', () => {
+    const bookings = [
+      { id: 1, checkIn: '2026-09-14', checkOut: '2026-09-17' },
+      { id: 2, checkIn: '2026-09-17', checkOut: '2026-09-20' },
+    ];
+
+    expect(bookingsTouchingDate(bookings, '2026-09-17')).toHaveLength(2);
+    expect(canCreateRecordOnDate(bookings, '2026-09-17')).toBe(false);
   });
 
   test('recognizes holds and blocks from existing API fields', () => {

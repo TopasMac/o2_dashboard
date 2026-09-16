@@ -228,6 +228,11 @@ export default function BookingNewFormRHF({
   }, [guestType, setValue, getValues]);
 
   const getUnitLabel = (opt) => opt?.label || '';
+  const selectableUnitOptions = useMemo(() => {
+    if (!initialUnit?.id) return unitOptions;
+    const alreadyLoaded = unitOptions.some((unit) => Number(unit.id) === Number(initialUnit.id));
+    return alreadyLoaded ? unitOptions : [initialUnit, ...unitOptions];
+  }, [initialUnit, unitOptions]);
 
   const parseYMDLocal = (ymd) => {
     if (!ymd) return null;
@@ -435,10 +440,10 @@ export default function BookingNewFormRHF({
             <Autocomplete
               disablePortal
               loading={loadingUnits}
-              options={unitOptions}
+              options={selectableUnitOptions}
               getOptionLabel={(opt) => opt?.label || ''}
               isOptionEqualToValue={(a, b) => Number(a?.id) === Number(b?.id)}
-              value={unitOptions.find((u) => Number(u.id) === Number(field.value)) || null}
+              value={selectableUnitOptions.find((u) => Number(u.id) === Number(field.value)) || null}
               onChange={(e, val) => field.onChange(val ? Number(val.id) : undefined)}
               renderInput={(params) => (
                 <TextField

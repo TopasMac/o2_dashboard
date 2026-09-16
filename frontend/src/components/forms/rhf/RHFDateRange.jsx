@@ -40,6 +40,7 @@ export default function RHFDateRange(props) {
     maxDate,
     onRangeCommit,
     readOnly = false,
+    autoFillEnd = true,
     fullWidth = true,
     style,
   } = props;
@@ -143,7 +144,7 @@ export default function RHFDateRange(props) {
           // If we have a start date but no valid end date (or end is not after start),
           // default to start + 1 night for display purposes.
           let endDate = rawEndDate;
-          if (startDate) {
+          if (autoFillEnd && startDate) {
             if (!endDate || !endDate.isAfter(startDate)) {
               endDate = startDate.add(1, 'day');
             }
@@ -163,15 +164,15 @@ export default function RHFDateRange(props) {
                       const s = coerceDayjs(newVal, null);
                       if (!s) return;
                       let e = getValues(nameEnd) ? coerceDayjs(getValues(nameEnd), null) : null;
-                      if (!e || !e.isAfter(s)) {
+                      if (autoFillEnd && (!e || !e.isAfter(s))) {
                         e = s.add(1, 'day');
                       }
                       const sStr = s.format('YYYY-MM-DD');
-                      const eStr = e.format('YYYY-MM-DD');
+                      const eStr = e && e.isAfter(s) ? e.format('YYYY-MM-DD') : '';
                       setValue(nameStart, sStr, { shouldValidate: true, shouldDirty: true });
                       setValue(nameEnd, eStr, { shouldValidate: true, shouldDirty: true });
                       onChange(`${sStr}|${eStr}`);
-                      if (typeof onRangeCommit === 'function') onRangeCommit({ startDate: s, endDate: e });
+                      if (typeof onRangeCommit === 'function') onRangeCommit({ startDate: s, endDate: e || null });
                     }}
                     disablePast
                     minDate={minDate ? dayjs(minDate) : today}

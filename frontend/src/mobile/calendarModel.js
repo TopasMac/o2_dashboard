@@ -112,6 +112,18 @@ export function bookingsForDate(bookings, ymd) {
   return (bookings || []).filter((booking) => bookingCoversDate(booking, ymd));
 }
 
+export function bookingTouchesDate(booking, ymd) {
+  return Boolean(booking?.checkIn && booking?.checkOut && booking.checkIn <= ymd && ymd <= booking.checkOut);
+}
+
+export function bookingsTouchingDate(bookings, ymd) {
+  return (bookings || []).filter((booking) => bookingTouchesDate(booking, ymd));
+}
+
+export function canCreateRecordOnDate(bookings, ymd) {
+  return !bookingsForDate(bookings, ymd).length;
+}
+
 export function getBookingKind(booking) {
   if (booking?.isBlock) return 'block';
   if (booking?.isHold) return 'hold';

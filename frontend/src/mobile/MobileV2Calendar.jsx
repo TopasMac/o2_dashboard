@@ -2,6 +2,7 @@ import * as React from 'react';
 import Alert from '@mui/material/Alert';
 import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CardContent from '@mui/material/CardContent';
@@ -17,14 +18,18 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import EventAvailableRoundedIcon from '@mui/icons-material/EventAvailableRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import api from '../api';
+import BlockCalFormRHF from '../components/forms/BlockCalFormRHF';
 import BookingEditFormRHF from '../components/forms/BookingEditFormRHF';
+import BookingNewFormRHF from '../components/forms/BookingNewFormRHF';
 import MobileFormDrawer from '../components/common/mobile/MobileFormDrawer';
 import {
   BOOKING_COLORS,
   bookingFormToApi,
   bookingsForDate,
+  bookingsTouchingDate,
   buildCalendarSegments,
   buildMonthGrid,
+  canCreateRecordOnDate,
   formatShortDate,
   getBookingColor,
   getTodayYmd,
@@ -89,6 +94,22 @@ function CompactDetail({ label, value }) {
   );
 }
 
+function CreationButtons({ onCreate }) {
+  return (
+    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 0.75 }}>
+      <Button size="small" variant="contained" onClick={() => onCreate('booking')} sx={{ px: 0.5 }}>
+        Reserva
+      </Button>
+      <Button size="small" variant="outlined" onClick={() => onCreate('hold')} sx={{ px: 0.5 }}>
+        Hold
+      </Button>
+      <Button size="small" variant="outlined" onClick={() => onCreate('block')} sx={{ px: 0.5 }}>
+        Bloqueo
+      </Button>
+    </Box>
+  );
+}
+
 export default function MobileV2Calendar() {
   const today = React.useMemo(() => getTodayYmd(), []);
   const [month, setMonth] = React.useState(() => monthFromYmd(today));
@@ -102,6 +123,7 @@ export default function MobileV2Calendar() {
   const [reloadToken, setReloadToken] = React.useState(0);
   const [editBooking, setEditBooking] = React.useState(null);
   const [editOpen, setEditOpen] = React.useState(false);
+  const [createType, setCreateType] = React.useState(null);
 
   const days = React.useMemo(
     () => buildMonthGrid(month.year, month.monthIndex),
@@ -156,6 +178,10 @@ export default function MobileV2Calendar() {
     () => units.map((unit) => ({ id: unit.id, label: unit.unit_name || '' })),
     [units]
   );
+  const selectedUnit = React.useMemo(
+    () => units.find((unit) => String(unit.id) === unitId) || null,
+    [unitId, units]
+  );
 
   const openEditor = (booking) => {
     if (booking?.isHold || booking?.isBlock) return;
@@ -177,8 +203,25 @@ export default function MobileV2Calendar() {
     setReloadToken((current) => current + 1);
   };
 
+  const creationAllowed = React.useMemo(
+    () => Boolean(unitId) && canCreateRecordOnDate(bookings, selectedDate),
+    [bookings, selectedDate, unitId]
+  );
+
+  const openCreator = (type) => {
+    if (!creationAllowed) return;
+    setCreateType(type);
+  };
+
+  const closeCreator = () => setCreateType(null);
+
+  const completeCreation = () => {
+    closeCreator();
+    setReloadToken((current) => current + 1);
+  };
+
   const selectedBookings = React.useMemo(
-    () => bookingsForDate(bookings, selectedDate),
+    () => bookingsTouchingDate(bookings, selectedDate),
     [bookings, selectedDate]
   );
   const calendarSegments = React.useMemo(
@@ -383,12 +426,19 @@ export default function MobileV2Calendar() {
         </Typography>
         {selectedBookings.length === 0 ? (
           <Card variant="outlined" sx={{ mt: 0.5, borderColor: '#dfe8e5' }}>
-            <CardContent sx={{ display: 'flex', gap: 1.25, alignItems: 'center', py: 2, '&:last-child': { pb: 2 } }}>
-              <EventAvailableRoundedIcon sx={{ color: '#63a69f' }} />
-              <Box>
-                <Typography sx={{ fontWeight: 750 }}>Disponible</Typography>
-                <Typography variant="body2" color="text.secondary">Sin registros para este día.</Typography>
+            <CardContent sx={{ py: 1.35, px: 1.5, '&:last-child': { pb: 1.35 } }}>
+              <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'center' }}>
+                <EventAvailableRoundedIcon sx={{ color: '#63a69f' }} />
+                <Box>
+                  <Typography sx={{ fontWeight: 750 }}>Disponible</Typography>
+                  <Typography variant="body2" color="text.secondary">Sin registros para este día.</Typography>
+                </Box>
               </Box>
+              {creationAllowed && (
+                <Box sx={{ mt: 1.25 }}>
+                  <CreationButtons onCreate={openCreator} />
+                </Box>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -440,6 +490,17 @@ export default function MobileV2Calendar() {
             ))}
           </Stack>
         )}
+
+        {selectedBookings.length > 0 && creationAllowed && (
+          <Card variant="outlined" sx={{ mt: 1, borderColor: '#cfe0dc', borderStyle: 'dashed' }}>
+            <CardContent sx={{ py: 1.15, px: 1.5, '&:last-child': { pb: 1.15 } }}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.75, color: '#1E6F68', fontWeight: 800 }}>
+                Agregar registro
+              </Typography>
+              <CreationButtons onCreate={openCreator} />
+            </CardContent>
+          </Card>
+        )}
       </Box>
       </Stack>
 
@@ -483,6 +544,45 @@ export default function MobileV2Calendar() {
           onSubmit: saveBooking,
           onCancel: closeEditor,
           submitLabel: 'Guardar',
+        }}
+      />
+
+      <MobileFormDrawer
+        open={Boolean(createType)}
+        onClose={closeCreator}
+        title={createType === 'booking' ? 'Nueva reservación' : createType === 'hold' ? 'Nuevo hold' : 'Nuevo bloqueo'}
+        headerLink={(
+          <IconButton aria-label="Cerrar formulario" onClick={closeCreator} sx={{ color: '#fff' }}>
+            <CloseRoundedIcon />
+          </IconButton>
+        )}
+        formId={createType === 'booking' ? 'mobile-v2-booking-new-form' : 'mobile-v2-soft-new-form'}
+        FormComponent={createType === 'booking' ? BookingNewFormRHF : BlockCalFormRHF}
+        componentKey={`${createType || 'create'}-${unitId}-${selectedDate}`}
+        mobileVariant="fullscreen"
+        contentSx={{ bgcolor: '#f7faf9' }}
+        actions={{ saveLabel: 'Guardar', cancelLabel: 'Cancelar', showDelete: false }}
+        formProps={createType === 'booking' ? {
+          formId: 'mobile-v2-booking-new-form',
+          initialUnit: selectedUnit ? {
+            id: selectedUnit.id,
+            label: selectedUnit.unit_name || '',
+            city: selectedUnit.city || '',
+          } : null,
+          initialCheckIn: selectedDate,
+          initialCheckOut: '',
+          onSaved: completeCreation,
+          onCancel: closeCreator,
+        } : {
+          formId: 'mobile-v2-soft-new-form',
+          initialType: createType === 'block' ? 'Block' : 'Hold',
+          unitOptions: unitOptionsForForm,
+          defaultUnitId: selectedUnit?.id || null,
+          defaultUnitName: selectedUnit?.unit_name || '',
+          initialStartDate: selectedDate,
+          initialEndDate: '',
+          requireEndDateChoice: true,
+          onSuccess: completeCreation,
         }}
       />
     </>

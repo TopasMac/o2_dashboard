@@ -58,6 +58,8 @@ export default function BlockCalFormRHF({
   unitOptions = [],
   initialStartDate = '',
   initialEndDate = '',
+  requireEndDateChoice = false,
+  formId = 'block-cal-form',
 }) {
   const [units, setUnits] = useState([]);
   const [selectedUnit, setSelectedUnit] = useState(null);
@@ -165,7 +167,7 @@ export default function BlockCalFormRHF({
     const today = dayjs();
     const tomorrow = today.add(1, 'day');
     const start = initialStartDate || today.format('YYYY-MM-DD');
-    const end = initialEndDate || tomorrow.format('YYYY-MM-DD');
+    const end = initialEndDate || (requireEndDateChoice ? '' : tomorrow.format('YYYY-MM-DD'));
     return {
       bookingDate: today.format('YYYY-MM-DD'), // hidden field, default to today
       unitId: selectedUnit?.id ?? defaultUnitId ?? '',
@@ -176,7 +178,7 @@ export default function BlockCalFormRHF({
       guestName: '',
       guests: 1,
       checkIn: initialStartDate || today.add(3, 'day').format('YYYY-MM-DD'),
-      checkOut: initialEndDate || today.add(4, 'day').format('YYYY-MM-DD'),
+      checkOut: initialEndDate || (requireEndDateChoice ? '' : today.add(4, 'day').format('YYYY-MM-DD')),
       payout: '',
       paymentMethod: 'cash',
       cleaningFee: unitFinanceDefaults.cleaningFee,
@@ -188,7 +190,7 @@ export default function BlockCalFormRHF({
       blockReason: 'Cleaning',
       blockNotes: '',
     };
-  }, [selectedUnit, unitFinanceDefaults, defaultUnitId, initialType, initialStartDate, initialEndDate]);
+  }, [selectedUnit, unitFinanceDefaults, defaultUnitId, initialType, initialStartDate, initialEndDate, requireEndDateChoice]);
 
   React.useEffect(() => {
     const current = methods.getValues();
@@ -394,7 +396,7 @@ export default function BlockCalFormRHF({
 
   return (
     <FormProvider {...methods}>
-      <form id="block-cal-form" onSubmit={handleSubmit(onSubmit)}>
+      <form id={formId} onSubmit={handleSubmit(onSubmit)}>
         {/* Booking Date - visible formatted */}
         <RHFTextField
           name="bookingDate"
@@ -464,6 +466,7 @@ export default function BlockCalFormRHF({
               nameEnd="checkOut"
               blockedRanges={blockedRanges}
               minDate={new Date()}
+              autoFillEnd={!requireEndDateChoice}
               fullWidth
             />
           </div>
@@ -532,6 +535,7 @@ export default function BlockCalFormRHF({
               nameEnd="blockCheckOut"
               blockedRanges={blockedRanges}
               minDate={new Date()}
+              autoFillEnd={!requireEndDateChoice}
               fullWidth
               labelStart="Start"
               labelEnd="End"
