@@ -352,6 +352,7 @@ export default function BookingEditFormRHF({
   }, [shouldDisableEndDate, wideAvail, effectiveShouldDisableDate]);
 
   const isMobileLayout = layout === 'mobile';
+  const isPrivateSource = String(source).toLowerCase() === 'private';
 
   const warningBreakdown = useMemo(() => {
     const counts = { manual: 0, o2Block: 0, o2Hold: 0 };
@@ -482,33 +483,50 @@ export default function BookingEditFormRHF({
         )}
 
         {/* Row 3: Guest Name / Guests */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? 'minmax(0, 1fr) 84px'
+              : { xs: '1fr', sm: 'minmax(0, 1fr) 140px' },
+            gap: isMobileLayout ? 1.25 : 2,
+          }}
+        >
           {!fieldHidden('guestName') && (
-            <RHFTextField
-              name="guestName"
-              control={control}
-              label="Guest Name"
-              size="small"
-              fullWidth
-            />
+            <Box sx={{ minWidth: 0 }}>
+              <RHFTextField
+                name="guestName"
+                control={control}
+                label="Guest Name"
+                size="small"
+                fullWidth
+              />
+            </Box>
           )}
           {!fieldHidden('guests') && (
-            <RHFTextField
-              name="guests"
-              control={control}
-              label="Guests"
-              size="small"
-              type="number"
-              inputProps={{ min: 0 }}
-              InputProps={{ endAdornment: <InputAdornment position="end">#</InputAdornment> }}
-              fullWidth={isMobileLayout}
-              sx={isMobileLayout ? { width: '100%' } : { width: 140 }}
-            />
+            <Box sx={{ minWidth: 0 }}>
+              <RHFTextField
+                name="guests"
+                control={control}
+                label="Guests"
+                size="small"
+                type="number"
+                inputProps={{ min: 0 }}
+                InputProps={{ endAdornment: <InputAdornment position="end">#</InputAdornment> }}
+                fullWidth
+              />
+            </Box>
           )}
-        </Stack>
+        </Box>
 
         {/* Row 4: Check In / Check Out */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout ? 'repeat(2, minmax(0, 1fr))' : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: isMobileLayout ? 1.25 : 2,
+          }}
+        >
           {!fieldHidden('checkIn') && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 0', minWidth: 0 }}>
               <RHFDatePicker
@@ -517,6 +535,11 @@ export default function BookingEditFormRHF({
                 label="Check In"
                 format="DD/MM/YYYY"
                 fullWidth
+                size={isMobileLayout ? 'small' : undefined}
+                sx={isMobileLayout ? {
+                  '& .MuiInputBase-input': { px: 0.75, fontSize: 13.5 },
+                  '& .MuiInputAdornment-root': { ml: 0 },
+                } : undefined}
                 shouldDisableDate={effectiveShouldDisableStartDate}
                 onMonthChange={onMonthChange}
                 loading={effectiveCalendarLoading}
@@ -542,6 +565,11 @@ export default function BookingEditFormRHF({
                 label="Check Out"
                 format="DD/MM/YYYY"
                 fullWidth
+                size={isMobileLayout ? 'small' : undefined}
+                sx={isMobileLayout ? {
+                  '& .MuiInputBase-input': { px: 0.75, fontSize: 13.5 },
+                  '& .MuiInputAdornment-root': { ml: 0 },
+                } : undefined}
                 shouldDisableDate={effectiveShouldDisableEndDate}
                 onMonthChange={onMonthChange}
                 loading={effectiveCalendarLoading}
@@ -559,7 +587,7 @@ export default function BookingEditFormRHF({
               )}
             </Box>
           )}
-        </Stack>
+        </Box>
 
         {/* Calendar availability (optional) */}
         {unitId && watch('checkIn') && watch('checkOut') && (
@@ -600,10 +628,21 @@ export default function BookingEditFormRHF({
           </Box>
         )}
 
-        {/* Row 5: Payout / Cleaning Fee (+ Paid if Private) */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+        {/* Row 5: Keep Payout and Paid together on mobile; retain the desktop row. */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? (isPrivateSource
+                ? 'minmax(0, 1.05fr) minmax(0, .8fr) auto'
+                : 'minmax(0, 1.05fr) minmax(0, .8fr)')
+              : (isPrivateSource ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))'),
+            gap: isMobileLayout ? 1.25 : 2,
+            alignItems: 'center',
+          }}
+        >
           {!fieldHidden('payout') && (
-            <Box sx={isMobileLayout ? { width: '100%' } : { flex: '1 1 0', minWidth: 0 }}>
+            <Box sx={{ minWidth: 0 }}>
               <Controller
                 name="payout"
                 control={control}
@@ -623,15 +662,32 @@ export default function BookingEditFormRHF({
               />
             </Box>
           )}
+
+          {isPrivateSource && (
+            <Box sx={{ order: 3 }}>
+              <Controller
+                name="isPaid"
+                control={control}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />}
+                    label="Paid"
+                    sx={{ flex: '0 0 auto', mr: 0, whiteSpace: 'nowrap' }}
+                  />
+                )}
+              />
+            </Box>
+          )}
+
           {!fieldHidden('cleaningFee') && (
-            <Box sx={isMobileLayout ? { width: '100%' } : { flex: '1 1 0', minWidth: 0 }}>
+            <Box sx={{ minWidth: 0, order: 2 }}>
               <Controller
                 name="cleaningFee"
                 control={control}
                 render={({ field, fieldState }) => (
                   <TextField
                     {...field}
-                    label="Cleaning Fee"
+                    label={isMobileLayout ? 'Cleaning' : 'Cleaning Fee'}
                     size="small"
                     inputMode="decimal"
                     fullWidth
@@ -644,43 +700,41 @@ export default function BookingEditFormRHF({
               />
             </Box>
           )}
-          {String(source).toLowerCase() === 'private' && (
-            <Controller
-              name="isPaid"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={<Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />}
-                  label="Paid"
-                />
-              )}
-            />
-          )}
-        </Stack>
+        </Box>
 
         {/* Row 6: Payment Method / Commission % */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? 'minmax(0, 1.45fr) minmax(96px, .75fr)'
+              : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: isMobileLayout ? 1.25 : 2,
+            alignItems: 'start',
+          }}
+        >
           {!fieldHidden('paymentMethod') && (
-            <Box sx={isMobileLayout ? { width: '100%' } : { flex: '1 1 0', minWidth: 0 }}>
+            <Box sx={{ minWidth: 0 }}>
               <RHFSelect
                 name="paymentMethod"
                 control={control}
                 label="Payment Method"
                 options={paymentOptionsForEdit}
                 size="small"
+                margin={isMobileLayout ? 'none' : 'dense'}
                 fullWidth
               />
             </Box>
           )}
           {!fieldHidden('commissionPercent') && (
-            <Box sx={isMobileLayout ? { width: '100%' } : { flex: '1 1 0', minWidth: 0 }}>
+            <Box sx={{ minWidth: 0 }}>
               <Controller
                 name="commissionPercent"
                 control={control}
                 render={({ field, fieldState }) => (
                   <TextField
                     {...field}
-                    label="Commission %"
+                    label={isMobileLayout ? 'Commission' : 'Commission %'}
                     size="small"
                     inputMode="decimal"
                     value={field.value ?? ''}
@@ -694,7 +748,7 @@ export default function BookingEditFormRHF({
               />
             </Box>
           )}
-        </Stack>
+        </Box>
 
         {/* Row 9: Notes */}
         {!fieldHidden('notes') && (

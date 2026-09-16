@@ -75,6 +75,11 @@ import SocialCalendar from './pages/SocialCalendar';
 import ShareLinkHandler from './pages/ShareLinkHandler';
 import UnitInventoryPage from './pages/UnitInventory';
 import EmployeeTasks from './pages/EmployeeTasks';
+import MobileV2AccessGate from './mobile/MobileV2AccessGate';
+import MobileV2Shell from './mobile/MobileV2Shell';
+import MobileV2Home from './mobile/MobileV2Home';
+import MobileV2Calendar from './mobile/MobileV2Calendar';
+import { MOBILE_FEATURES } from './mobile/mobileFeatures';
 
 // --- Sticky mobile/desktop shell preference ---
 function PreferredShellStickyRedirect() {
@@ -348,6 +353,34 @@ function App() {
 
         {/* ===================== Mobile Routes (no desktop Layout) ===================== */}
         <Route path="/m/login" element={<Login />} />
+        <Route
+          path="/m/v2"
+          element={
+            <PrivateRoute>
+              <MobileV2AccessGate feature={MOBILE_FEATURES.dashboard}>
+                {(access) => (
+                  <MobileV2Shell access={access}>
+                    <MobileV2Home />
+                  </MobileV2Shell>
+                )}
+              </MobileV2AccessGate>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/m/v2/calendar"
+          element={
+            <PrivateRoute>
+              <MobileV2AccessGate feature={MOBILE_FEATURES.calendar}>
+                {(access) => (
+                  <MobileV2Shell access={access} disableScroll>
+                    <MobileV2Calendar />
+                  </MobileV2Shell>
+                )}
+              </MobileV2AccessGate>
+            </PrivateRoute>
+          }
+        />
         <Route
           path="/m/dashboard"
           element={
