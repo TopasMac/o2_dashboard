@@ -75,6 +75,7 @@ import SocialCalendar from './pages/SocialCalendar';
 import ShareLinkHandler from './pages/ShareLinkHandler';
 import UnitInventoryPage from './pages/UnitInventory';
 import EmployeeTasks from './pages/EmployeeTasks';
+import AppBranding from './components/AppBranding';
 import MobileV2AccessGate from './mobile/MobileV2AccessGate';
 import MobileV2Shell from './mobile/MobileV2Shell';
 import MobileV2Home from './mobile/MobileV2Home';
@@ -181,6 +182,7 @@ function App() {
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Router>
+        <AppBranding />
         <PreferredShellStickyRedirect />
         <Routes>
         {/* Login Page */}

@@ -184,6 +184,7 @@ class AccessProfileResolverService
     private function getCleanerBasePermissions(): array
     {
         return [
+            'mobile.cleanings.view',
             'tasks.view_self',
             'tasks.update_status_self',
             'dashboard.view_my_tasks',

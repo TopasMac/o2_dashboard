@@ -43,11 +43,10 @@ export const MOBILE_FEATURES = Object.freeze({
 
 export const MOBILE_FEATURE_LIST = Object.freeze(Object.values(MOBILE_FEATURES));
 
-// Production rollout guard. Keep Mobile V2 limited to administrators until a
-// manager or cleaner release has been explicitly tested and approved. The
-// per-feature permissions below remain the future access model, but they do
-// not activate non-admin navigation while this guard is enabled.
-export const MOBILE_V2_ADMIN_ONLY = true;
+// Controlled first non-admin rollout: Cleaners may use only the cleanings
+// feature when their server-issued profile includes its permission. Managers
+// and every other non-admin profile remain outside Mobile V2 for now.
+export const MOBILE_V2_CLEANER_PILOT = true;
 
 /**
  * One access decision for every Mobile V2 page and navigation item.
@@ -66,11 +65,15 @@ export function canAccessMobileFeature(access, feature) {
     return true;
   }
 
-  if (MOBILE_V2_ADMIN_ONLY) {
-    return false;
+  if (
+    MOBILE_V2_CLEANER_PILOT
+    && access.isCleaner
+    && feature.id === 'cleanings'
+  ) {
+    return permissions.includes(feature.permission);
   }
 
-  return Boolean(feature.permission && permissions.includes(feature.permission));
+  return false;
 }
 
 export function getAccessibleMobileFeatures(access, { includeUnavailable = false } = {}) {

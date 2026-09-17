@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\HKCleanings;
 use App\Entity\Unit;
 use App\Entity\Employee;
+use App\Service\CleaningCityScopeService;
 use App\Service\HKCleaningManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -22,11 +23,16 @@ class HKCleaningsWriteController extends AbstractController
 {
     private EntityManagerInterface $em;
     private HKCleaningManager $hkCleaningManager;
+    private CleaningCityScopeService $cleaningCityScope;
 
-    public function __construct(EntityManagerInterface $em, HKCleaningManager $hkCleaningManager)
-    {
+    public function __construct(
+        EntityManagerInterface $em,
+        HKCleaningManager $hkCleaningManager,
+        CleaningCityScopeService $cleaningCityScope,
+    ) {
         $this->em = $em;
         $this->hkCleaningManager = $hkCleaningManager;
+        $this->cleaningCityScope = $cleaningCityScope;
     }
 
     private function fmtDt($v): ?string
@@ -91,6 +97,15 @@ class HKCleaningsWriteController extends AbstractController
         }
 
         return null;
+    }
+
+    private function assertCurrentUserCanAccessCleaning(HKCleanings $cleaning): void
+    {
+        $this->cleaningCityScope->assertCleaningAccess(
+            $this->currentEmployee(),
+            $this->isGranted('ROLE_ADMIN'),
+            $cleaning->getCity(),
+        );
     }
 
     /**
@@ -1124,6 +1139,8 @@ public function markDoneBy(Request $request): JsonResponse
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
         }
 
+        $this->assertCurrentUserCanAccessCleaning($hk);
+
         // Resolve cleaner from the authenticated actor. Cleaners can only submit
         // as themselves; managers/admins may select a cleaner.
         $employeeId = $request->request->get('employeeId');
@@ -1218,6 +1235,8 @@ public function markDoneBy(Request $request): JsonResponse
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
         }
 
+        $this->assertCurrentUserCanAccessCleaning($hk);
+
         // Resolve current employee from the logged-in user.
         $employee = null;
         $user = $this->getUser();
@@ -1297,6 +1316,8 @@ public function markDoneBy(Request $request): JsonResponse
         if (!$hk) {
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
         }
+
+        $this->assertCurrentUserCanAccessCleaning($hk);
 
         // Resolve the completion actor through the same authorization policy
         // used by every other manual completion path. Cleaners may only submit

@@ -27,23 +27,32 @@ describe('Mobile V2 feature access', () => {
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.dashboard)).toBe(false);
   });
 
-  test('keeps non-admin feature permissions disabled for the initial rollout', () => {
-    const nonAdminProfiles = [
-      { isManager: true, permissions: ['mobile.calendar.view'] },
-      { isCleaner: true, permissions: ['mobile.cleanings.view'] },
-    ];
+  test('allows a cleaner to access only the cleanings feature during the pilot', () => {
+    const access = {
+      isAdmin: false,
+      isCleaner: true,
+      isEnabled: true,
+      isLoading: false,
+      permissions: ['mobile.cleanings.view'],
+    };
 
-    nonAdminProfiles.forEach((profile) => {
-      const access = {
-        isAdmin: false,
-        isEnabled: true,
-        isLoading: false,
-        ...profile,
-      };
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.dashboard)).toBe(false);
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(true);
+    expect(getAccessibleMobileFeatures(access).map((feature) => feature.id)).toEqual(['cleanings']);
+  });
 
-      expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
-      expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(false);
-    });
+  test('keeps managers outside the non-admin pilot', () => {
+    const access = {
+      isAdmin: false,
+      isManager: true,
+      isEnabled: true,
+      isLoading: false,
+      permissions: ['mobile.calendar.view', 'mobile.cleanings.view'],
+    };
+
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(false);
   });
 
   test('only returns implemented features for navigation', () => {
