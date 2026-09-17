@@ -27,16 +27,23 @@ describe('Mobile V2 feature access', () => {
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.dashboard)).toBe(false);
   });
 
-  test('supports individual permissions for future access assignments', () => {
-    const access = {
-      isAdmin: false,
-      isEnabled: true,
-      isLoading: false,
-      permissions: ['mobile.calendar.view'],
-    };
+  test('keeps non-admin feature permissions disabled for the initial rollout', () => {
+    const nonAdminProfiles = [
+      { isManager: true, permissions: ['mobile.calendar.view'] },
+      { isCleaner: true, permissions: ['mobile.cleanings.view'] },
+    ];
 
-    expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(true);
-    expect(canAccessMobileFeature(access, MOBILE_FEATURES.unitTransactions)).toBe(false);
+    nonAdminProfiles.forEach((profile) => {
+      const access = {
+        isAdmin: false,
+        isEnabled: true,
+        isLoading: false,
+        ...profile,
+      };
+
+      expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
+      expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(false);
+    });
   });
 
   test('only returns implemented features for navigation', () => {
