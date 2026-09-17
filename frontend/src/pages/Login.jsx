@@ -3,6 +3,7 @@ import api from '../api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Container, Box, Avatar, Typography, TextField, Button, Paper, Alert } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { resolveLoginTarget } from '../utils/loginRedirect';
 
 // Minimal JWT parser to extract roles if backend doesn't send them explicitly
 function parseJwtRoles(token) {
@@ -93,30 +94,19 @@ function Login() {
             localStorage.setItem('roles', JSON.stringify(rolesArr));
           }
         }
-        const hasRole = (r) => (rolesArr || []).includes(r);
-
         // Pick redirect target:
         // 1) explicit ?redirect=...
         // 2) preserved ?from=...
-        // 3) mobile context: /m/dashboard
-        // 4) role-based default: admins/managers -> /dashboard, clients -> /m/dashboard
-        let target = redirectParam || from;
-        if (!target) {
-          // Prefer mobile dashboard when login is initiated from a mobile context
-          if (isMobileHint) {
-            target = '/m/dashboard';
-          } else if (hasRole('ROLE_MANAGER') && !hasRole('ROLE_ADMIN')) {
-            target = '/manager-dashboard';
-          } else if (hasRole('ROLE_ADMIN')) {
-            target = '/dashboard';
-          } else if (hasRole('ROLE_MANAGER')) {
-            target = '/manager-dashboard';
-          } else if (hasRole('ROLE_CLIENT')) {
-            target = '/m/dashboard';
-          } else {
-            target = '/';
-          }
-        }
+        // 3) app.myhausin.com: Mobile V2
+        // 4) legacy mobile context: /m/dashboard
+        // 5) role-based desktop default
+        const target = resolveLoginTarget({
+          hostname: typeof window !== 'undefined' ? window.location.hostname : '',
+          redirectParam,
+          from,
+          isMobileHint,
+          roles: rolesArr,
+        });
 
         navigate(target, { replace: true });
         try {
