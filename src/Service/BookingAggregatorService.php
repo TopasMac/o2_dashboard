@@ -21,6 +21,7 @@ class BookingAggregatorService
     private ReservationConfigService $reservationConfigService;
     private MonthSliceRefresher $refresher;
     private LoggerInterface $logger;
+    private BookingNightCalculator $nightCalculator;
 
     /**
      * Strip any HTML/markup and decode entities to keep DB fields plain text.
@@ -272,7 +273,8 @@ class BookingAggregatorService
         BookingCalculatorService $bookingCalculatorService,
         ReservationConfigService $reservationConfigService,
         MonthSliceRefresher $refresher,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        BookingNightCalculator $nightCalculator
     ) {
         $this->entityManager = $entityManager;
         $this->bookingConfigRepository = $bookingConfigRepository;
@@ -280,6 +282,7 @@ class BookingAggregatorService
         $this->reservationConfigService = $reservationConfigService;
         $this->refresher = $refresher;
         $this->logger = $logger;
+        $this->nightCalculator = $nightCalculator;
     }
 
     public function createAllBookingFromPrivateReservation(PrivateReservation $reservation): AllBookings
@@ -396,7 +399,7 @@ class BookingAggregatorService
 
         // Ensure days is calculated
         if ($booking->getCheckIn() && $booking->getCheckOut()) {
-            $booking->setDays($booking->getCheckOut()->diff($booking->getCheckIn())->days);
+            $booking->setDays($this->nightCalculator->calculate($booking->getCheckIn(), $booking->getCheckOut()));
         }
 
         // Ensure status is set based on check-in and check-out dates
@@ -523,7 +526,7 @@ class BookingAggregatorService
 
         // Ensure days is calculated
         if ($booking->getCheckIn() && $booking->getCheckOut()) {
-            $booking->setDays($booking->getCheckOut()->diff($booking->getCheckIn())->days);
+            $booking->setDays($this->nightCalculator->calculate($booking->getCheckIn(), $booking->getCheckOut()));
         }
 
         // Ensure status is set based on check-in and check-out dates
@@ -730,7 +733,7 @@ class BookingAggregatorService
 
         // Update days
         if ($booking->getCheckIn() && $booking->getCheckOut()) {
-            $booking->setDays($booking->getCheckOut()->diff($booking->getCheckIn())->days);
+            $booking->setDays($this->nightCalculator->calculate($booking->getCheckIn(), $booking->getCheckOut()));
         }
 
         // Update status:

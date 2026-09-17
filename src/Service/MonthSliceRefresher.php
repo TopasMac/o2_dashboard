@@ -36,7 +36,7 @@ class MonthSliceRefresher
                     `o2_total`, `client_income`, `room_fee`,
                     `unit_id`, `city`, `unit_name`, `guest_name`, `guest_type`, `source`, `payment_method`,
                     `check_in`, `check_out`
-             FROM `owners2_dashboard`.`all_bookings`
+             FROM `all_bookings`
              WHERE `id` = :bid",
             ['bid' => $bookingId]
         );
@@ -120,7 +120,7 @@ SELECT
   ROUND(COALESCE(ab.`commission_value`, 0), 2) AS `o2_commission_in_month`,
   ROUND(COALESCE(ab.`client_income`, 0), 2)    AS `owner_payout_in_month`,
   COALESCE(ab.`commission_base`, 0)            AS `commission_base_in_month`
-FROM `owners2_dashboard`.`all_bookings` ab
+FROM `all_bookings` ab
 WHERE ab.`id` = :bid
 LIMIT 1
 SQL;
@@ -290,7 +290,7 @@ FROM (
         GREATEST(ab.`check_in`, STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d'))
       )) / NULLIF(DATEDIFF(ab.`check_out`, ab.`check_in`), 0)
     )), 2) AS `owner_payout_in_month`
-  FROM `owners2_dashboard`.`all_bookings` AS ab
+  FROM `all_bookings` AS ab
   JOIN {$monthsTableSql}
     ON ab.`check_in` < DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)
    AND ab.`check_out` > STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')
@@ -317,7 +317,7 @@ SQL;
         try {
             // Pull needed booking info (unit, city, checkout, cleaning fee collected)
             $ab2 = $this->conn->fetchAssociative(
-                "SELECT `unit_id`, `city`, `check_out`, `cleaning_fee` FROM `owners2_dashboard`.`all_bookings` WHERE `id` = :bid LIMIT 1",
+                "SELECT `unit_id`, `city`, `check_out`, `cleaning_fee` FROM `all_bookings` WHERE `id` = :bid LIMIT 1",
                 ['bid' => $bookingId]
             );
 

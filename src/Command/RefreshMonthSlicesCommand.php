@@ -51,7 +51,7 @@ class RefreshMonthSlicesCommand extends Command
         $ab = $this->conn->fetchAssociative(
             "SELECT `status`, `payout`, `tax_amount`, `cleaning_fee`, `commission_percent`, `commission_value`,
                     `o2_total`, `client_income`, `room_fee`, `check_in`
-             FROM `owners2_dashboard`.`all_bookings`
+             FROM `all_bookings`
              WHERE `id` = :bid",
             ['bid' => $bookingId]
         );
@@ -120,7 +120,7 @@ SELECT
   0.00                                  AS `cleaning_fee_in_month`,
   ROUND(COALESCE(ab.`commission_value`, 0), 2) AS `o2_commission_in_month`,
   ROUND(COALESCE(ab.`client_income`, 0), 2) AS `owner_payout_in_month`
-FROM `owners2_dashboard`.`all_bookings` ab
+FROM `all_bookings` ab
 WHERE ab.`id` = :bid
 LIMIT 1
 SQL;
@@ -395,7 +395,7 @@ FROM (
         )
       , 2)
     , 2) AS `owner_payout_in_month`
-  FROM `owners2_dashboard`.`all_bookings` AS ab
+  FROM `all_bookings` AS ab
   JOIN {$monthsTableSql}
     ON ab.`check_in` < DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)
    AND ab.`check_out` > STR_TO_DATE(CONCAT(m.`ym`,'-01'), '%Y-%m-%d')
@@ -421,7 +421,7 @@ SQL;
     private function fetchAllMonths(): array
     {
         $row = $this->conn->fetchAssociative(
-            "SELECT MIN(`check_in`) AS min_ci, MAX(`check_out`) AS max_co FROM `owners2_dashboard`.`all_bookings`"
+            "SELECT MIN(`check_in`) AS min_ci, MAX(`check_out`) AS max_co FROM `all_bookings`"
         );
         if (!$row || empty($row['min_ci']) || empty($row['max_co'])) {
             return [];
@@ -714,7 +714,7 @@ FROM (
       , 2)
     , 2) AS `owner_payout_in_month`
 
-  FROM `owners2_dashboard`.`all_bookings` AS ab
+  FROM `all_bookings` AS ab
   WHERE (LOWER(ab.`status`) NOT IN ('cancelled','canceled') OR ab.`status` IS NULL)
     AND ab.`check_in` < DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)
     AND ab.`check_out` > STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')
@@ -749,7 +749,7 @@ FROM (
     0.00 AS `cleaning_fee_in_month`,
     ROUND(COALESCE(ab.`commission_value`, 0), 2) AS `o2_commission_in_month`,
     ROUND(COALESCE(ab.`client_income`, 0), 2) AS `owner_payout_in_month`
-  FROM `owners2_dashboard`.`all_bookings` AS ab
+  FROM `all_bookings` AS ab
   WHERE LOWER(ab.`status`) IN ('cancelled','canceled')
     AND COALESCE(ab.`payout`, 0) > 0
     AND DATE_FORMAT(ab.`check_in`, '%Y-%m') = :ym
@@ -1033,7 +1033,7 @@ FROM (
         )
       , 2)
     , 2) AS `owner_payout_in_month`
-  FROM `owners2_dashboard`.`all_bookings` AS ab
+  FROM `all_bookings` AS ab
   WHERE (LOWER(ab.`status`) NOT IN ('cancelled','canceled') OR ab.`status` IS NULL)
     AND ab.`check_in` < DATE_ADD(LAST_DAY(STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')), INTERVAL 1 DAY)
     AND ab.`check_out` > STR_TO_DATE(CONCAT(:ym,'-01'), '%Y-%m-%d')
@@ -1068,7 +1068,7 @@ FROM (
     0.00 AS `cleaning_fee_in_month`,
     ROUND(COALESCE(ab.`commission_value`, 0), 2) AS `o2_commission_in_month`,
     ROUND(COALESCE(ab.`client_income`, 0), 2) AS `owner_payout_in_month`
-  FROM `owners2_dashboard`.`all_bookings` AS ab
+  FROM `all_bookings` AS ab
   WHERE LOWER(ab.`status`) IN ('cancelled','canceled')
     AND COALESCE(ab.`payout`, 0) > 0
     AND DATE_FORMAT(ab.`check_in`, '%Y-%m') = :ym

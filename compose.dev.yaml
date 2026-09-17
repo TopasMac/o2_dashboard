@@ -1,0 +1,35 @@
+services:
+  database:
+    image: mysql:8.0.43
+    container_name: owners2-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${OWNERS2_DB_NAME}
+      MYSQL_USER: ${OWNERS2_DB_USER}
+      MYSQL_PASSWORD: ${OWNERS2_DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${OWNERS2_DB_ROOT_PASSWORD}
+      TZ: America/Cancun
+    ports:
+      - "127.0.0.1:3308:3306"
+    volumes:
+      - owners2_mysql_dev_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mailer:
+    image: axllent/mailpit:v1.30.6
+    container_name: owners2-mailpit-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+volumes:
+  owners2_mysql_dev_data:
+    name: owners2_mysql_dev_data
