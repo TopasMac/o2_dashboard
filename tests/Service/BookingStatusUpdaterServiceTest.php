@@ -61,6 +61,26 @@ final class BookingStatusUpdaterServiceTest extends TestCase
         self::assertSame('Past', $booking->getStatus());
     }
 
+    public function testIncompleteBookingDatesDoNotCauseStatusUpdateFailure(): void
+    {
+        $booking = (new AllBookings())
+            ->setSource('Airbnb')
+            ->setStatus('Upcoming');
+
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::never())->method('persist');
+        $entityManager->expects(self::never())->method('flush');
+
+        $cleaningManager = $this->createMock(HKCleaningManager::class);
+        $cleaningManager->expects(self::never())->method('usesReconciliationPolicy');
+        $cleaningManager->expects(self::never())->method('syncCheckoutCleaningForBooking');
+
+        (new BookingStatusUpdaterService($entityManager, $cleaningManager))
+            ->updateStatuses([$booking]);
+
+        self::assertSame('Upcoming', $booking->getStatus());
+    }
+
     private function booking(\DateTimeImmutable $checkIn, \DateTimeImmutable $checkOut): AllBookings
     {
         return (new AllBookings())
