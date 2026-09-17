@@ -243,42 +243,60 @@ export default function MobileV2Calendar() {
   return (
     <>
       <Stack spacing={1.25} sx={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      <Box>
-        <Typography component="h1" variant="h5" sx={{ color: '#173f3b', fontWeight: 800 }}>
-          Calendario
-        </Typography>
-      </Box>
+        <Stack spacing={1.25} sx={{ flexShrink: 0, minWidth: 0 }}>
+          <Box>
+            <Typography component="h1" variant="h5" sx={{ color: '#173f3b', fontWeight: 800 }}>
+              Calendario
+            </Typography>
+          </Box>
 
-      {error && <Alert severity="error">{error}</Alert>}
+          {error && <Alert severity="error">{error}</Alert>}
 
-      {unitsLoading ? (
-        <Skeleton variant="rounded" height={56} />
-      ) : (
-        <Autocomplete
-          fullWidth
-          size="small"
-          options={units}
-          value={units.find((unit) => String(unit.id) === unitId) || null}
-          onChange={(_, unit) => setUnitId(unit ? String(unit.id) : '')}
-          getOptionLabel={(unit) => `${unit.unit_name}${unit.city ? ` · ${unit.city}` : ''}`}
-          isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
-          noOptionsText="No encontramos esa unidad"
-          clearText="Limpiar"
-          openText="Ver unidades"
-          closeText="Cerrar"
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Unidad"
-              placeholder="Escribe para buscar"
-              inputProps={{
-                ...params.inputProps,
-                autoComplete: 'off',
-              }}
+          {unitsLoading ? (
+            <Skeleton variant="rounded" height={56} />
+          ) : (
+            <Autocomplete
+              fullWidth
+              size="small"
+              options={units}
+              value={units.find((unit) => String(unit.id) === unitId) || null}
+              onChange={(_, unit) => setUnitId(unit ? String(unit.id) : '')}
+              getOptionLabel={(unit) => `${unit.unit_name}${unit.city ? ` · ${unit.city}` : ''}`}
+              isOptionEqualToValue={(option, value) => String(option.id) === String(value.id)}
+              noOptionsText="No encontramos esa unidad"
+              clearText="Limpiar"
+              openText="Ver unidades"
+              closeText="Cerrar"
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Unidad"
+                  placeholder="Escribe para buscar"
+                  inputProps={{
+                    ...params.inputProps,
+                    autoComplete: 'off',
+                  }}
+                />
+              )}
             />
           )}
-        />
-      )}
+        </Stack>
+
+        <Box
+          data-testid="mobile-calendar-scroll-region"
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            overscrollBehaviorX: 'none',
+            overscrollBehaviorY: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            pb: 0.5,
+          }}
+        >
+          <Stack spacing={1.25} sx={{ minWidth: 0 }}>
 
       <Card variant="outlined" sx={{ borderColor: '#d8e4e1', overflow: 'hidden', flexShrink: 0 }}>
         <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.5 } }}>
@@ -420,7 +438,7 @@ export default function MobileV2Calendar() {
         </CardContent>
       </Card>
 
-      <Box sx={{ minHeight: 0, overflowY: 'auto', pb: 0.5 }}>
+      <Box sx={{ minHeight: 0, minWidth: 0 }}>
         <Typography variant="overline" sx={{ color: '#1E6F68', fontWeight: 900 }}>
           {formatShortDate(selectedDate)}
         </Typography>
@@ -502,6 +520,8 @@ export default function MobileV2Calendar() {
           </Card>
         )}
       </Box>
+          </Stack>
+        </Box>
       </Stack>
 
       <MobileFormDrawer

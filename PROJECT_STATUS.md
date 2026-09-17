@@ -1,6 +1,6 @@
 # Owners2 project status
 
-Last updated: 2026-09-16
+Last updated: 2026-09-17
 
 ## Objective
 
@@ -65,20 +65,24 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Deployed commit:** `2a8fb4b` — `fix: preserve production booking safeguards (#6)`
-- **Deployment date:** 2026-09-16
-- **Checkout state after deployment:** clean and synchronized with `origin/main`
+- **Production server checkout last verified:** `9b4707b` — `release: deploy Admin-only Mobile V2`
+- **GitHub `main`:** `3f78a09` — `fix: keep HausIn login on Mobile V2 (#13)`
+- **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; the login-routing fix was deployed and the CloudFront cache was invalidated.
+- **Production server state after the last backend deployment:** clean and synchronized with `origin/main` at that time.
 - **Nginx:** active
 - **Doctrine migrations:** 234 executed, 234 available, 0 new; latest `Version20260529050811`
-- **Smoke test:** login, Bookings, and Housekeeping/Cleanings verified by the owner.
+- **Smoke tests:** normal dashboard login and Bookings verified by the owner; Mobile V2 route returns `200` and its protected API returns `401` without authentication.
 - **Database backup:** `owners2_dashboard_2026-09-16-02-30.sql` confirmed before deployment.
 - **Safety recovery:** production WIP was archived and retained in stash `pre-deploy-production-wip-2026-09-16`; do not reapply it without review because its intended behavior is now reconciled in Git.
 
 The release included no schema migration, cron modification, or historical data correction.
 
+Mobile V2 in production remains restricted to administrators. The current release candidate contains a controlled Cleaner pilot: verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. The candidate also preserves the dedicated `app.myhausin.com` login destination, adds HausIn branding, and stabilizes the mobile viewport. It must still pass a real-account Cleaner verification after promotion through the normal release process.
+
 ## Verification baseline
 
-- Backend suite: 16 tests, 54 assertions passed for the reconciled release.
+- Backend service suite: 25 tests, 68 assertions passed for the Cleaner-pilot release candidate.
+- Focused Mobile V2, login-routing, and branding frontend suite: 32 tests passed.
 - Symfony service-container validation passed in development and production modes.
 - Optimized frontend production build passed.
 - The legacy frontend `App.test.js` cannot resolve `react-router-dom` in the current Jest setup; this is a known test-harness issue.

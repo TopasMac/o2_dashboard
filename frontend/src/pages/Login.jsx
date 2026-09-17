@@ -94,18 +94,31 @@ function Login() {
             localStorage.setItem('roles', JSON.stringify(rolesArr));
           }
         }
-        // Pick redirect target:
-        // 1) explicit ?redirect=...
-        // 2) preserved ?from=...
-        // 3) app.myhausin.com: Mobile V2
-        // 4) legacy mobile context: /m/dashboard
-        // 5) role-based desktop default
+        let employeeArea = '';
+        const isEmployeeOnly = rolesArr.includes('ROLE_EMPLOYEE')
+          && !rolesArr.includes('ROLE_MANAGER')
+          && !rolesArr.includes('ROLE_ADMIN')
+          && !rolesArr.includes('ROLE_CLIENT');
+
+        if (isMobileHint && isEmployeeOnly) {
+          try {
+            const sessionResponse = await api.get('/api/session/me');
+            employeeArea = sessionResponse?.data?.employee?.area || '';
+          } catch (_sessionError) {
+            // The routing helper keeps the user in the existing safe mobile
+            // destination when the employee profile cannot be verified.
+          }
+        }
+
+        // Keep app.myhausin.com on Mobile V2, route verified Cleaners to the
+        // cleaning pilot, and preserve legacy/desktop behavior on other hosts.
         const target = resolveLoginTarget({
           hostname: typeof window !== 'undefined' ? window.location.hostname : '',
           redirectParam,
           from,
           isMobileHint,
           roles: rolesArr,
+          employeeArea,
         });
 
         navigate(target, { replace: true });
