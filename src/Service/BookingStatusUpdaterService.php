@@ -4,7 +4,6 @@ namespace App\Service;
 
 use App\Entity\AllBookings;
 use App\Entity\HKCleanings;
-use App\Entity\Unit;
 use App\Service\HKCleaningManager;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -65,15 +64,6 @@ class BookingStatusUpdaterService
             // Default date-driven status logic for non-Owners2 rows
             $checkIn = $booking->getCheckIn();
             $checkOut = $booking->getCheckOut();
-
-            // If a non-cancelled reservation has checked out, mark the HK cleaning as done (Playa + Tulum).
-            $nowCancun = new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun'));
-            if ($checkOut instanceof \DateTimeInterface
-                && !$this->hkCleaningManager->usesReconciliationPolicy($checkOut)
-                && $checkOut < $nowCancun
-            ) {
-                $this->syncHousekeepingDoneForPlayaOrTulum($booking);
-            }
 
             $status = $booking->getStatus();
             if ($checkOut < $now) {
@@ -159,96 +149,4 @@ class BookingStatusUpdaterService
         }
     }
 
-    private function syncHousekeepingDoneForPlayaOrTulum(AllBookings $booking): void
-    {
-        // Only apply to city: Tulum or Playa del Carmen
-        $city = null;
-
-        if (method_exists($booking, 'getCity')) {
-            $city = $booking->getCity();
-        } elseif (method_exists($booking, 'getUnitCity')) {
-            $city = $booking->getUnitCity();
-        }
-
-        if (!$city) {
-            // Fallback: resolve unit city by unit_name
-            $unitName = method_exists($booking, 'getUnitName') ? $booking->getUnitName() : null;
-            if ($unitName) {
-                try {
-                    $unitRepo = $this->entityManager->getRepository(Unit::class);
-                    $unit = $unitRepo->findOneBy(['unitName' => $unitName]);
-                    if ($unit && method_exists($unit, 'getCity')) {
-                        $city = $unit->getCity();
-                    }
-                } catch (\Throwable) {
-                    // ignore
-                }
-            }
-        }
-
-        $cityLower = strtolower((string)$city);
-        if (!in_array($cityLower, ['tulum', 'playa del carmen'], true)) {
-            return;
-        }
-
-        // Match hk_cleanings by reservation_code + checkout_date first
-        $repo = $this->entityManager->getRepository(HKCleanings::class);
-        $date = $booking->getCheckOut();
-        if (!$date instanceof \DateTimeInterface) {
-            return;
-        }
-        $dateImmutable = \DateTimeImmutable::createFromInterface($date);
-
-        $hk = null;
-
-        // 1) Best match: booking_id
-        $bookingId = (int)($booking->getId() ?? 0);
-        if ($bookingId > 0) {
-            $hk = $repo->findOneBy(['bookingId' => $bookingId]);
-        }
-
-        $resCode = method_exists($booking, 'getConfirmationCode') ? $booking->getConfirmationCode() : null;
-        if (!$hk && $resCode) {
-            $hk = $repo->findOneBy([
-                'reservationCode' => $resCode,
-                'checkoutDate' => $dateImmutable,
-            ]);
-        }
-
-        // Fallback: match by unit_name + date
-        if (!$hk) {
-            $unitName = method_exists($booking, 'getUnitName') ? $booking->getUnitName() : null;
-            if ($unitName) {
-                $hk = $repo->createQueryBuilder('h')
-                    ->leftJoin('h.unit', 'u')
-                    ->andWhere('h.checkoutDate = :d')
-                    ->andWhere('u.unitName = :un')
-                    ->setParameter('d', $dateImmutable)
-                    ->setParameter('un', $unitName)
-                    ->setMaxResults(1)
-                    ->getQuery()
-                    ->getOneOrNullResult();
-            }
-        }
-
-        if ($hk && method_exists($hk, 'setStatus')) {
-            $doneConst = \defined(HKCleanings::class . '::STATUS_DONE') ? HKCleanings::STATUS_DONE : 'done';
-            $cancelConst = \defined(HKCleanings::class . '::STATUS_CANCELLED') ? HKCleanings::STATUS_CANCELLED : 'cancelled';
-
-            // Never override cancelled
-            if (method_exists($hk, 'getStatus')) {
-                $cur = $hk->getStatus();
-                if ($cur === $cancelConst) {
-                    return;
-                }
-                if ($cur === $doneConst) {
-                    return; // already done
-                }
-            }
-
-            // Delegate to manager to mark done + create hktransactions row (idempotent)
-            $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
-            // Do not flush here; defer to caller's $flush flag in updateStatuses()
-        }
-    }
 }

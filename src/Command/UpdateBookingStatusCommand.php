@@ -74,8 +74,8 @@ class UpdateBookingStatusCommand extends Command
         );
 
         // Apply the idempotent booking -> cleaning policy only from the cutoff onward.
-        // Upcoming/Ongoing => Pending, Past => Done + reconciliation, Cancelled => remove cleaning.
-        // This policy deliberately does not create hktransactions rows.
+        // Active/Past reservations create or retain a cleaning without completing it;
+        // Cancelled reservations remove their booking-driven cleaning.
         $hkSynced = 0;
         $hkCreated = 0;
         $hkRemoved = 0;

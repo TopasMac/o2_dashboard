@@ -27,16 +27,19 @@ class HKCleaningManager
     private Connection $conn;
     private HKCleaningRateResolver $rateResolver;
     private DocumentUploadService $documentUploadService;
+    private HKCleaningBookingSyncPolicy $bookingSyncPolicy;
 
     public function __construct(
         EntityManagerInterface $em,
         HKCleaningRateResolver $rateResolver,
-        DocumentUploadService $documentUploadService
+        DocumentUploadService $documentUploadService,
+        HKCleaningBookingSyncPolicy $bookingSyncPolicy,
     ) {
         $this->em = $em;
         $this->conn = $em->getConnection();
         $this->rateResolver = $rateResolver;
         $this->documentUploadService = $documentUploadService;
+        $this->bookingSyncPolicy = $bookingSyncPolicy;
     }
 
     private function normalizeCity(?string $city): string
@@ -200,9 +203,6 @@ class HKCleaningManager
         $costCentre = $this->costCentreFromCity($city);
         $cleaningType = $guestType === 'owner' ? HKCleanings::TYPE_OWNER : HKCleanings::TYPE_CHECKOUT;
 
-        $cleaningStatus = $bookingStatus === 'past'
-            ? HKCleanings::STATUS_DONE
-            : HKCleanings::STATUS_PENDING;
         $existingBeforeSync = $this->findBookingCleaning(
             $booking,
             $unit,
@@ -210,17 +210,10 @@ class HKCleaningManager
             $cleaningType,
             $reservationCode,
         );
-        $resetLegacyAutoReported = false;
-        if ($cleaningStatus === HKCleanings::STATUS_DONE && $existingBeforeSync instanceof HKCleanings) {
-            $existingCity = $this->normalizeCity((string)($existingBeforeSync->getCity() ?? $city));
-            $reportStatus = strtolower(trim((string)($existingBeforeSync->getReportStatus() ?? '')));
-            $cleaningCost = $existingBeforeSync->getCleaningCost();
-            $laundryCost = $existingBeforeSync->getLaundryCost();
-            $resetLegacyAutoReported = $existingCity === 'Playa del Carmen'
-                && $reportStatus === HKCleanings::REPORT_STATUS_REPORTED
-                && ($cleaningCost === null || trim((string)$cleaningCost) === '')
-                && ($laundryCost === null || trim((string)$laundryCost) === '');
-        }
+        // Booking synchronization may create or update a cleaning, but a past
+        // checkout is not evidence that the work was completed. Preserve any
+        // existing manual workflow status; new rows always start pending.
+        $cleaningStatus = $this->bookingSyncPolicy->statusFor($existingBeforeSync);
 
         $payload = [
             'unitId'          => $unitId,
@@ -233,6 +226,9 @@ class HKCleaningManager
             'notes'           => $notes,
             'bill_to'         => $billTo,
             'cost_centre'     => $costCentre,
+            // Booking synchronization may preserve an already-done row, but it
+            // must never manufacture completion timestamps or actors.
+            'finalizeDone'     => false,
         ];
 
         $result = $this->bulkCreate([$payload]);
@@ -245,12 +241,8 @@ class HKCleaningManager
             $reservationCode,
         );
         if ($cleaning instanceof HKCleanings) {
-            if ($cleaningStatus === HKCleanings::STATUS_DONE) {
-                if ($resetLegacyAutoReported) {
-                    $cleaning->setReportStatus(HKCleanings::REPORT_STATUS_PENDING);
-                    $this->em->persist($cleaning);
-                    $this->em->flush();
-                }
+            $actualStatus = strtolower(trim((string) $cleaning->getStatus()));
+            if ($actualStatus === strtolower(HKCleanings::STATUS_DONE)) {
                 $this->deleteTransactionForCleaning($cleaning);
                 $this->ensureReconcileRowExistsForDoneCleaning($cleaning);
             } else {
@@ -401,6 +393,7 @@ class HKCleaningManager
             }
 
             $status = $data['status'] ?? HKCleanings::STATUS_PENDING; // auto-created rows start as pending
+            $finalizeDone = (bool)($data['finalizeDone'] ?? true);
             $city = $this->normalizeCity($data['city'] ?? ($unit->getCity() ?? ''));
 
             // Defaults
@@ -490,7 +483,7 @@ class HKCleaningManager
                 if (method_exists($existing, 'setStatus')) {
                     $existing->setStatus($status);
                     // If bulkCreate marks an existing row as DONE, also create the hktransactions ledger row.
-                    if (strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
+                    if ($finalizeDone && strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
                         if ($this->usesReconciliationPolicy($checkoutDt)) {
                             $toReconcileOnly[] = $existing;
                         } else {
@@ -611,7 +604,7 @@ class HKCleaningManager
             }
 
             // If bulkCreate inserts a row already marked DONE, also create the hktransactions ledger row.
-            if (strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
+            if ($finalizeDone && strtolower((string)$status) === strtolower((string)HKCleanings::STATUS_DONE)) {
                 if ($this->usesReconciliationPolicy($checkoutDt)) {
                     $toReconcileOnly[] = $hk;
                 } else {
@@ -637,8 +630,9 @@ class HKCleaningManager
 
         foreach ($toReconcileOnly as $hkDone) {
             try {
-                $this->deleteTransactionForCleaning($hkDone);
-                $this->ensureReconcileRowExistsForDoneCleaning($hkDone);
+                // Post-cutoff completion suppresses hktransactions inside this
+                // method, while still recording doneAt and reconciliation.
+                $this->markDoneAndCreateTransaction($hkDone);
             } catch (\Throwable $e) {
                 // Reconciliation is best-effort here; callers can safely retry the idempotent sync.
             }
@@ -1022,6 +1016,31 @@ class HKCleaningManager
             'transactionCode' => method_exists($tx, 'getTransactionCode') ? $tx->getTransactionCode() : null,
             'alreadyExisted' => false,
         ];
+    }
+
+    /**
+     * Complete a cleaning through an explicit user action.
+     *
+     * Booking synchronization must never call this method. The optional employee
+     * is the authenticated actor (or the cleaner selected by a manager/admin).
+     */
+    public function completeCleaning(HKCleanings $hk, ?Employee $completedBy = null): array
+    {
+        if ($completedBy instanceof Employee && $hk->getDoneByEmployee() === null) {
+            $hk->setDoneByEmployee($completedBy);
+        }
+        if ($hk->getDoneAt() === null) {
+            $hk->setDoneAt(new \DateTimeImmutable('now', new DateTimeZone('America/Cancun')));
+        }
+        $hk->setStatus(HKCleanings::STATUS_DONE);
+
+        // Persist the audit fields before downstream accounting/reconciliation.
+        // This also covers the legacy idempotency path that can return early when
+        // a linked transaction already exists.
+        $this->em->persist($hk);
+        $this->em->flush();
+
+        return $this->markDoneAndCreateTransaction($hk);
     }
 
     /**
