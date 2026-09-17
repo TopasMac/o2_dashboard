@@ -1298,22 +1298,13 @@ public function markDoneBy(Request $request): JsonResponse
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
         }
 
-        // Resolve cleaner (employee) either from explicit employeeId or from the logged-in user.
-        $employee = null;
+        // Resolve the completion actor through the same authorization policy
+        // used by every other manual completion path. Cleaners may only submit
+        // as themselves; managers/admins may optionally select a cleaner.
         $employeeId = $request->request->get('employeeId');
-        if ($employeeId) {
-            $employee = $this->em->getRepository(Employee::class)->find((int)$employeeId);
-        } else {
-            $user = $this->getUser();
-            if ($user instanceof Employee) {
-                $employee = $user;
-            } elseif ($user && method_exists($user, 'getEmployee')) {
-                $maybe = $user->getEmployee();
-                if ($maybe instanceof Employee) {
-                    $employee = $maybe;
-                }
-            }
-        }
+        $employee = $this->resolveCompletionActor(
+            $employeeId && is_numeric($employeeId) ? (int) $employeeId : null,
+        );
 
         if (!$employee instanceof Employee) {
             return $this->json(['ok' => false, 'error' => 'Cleaner (employee) could not be resolved'], Response::HTTP_BAD_REQUEST);

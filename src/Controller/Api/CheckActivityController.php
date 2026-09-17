@@ -164,84 +164,191 @@ class CheckActivityController extends AbstractController
         unset($row);
 
         // --- Enrich with Housekeepers cleaning info (hk_cleanings) ---
-        // Collect unit ids and min/max checkout dates from rows
+        // Collect unit ids from booking activity rows.
         $unitIds = [];
-        $minCheckout = null; // 'Y-m-d'
-        $maxCheckout = null; // 'Y-m-d'
         foreach ($data as $r) {
             if (!empty($r['unit_id'])) {
                 $unitIds[(int)$r['unit_id']] = true;
             }
-            if (!empty($r['check_out'])) {
-                $d = substr((string)$r['check_out'], 0, 10);
-                if ($d) {
-                    if ($minCheckout === null || $d < $minCheckout) { $minCheckout = $d; }
-                    if ($maxCheckout === null || $d > $maxCheckout) { $maxCheckout = $d; }
-                }
-            }
         }
 
-        $hkIndex = [];
-        if (!empty($unitIds) && $minCheckout !== null && $maxCheckout !== null) {
+        // Include the practical unit/condo access details used by the mobile
+        // cleaning calendar. These values are deliberately returned with the
+        // general response so the access panel can open immediately. Client
+        // accounts use this endpoint elsewhere, so credentials remain limited
+        // to operational staff roles.
+        $unitAccessIndex = [];
+        $canViewUnitAccess = $this->isGranted('ROLE_ADMIN')
+            || $this->isGranted('ROLE_MANAGER')
+            || $this->isGranted('ROLE_EMPLOYEE');
+        if ($canViewUnitAccess && !empty($unitIds)) {
             $conn = $em->getConnection();
-            $hkSql = [];
-            $hkSql[] = 'SELECT h.id,';
-            $hkSql[] = '       h.unit_id AS unitId,';
-            $hkSql[] = '       DATE(h.checkout_date) AS checkoutDate,';
-            $hkSql[] = '       h.status,';
-            $hkSql[] = '       h.o2_collected_fee AS collectedFee,';
-            $hkSql[] = '       h.assigned_to_id AS assignedToId,';
-            $hkSql[] = '       e.short_name AS assignedToShortName';
-            $hkSql[] = 'FROM hk_cleanings h';
-            $hkSql[] = 'LEFT JOIN employee e ON e.id = h.assigned_to_id';
-            $hkSql[] = "WHERE h.cleaning_type = 'checkout'";
-            $hkSql[] = '  AND h.checkout_date BETWEEN :d1 AND :d2';
-            $hkSql[] = '  AND h.unit_id IN (' . implode(',', array_map('intval', array_keys($unitIds))) . ')';
+            $accessSql = [];
+            $accessSql[] = 'SELECT u.id AS unitId,';
+            $accessSql[] = '       u.unit_number AS unitNumber,';
+            $accessSql[] = '       u.unit_floor AS unitFloor,';
+            $accessSql[] = '       u.access_type AS accessType,';
+            $accessSql[] = '       u.access_code AS accessCode,';
+            $accessSql[] = '       u.wifi_name AS wifiName,';
+            $accessSql[] = '       u.wifi_password AS wifiPassword,';
+            $accessSql[] = '       c.condo_name AS condoName,';
+            $accessSql[] = '       c.door_code AS condoDoorCode';
+            $accessSql[] = 'FROM unit u';
+            $accessSql[] = 'LEFT JOIN condo c ON c.id = u.condo_id';
+            $accessSql[] = 'WHERE u.id IN (' . implode(',', array_map('intval', array_keys($unitIds))) . ')';
 
-            $stmt = $conn->prepare(implode("\n", $hkSql));
-            $stmt->bindValue(':d1', $minCheckout);
-            $stmt->bindValue(':d2', $maxCheckout);
-            $hkRows = $stmt->executeQuery()->fetchAllAssociative();
-
-            foreach ($hkRows as $h) {
-                $u = (int)$h['unitId'];
-                $d = (string)$h['checkoutDate']; // Y-m-d
-                $hkIndex[$u][$d] = [
-                    'id' => (int)($h['id'] ?? 0),
-                    'status' => (string)($h['status'] ?? ''),
-                    'collectedFee' => number_format((float)($h['collectedFee'] ?? 0), 2, '.', ''),
-                    'assignedToId' => isset($h['assignedToId']) ? (int) $h['assignedToId'] : null,
-                    'assignedToShortName' => isset($h['assignedToShortName']) ? (string) $h['assignedToShortName'] : null,
+            $accessRows = $conn->executeQuery(implode("\n", $accessSql))->fetchAllAssociative();
+            foreach ($accessRows as $accessRow) {
+                $unitId = (int)($accessRow['unitId'] ?? 0);
+                if ($unitId <= 0) {
+                    continue;
+                }
+                $unitAccessIndex[$unitId] = [
+                    'unit_number' => $accessRow['unitNumber'] ?? null,
+                    'unit_floor' => $accessRow['unitFloor'] ?? null,
+                    'access_type' => $accessRow['accessType'] ?? null,
+                    'access_code' => $accessRow['accessCode'] ?? null,
+                    'wifi_name' => $accessRow['wifiName'] ?? null,
+                    'wifi_password' => $accessRow['wifiPassword'] ?? null,
+                    'condo_name' => $accessRow['condoName'] ?? null,
+                    'condo_door_code' => $accessRow['condoDoorCode'] ?? null,
                 ];
             }
         }
 
+        foreach ($data as &$row) {
+            $unitId = !empty($row['unit_id']) ? (int)$row['unit_id'] : 0;
+            $access = $unitAccessIndex[$unitId] ?? [];
+            $row['unit_number'] = $access['unit_number'] ?? null;
+            $row['unit_floor'] = $access['unit_floor'] ?? null;
+            $row['access_type'] = $access['access_type'] ?? null;
+            $row['access_code'] = $access['access_code'] ?? null;
+            $row['wifi_name'] = $access['wifi_name'] ?? null;
+            $row['wifi_password'] = $access['wifi_password'] ?? null;
+            $row['condo_name'] = $access['condo_name'] ?? null;
+            $row['condo_door_code'] = $access['condo_door_code'] ?? null;
+        }
+        unset($row);
+
+        // Load every cleaning type for the requested days. Refresh, mid-stay,
+        // redo, and orphaned checkout rows must still appear even when there is
+        // no booking check-in/check-out event for the unit on that day.
+        $conn = $em->getConnection();
+        $hkSql = [];
+        $hkSql[] = 'SELECT h.id,';
+        $hkSql[] = '       h.unit_id AS unitId,';
+        $hkSql[] = "       COALESCE(u.unit_name, CONCAT('Unit #', h.unit_id)) AS unitName,";
+        $hkSql[] = '       COALESCE(u.city, h.city) AS unitCity,';
+        $hkSql[] = '       DATE(h.checkout_date) AS checkoutDate,';
+        $hkSql[] = '       h.cleaning_type AS cleaningType,';
+        $hkSql[] = '       h.reservation_code AS reservationCode,';
+        $hkSql[] = '       h.status,';
+        $hkSql[] = '       h.o2_collected_fee AS collectedFee,';
+        $hkSql[] = '       h.assigned_to_id AS assignedToId,';
+        $hkSql[] = '       e.short_name AS assignedToShortName,';
+        $hkSql[] = '       u.unit_number AS unitNumber,';
+        $hkSql[] = '       u.unit_floor AS unitFloor,';
+        $hkSql[] = '       u.access_type AS accessType,';
+        $hkSql[] = '       u.access_code AS accessCode,';
+        $hkSql[] = '       u.wifi_name AS wifiName,';
+        $hkSql[] = '       u.wifi_password AS wifiPassword,';
+        $hkSql[] = '       c.condo_name AS condoName,';
+        $hkSql[] = '       c.door_code AS condoDoorCode';
+        $hkSql[] = 'FROM hk_cleanings h';
+        $hkSql[] = 'LEFT JOIN unit u ON u.id = h.unit_id';
+        $hkSql[] = 'LEFT JOIN condo c ON c.id = u.condo_id';
+        $hkSql[] = 'LEFT JOIN employee e ON e.id = h.assigned_to_id';
+        $hkSql[] = 'WHERE h.checkout_date BETWEEN :d1 AND :d2';
+        if ($city) {
+            $hkSql[] = '  AND COALESCE(u.city, h.city) = :hkCity';
+        }
+        $hkSql[] = 'ORDER BY u.unit_name ASC, h.id ASC';
+
+        $stmt = $conn->prepare(implode("\n", $hkSql));
+        $stmt->bindValue(':d1', $start->format('Y-m-d'));
+        $stmt->bindValue(':d2', $end->format('Y-m-d'));
+        if ($city) {
+            $stmt->bindValue(':hkCity', $city);
+        }
+        $hkRowsRaw = $stmt->executeQuery()->fetchAllAssociative();
+
+        $hkRows = [];
+        $hkIndex = [];
+        foreach ($hkRowsRaw as $h) {
+            $normalized = [
+                'id' => (int)($h['id'] ?? 0),
+                'unitId' => (int)($h['unitId'] ?? 0),
+                'unitName' => (string)($h['unitName'] ?? 'Unidad'),
+                'unitCity' => (string)($h['unitCity'] ?? ''),
+                'checkoutDate' => (string)($h['checkoutDate'] ?? ''),
+                'cleaningType' => (string)($h['cleaningType'] ?? ''),
+                'reservationCode' => $h['reservationCode'] ?? null,
+                'status' => (string)($h['status'] ?? ''),
+                'collectedFee' => number_format((float)($h['collectedFee'] ?? 0), 2, '.', ''),
+                'assignedToId' => isset($h['assignedToId']) ? (int)$h['assignedToId'] : null,
+                'assignedToShortName' => isset($h['assignedToShortName']) ? (string)$h['assignedToShortName'] : null,
+                'unitNumber' => $h['unitNumber'] ?? null,
+                'unitFloor' => $h['unitFloor'] ?? null,
+                'accessType' => $h['accessType'] ?? null,
+                'accessCode' => $h['accessCode'] ?? null,
+                'wifiName' => $h['wifiName'] ?? null,
+                'wifiPassword' => $h['wifiPassword'] ?? null,
+                'condoName' => $h['condoName'] ?? null,
+                'condoDoorCode' => $h['condoDoorCode'] ?? null,
+            ];
+            $hkRows[] = $normalized;
+            $hkIndex[$normalized['unitId']][$normalized['checkoutDate']][] = $normalized;
+        }
+
         // Attach HK info only for checkout events
+        $representedCleaningIds = [];
         foreach ($data as &$row) {
             // Default flat fields
             $row['hk_cleaning_id'] = null;
             $row['hk_done'] = false;
             $row['hk_assigned_to_id'] = null;
             $row['hk_assigned_to_short_name'] = null;
+            $row['hk_cleaning_type'] = null;
 
             if (!empty($row['event_check_out'])) {
                 $u = isset($row['unit_id']) ? (int) $row['unit_id'] : null;
                 $d = !empty($row['check_out']) ? substr((string) $row['check_out'], 0, 10) : null;
 
-                if ($u && $d && isset($hkIndex[$u][$d])) {
-                    $h = $hkIndex[$u][$d];
+                $candidates = ($u && $d) ? ($hkIndex[$u][$d] ?? []) : [];
+                $reservationCode = (string)($row['reservation_code'] ?? '');
+                $h = null;
+                foreach ($candidates as $candidate) {
+                    if ($reservationCode !== '' && (string)($candidate['reservationCode'] ?? '') === $reservationCode) {
+                        $h = $candidate;
+                        break;
+                    }
+                }
+                if ($h === null) {
+                    foreach ($candidates as $candidate) {
+                        $type = strtolower(trim((string)($candidate['cleaningType'] ?? '')));
+                        if (in_array($type, ['checkout', 'owner'], true)) {
+                            $h = $candidate;
+                            break;
+                        }
+                    }
+                }
+
+                if ($h !== null) {
                     $isDone = strtolower((string) $h['status']) === 'done';
 
                     $row['hk'] = [
                         'id'   => $h['id'],
                         'done' => $isDone,
+                        'cleaningType' => $h['cleaningType'],
                         'assignedToId' => $h['assignedToId'] ?? null,
                         'assignedToShortName' => $h['assignedToShortName'] ?? null,
                     ];
                     $row['hk_cleaning_id'] = $h['id'];
                     $row['hk_done'] = $isDone;
+                    $row['hk_cleaning_type'] = $h['cleaningType'];
                     $row['hk_assigned_to_id'] = $h['assignedToId'] ?? null;
                     $row['hk_assigned_to_short_name'] = $h['assignedToShortName'] ?? null;
+                    $representedCleaningIds[(int)$h['id']] = true;
                 } else {
                     // No matching hk_cleanings row
                     $row['hk'] = null;
@@ -253,6 +360,53 @@ class CheckActivityController extends AbstractController
         }
         unset($row);
 
+        // Add cleaning-only rows for service types that have no corresponding
+        // booking event, or for any unmatched checkout/owner cleaning.
+        foreach ($hkRows as $h) {
+            if (isset($representedCleaningIds[(int)$h['id']])) {
+                continue;
+            }
+            $isDone = strtolower((string)$h['status']) === 'done';
+            $data[] = [
+                'id' => null,
+                'unit_id' => $h['unitId'],
+                'unit_name' => $h['unitName'],
+                'guest' => '',
+                'reservation_code' => $h['reservationCode'],
+                'source' => '',
+                'check_in' => null,
+                'check_out' => null,
+                'service_date' => $h['checkoutDate'],
+                'notes' => null,
+                'check_in_notes' => null,
+                'check_out_notes' => null,
+                'city' => $h['unitCity'],
+                'event_check_in' => false,
+                'event_check_out' => false,
+                'event_cleaning_only' => true,
+                'hk_cleaning_id' => $h['id'],
+                'hk_done' => $isDone,
+                'hk_cleaning_type' => $h['cleaningType'],
+                'hk_assigned_to_id' => $h['assignedToId'],
+                'hk_assigned_to_short_name' => $h['assignedToShortName'],
+                'hk' => [
+                    'id' => $h['id'],
+                    'done' => $isDone,
+                    'cleaningType' => $h['cleaningType'],
+                    'assignedToId' => $h['assignedToId'],
+                    'assignedToShortName' => $h['assignedToShortName'],
+                ],
+                'unit_number' => $canViewUnitAccess ? $h['unitNumber'] : null,
+                'unit_floor' => $canViewUnitAccess ? $h['unitFloor'] : null,
+                'access_type' => $canViewUnitAccess ? $h['accessType'] : null,
+                'access_code' => $canViewUnitAccess ? $h['accessCode'] : null,
+                'wifi_name' => $canViewUnitAccess ? $h['wifiName'] : null,
+                'wifi_password' => $canViewUnitAccess ? $h['wifiPassword'] : null,
+                'condo_name' => $canViewUnitAccess ? $h['condoName'] : null,
+                'condo_door_code' => $canViewUnitAccess ? $h['condoDoorCode'] : null,
+            ];
+        }
+
         // --- Enrich with checklist draft/submission info (hk_cleaning_checklist) ---
         // We match by hk_cleanings.id (cleaning_id in hk_cleaning_checklist)
         $cleaningIds = [];
@@ -262,14 +416,16 @@ class CheckActivityController extends AbstractController
             }
         }
 
-        $checklistIndex = []; // cleaningId => ['submittedAt' => mixed|null, 'cleanerId' => int|null]
+        $checklistIndex = []; // cleaningId => latest checklist details
         if (!empty($cleaningIds)) {
             $conn = $em->getConnection();
             $sql = [];
-            $sql[] = 'SELECT c.cleaning_id AS cleaningId, c.cleaner_id AS cleanerId, c.submitted_at AS submittedAt, e.short_name AS cleanerShortName';
+            $sql[] = 'SELECT c.cleaning_id AS cleaningId, c.cleaner_id AS cleanerId, c.submitted_at AS submittedAt,';
+            $sql[] = '       c.cleaning_notes AS cleaningNotes, e.short_name AS cleanerShortName';
             $sql[] = 'FROM hk_cleaning_checklist c';
             $sql[] = 'LEFT JOIN employee e ON e.id = c.cleaner_id';
             $sql[] = 'WHERE c.cleaning_id IN (' . implode(',', array_map('intval', array_keys($cleaningIds))) . ')';
+            $sql[] = '  AND c.id = (SELECT MAX(c2.id) FROM hk_cleaning_checklist c2 WHERE c2.cleaning_id = c.cleaning_id)';
 
             $stmt = $conn->prepare(implode("\n", $sql));
             $rows = $stmt->executeQuery()->fetchAllAssociative();
@@ -283,6 +439,7 @@ class CheckActivityController extends AbstractController
                     'submittedAt' => $c['submittedAt'] ?? null,
                     'cleanerId'   => isset($c['cleanerId']) ? (int) $c['cleanerId'] : null,
                     'cleanerShortName' => isset($c['cleanerShortName']) ? (string) $c['cleanerShortName'] : null,
+                    'cleaningNotes' => isset($c['cleaningNotes']) ? (string) $c['cleaningNotes'] : null,
                 ];
             }
         }
@@ -293,12 +450,14 @@ class CheckActivityController extends AbstractController
             $row['checklist_submitted_at'] = null;
             $row['checklist_cleaner_id'] = null;
             $row['checklist_cleaner_short_name'] = null;
+            $row['checklist_cleaning_notes'] = null;
 
             $cid = !empty($row['hk_cleaning_id']) ? (int) $row['hk_cleaning_id'] : 0;
             if ($cid > 0 && array_key_exists($cid, $checklistIndex)) {
                 $submittedAt = $checklistIndex[$cid]['submittedAt'] ?? null;
                 $row['checklist_cleaner_id'] = $checklistIndex[$cid]['cleanerId'] ?? null;
                 $row['checklist_cleaner_short_name'] = $checklistIndex[$cid]['cleanerShortName'] ?? null;
+                $row['checklist_cleaning_notes'] = $checklistIndex[$cid]['cleaningNotes'] ?? null;
 
                 // If submitted_at is NULL => draft exists (saved but not submitted)
                 if ($submittedAt === null) {

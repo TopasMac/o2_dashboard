@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: HausIn mobile application hosting on app.myhausin.com
+
+# REVIEW-ONLY PROPOSAL — DO NOT APPLY AS-IS.
+#
+# This template describes the static S3/CloudFront placeholder architecture.
+# It does not route /api/* to the Symfony backend, and its Route53 resources do
+# not represent the currently authoritative Wix-managed DNS zone. The release
+# process must first inventory the existing AWS resources and decide whether to
+# import/update them or replace this proposal with a reviewed stack.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: app.myhausin.com
+  HostedZoneId:
+    Type: String
+    Default: Z08591472C1Z5ECZQ74YQ
+
+Resources:
+  MobileAppBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: app-myhausin-com-147997122630
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  MobileAppCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  MobileAppOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: app-myhausin-com-oac
+        Description: Private S3 access for the HausIn mobile application
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  MobileAppDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DomainName
+        Comment: HausIn mobile application
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt MobileAppBucket.RegionalDomainName
+            Id: mobile-app-s3
+            OriginAccessControlId: !Ref MobileAppOriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          Compress: true
+          TargetOriginId: mobile-app-s3
+          ViewerProtocolPolicy: redirect-to-https
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          AcmCertificateArn: !Ref MobileAppCertificate
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+
+  MobileAppBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MobileAppBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${MobileAppBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${MobileAppDistribution}'
+
+  MobileAppDnsA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt MobileAppDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  MobileAppDnsAAAA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt MobileAppDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+Outputs:
+  ApplicationUrl:
+    Value: !Sub 'https://${DomainName}'
+  BucketName:
+    Value: !Ref MobileAppBucket
+  DistributionId:
+    Value: !Ref MobileAppDistribution
+  DistributionDomainName:
+    Value: !GetAtt MobileAppDistribution.DomainName

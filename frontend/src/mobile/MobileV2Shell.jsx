@@ -1,0 +1,111 @@
+import * as React from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import AppBar from '@mui/material/AppBar';
+import Box from '@mui/material/Box';
+import Container from '@mui/material/Container';
+import IconButton from '@mui/material/IconButton';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
+import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
+import CleaningServicesRoundedIcon from '@mui/icons-material/CleaningServicesRounded';
+import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import { getAccessibleMobileFeatures } from './mobileFeatures';
+
+const NAV_ICONS = {
+  dashboard: HomeRoundedIcon,
+  calendar: CalendarMonthRoundedIcon,
+  cleanings: CleaningServicesRoundedIcon,
+};
+
+export default function MobileV2Shell({ access, children, disableScroll = false }) {
+  const navigate = useNavigate();
+  const navigation = getAccessibleMobileFeatures(access);
+
+  React.useEffect(() => {
+    if (!disableScroll) return undefined;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [disableScroll]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
+    navigate('/m/login', { replace: true });
+  };
+
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        bgcolor: '#f4f7f6',
+      }}
+    >
+      <Container
+        component="main"
+        maxWidth="sm"
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          width: '100%',
+          overflowY: disableScroll ? 'hidden' : 'auto',
+          px: 2,
+          py: disableScroll ? 1.5 : 2.5,
+        }}
+      >
+        {children}
+      </Container>
+
+      <AppBar component="footer" position="static" elevation={5} sx={{ bgcolor: '#1E6F68', flexShrink: 0 }}>
+        <Toolbar sx={{ minHeight: 60, px: 1.5, justifyContent: 'space-between' }}>
+          <Box sx={{ minWidth: 72 }}>
+            <Typography noWrap sx={{ fontWeight: 800, fontSize: 14, lineHeight: 1.1 }}>
+              HausIn
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.78, fontSize: 10 }}>
+              Mobile V2
+            </Typography>
+          </Box>
+
+          <Box component="nav" aria-label="Navegación móvil" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {navigation.map((feature) => {
+              const NavigationIcon = NAV_ICONS[feature.id];
+              if (!NavigationIcon) return null;
+              return (
+                <IconButton
+                  key={feature.id}
+                  component={NavLink}
+                  to={feature.path}
+                  aria-label={feature.label}
+                  title={feature.label}
+                  style={({ isActive }) => ({
+                    color: isActive ? '#ffffff' : 'rgba(255,255,255,.58)',
+                    background: isActive ? 'rgba(255,255,255,.15)' : 'transparent',
+                  })}
+                >
+                  <NavigationIcon />
+                </IconButton>
+              );
+            })}
+          </Box>
+
+          <IconButton color="inherit" onClick={handleLogout} aria-label="Salir" title="Salir">
+            <LogoutRoundedIcon />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+    </Box>
+  );
+}
