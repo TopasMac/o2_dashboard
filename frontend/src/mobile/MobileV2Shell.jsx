@@ -39,7 +39,7 @@ export default function MobileV2Shell({ access, children, disableScroll = false 
   const handleLogout = () => {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
-    navigate('/login', { replace: true });
+    navigate('/m/login', { replace: true });
   };
 
   return (
