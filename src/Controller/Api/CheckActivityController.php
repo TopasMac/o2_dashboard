@@ -3,6 +3,8 @@
 namespace App\Controller\Api;
 
 use App\Entity\AllBookings;
+use App\Entity\Employee;
+use App\Service\CleaningCityScopeService;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\DBAL\Types\Types;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -13,7 +15,11 @@ use Symfony\Component\HttpFoundation\Request;
 class CheckActivityController extends AbstractController
 {
     #[Route('/api/bookings/check-activity', name: 'api_check_activity', methods: ['GET'])]
-    public function __invoke(Request $request, EntityManagerInterface $em): JsonResponse
+    public function __invoke(
+        Request $request,
+        EntityManagerInterface $em,
+        CleaningCityScopeService $cityScope,
+    ): JsonResponse
     {
         // Normalize incoming dates to immutable date-only (Y-m-d)
         $startRaw = $request->query->get('start');
@@ -26,7 +32,16 @@ class CheckActivityController extends AbstractController
 
         $start = $startBase ? \DateTimeImmutable::createFromFormat('Y-m-d', $startBase->format('Y-m-d')) : null;
         $end = $endBase ? \DateTimeImmutable::createFromFormat('Y-m-d', $endBase->format('Y-m-d')) : null;
-        $city = $request->query->get('city');
+        $requestedCity = $request->query->get('city');
+        $user = $this->getUser();
+        $employee = $user && method_exists($user, 'getEmployee')
+            ? $user->getEmployee()
+            : null;
+        $city = $cityScope->resolve(
+            $employee instanceof Employee ? $employee : null,
+            $this->isGranted('ROLE_ADMIN'),
+            is_string($requestedCity) ? $requestedCity : null,
+        );
 
         if (!$start || !$end) {
             return $this->json(['error' => 'Start and end dates are required.'], 400);

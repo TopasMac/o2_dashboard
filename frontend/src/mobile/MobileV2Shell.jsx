@@ -23,18 +23,23 @@ export default function MobileV2Shell({ access, children, disableScroll = false 
   const navigation = getAccessibleMobileFeatures(access);
 
   React.useEffect(() => {
-    if (!disableScroll) return undefined;
     const previousBodyOverflow = document.body.style.overflow;
     const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehavior;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+    document.documentElement.style.overscrollBehavior = 'none';
     window.scrollTo(0, 0);
 
     return () => {
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overscrollBehavior = previousBodyOverscroll;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
     };
-  }, [disableScroll]);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -46,10 +51,18 @@ export default function MobileV2Shell({ access, children, disableScroll = false 
     <Box
       sx={{
         position: 'fixed',
-        inset: 0,
+        top: 0,
+        right: 0,
+        left: 0,
+        width: '100%',
+        maxWidth: '100vw',
+        height: '100dvh',
+        maxHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        overscrollBehavior: 'none',
+        touchAction: 'pan-y pinch-zoom',
         bgcolor: '#f4f7f6',
       }}
     >
@@ -61,21 +74,35 @@ export default function MobileV2Shell({ access, children, disableScroll = false 
           minHeight: 0,
           width: '100%',
           overflowY: disableScroll ? 'hidden' : 'auto',
-          px: 2,
-          py: disableScroll ? 1.5 : 2.5,
+          overflowX: 'hidden',
+          overscrollBehaviorX: 'none',
+          overscrollBehaviorY: 'contain',
+          px: 'max(16px, env(safe-area-inset-left), env(safe-area-inset-right))',
+          pt: disableScroll
+            ? 'max(12px, env(safe-area-inset-top))'
+            : 'max(20px, env(safe-area-inset-top))',
+          pb: disableScroll ? 1.5 : 2.5,
         }}
       >
         {children}
       </Container>
 
-      <AppBar component="footer" position="static" elevation={5} sx={{ bgcolor: '#1E6F68', flexShrink: 0 }}>
+      <AppBar
+        component="footer"
+        position="static"
+        elevation={5}
+        sx={{
+          bgcolor: '#1E6F68',
+          flexShrink: 0,
+          pb: 'env(safe-area-inset-bottom)',
+          pl: 'env(safe-area-inset-left)',
+          pr: 'env(safe-area-inset-right)',
+        }}
+      >
         <Toolbar sx={{ minHeight: 60, px: 1.5, justifyContent: 'space-between' }}>
           <Box sx={{ minWidth: 72 }}>
             <Typography noWrap sx={{ fontWeight: 800, fontSize: 14, lineHeight: 1.1 }}>
               HausIn
-            </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.78, fontSize: 10 }}>
-              Mobile V2
             </Typography>
           </Box>
 

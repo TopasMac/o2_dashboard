@@ -24,6 +24,24 @@ describe('resolveLoginTarget', () => {
     })).toBe('/m/v2/cleanings');
   });
 
+  test('sends a verified Cleaner to the Mobile V2 cleaning pilot', () => {
+    expect(resolveLoginTarget({
+      hostname: 'app.myhausin.com',
+      isMobileHint: true,
+      roles: ['ROLE_USER', 'ROLE_EMPLOYEE'],
+      employeeArea: 'Cleaner',
+    })).toBe('/m/v2/cleanings');
+  });
+
+  test('does not grant the Cleaner destination from an unverified employee role', () => {
+    expect(resolveLoginTarget({
+      hostname: 'app.myhausin.com',
+      isMobileHint: true,
+      roles: ['ROLE_USER', 'ROLE_EMPLOYEE'],
+      employeeArea: '',
+    })).toBe('/m/v2');
+  });
+
   test('preserves the legacy mobile destination on other hosts', () => {
     expect(resolveLoginTarget({
       hostname: 'dashboard.owners2.com',
