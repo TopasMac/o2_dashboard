@@ -74,9 +74,6 @@ export default function MobileV2Shell({ access, children, disableScroll = false 
             <Typography noWrap sx={{ fontWeight: 800, fontSize: 14, lineHeight: 1.1 }}>
               HausIn
             </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.78, fontSize: 10 }}>
-              Mobile V2
-            </Typography>
           </Box>
 
           <Box component="nav" aria-label="Navegación móvil" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
