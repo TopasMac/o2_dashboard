@@ -144,7 +144,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Social posts/calendar | Removal candidate | Visible admin navigation and full API/entity implementation, but both social tables contain zero rows. Strong candidate if marketing is managed elsewhere. |
 | Settings | Removal candidate | The `/settings` route renders only `Settings Page`; it is a navigation placeholder, not a working feature. |
 | Private reservation staging | Review/consolidate | One row, two similarly named sync commands, booking-controller creation, and the newer direct booking flow. Determine the canonical private-booking path. |
-| Mobile application | Keep pending role review | Dedicated operational workflows exist for tasks, calendar, check activity, cash, unit details, and inventory. Mobile V2 now has an admin-first calendar that can view/edit bookings and start reservation, hold, or block creation only on available nights and checkout-only boundaries. Confirm which employee/client roles should receive each page before widening access. |
+| Mobile application | Keep pending role review | Dedicated operational workflows exist for tasks, calendar, check activity, cash, unit details, and inventory. Mobile V2 now has an admin-first reservations calendar plus a daily cleanings page with city filtering, check-in/check-out activity, all cleaning types (including standalone services), cleaning status, assignment visibility, and unit/condo access details. Confirm manager/cleaner permissions and data scope before widening access. |
 
 ## High-confidence code cleanup candidates
 

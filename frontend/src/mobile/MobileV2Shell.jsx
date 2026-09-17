@@ -7,6 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
+import CleaningServicesRoundedIcon from '@mui/icons-material/CleaningServicesRounded';
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { getAccessibleMobileFeatures } from './mobileFeatures';
@@ -14,6 +15,7 @@ import { getAccessibleMobileFeatures } from './mobileFeatures';
 const NAV_ICONS = {
   dashboard: HomeRoundedIcon,
   calendar: CalendarMonthRoundedIcon,
+  cleanings: CleaningServicesRoundedIcon,
 };
 
 export default function MobileV2Shell({ access, children, disableScroll = false }) {

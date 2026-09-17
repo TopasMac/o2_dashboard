@@ -15,6 +15,14 @@ export const MOBILE_FEATURES = Object.freeze({
     permission: 'mobile.calendar.view',
     available: true,
   }),
+  cleanings: Object.freeze({
+    id: 'cleanings',
+    label: 'Limpiezas',
+    description: 'Actividad diaria de entradas, salidas y limpiezas',
+    path: '/m/v2/cleanings',
+    permission: 'mobile.cleanings.view',
+    available: true,
+  }),
   unitTransactions: Object.freeze({
     id: 'unitTransactions',
     label: 'Transacciones de unidades',

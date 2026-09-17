@@ -50,6 +50,7 @@ describe('Mobile V2 feature access', () => {
     expect(getAccessibleMobileFeatures(access).map((feature) => feature.id)).toEqual([
       'dashboard',
       'calendar',
+      'cleanings',
     ]);
   });
 });

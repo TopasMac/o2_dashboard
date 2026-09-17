@@ -79,6 +79,7 @@ import MobileV2AccessGate from './mobile/MobileV2AccessGate';
 import MobileV2Shell from './mobile/MobileV2Shell';
 import MobileV2Home from './mobile/MobileV2Home';
 import MobileV2Calendar from './mobile/MobileV2Calendar';
+import MobileV2Cleanings from './mobile/MobileV2Cleanings';
 import { MOBILE_FEATURES } from './mobile/mobileFeatures';
 
 // --- Sticky mobile/desktop shell preference ---
@@ -375,6 +376,20 @@ function App() {
                 {(access) => (
                   <MobileV2Shell access={access} disableScroll>
                     <MobileV2Calendar />
+                  </MobileV2Shell>
+                )}
+              </MobileV2AccessGate>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/m/v2/cleanings"
+          element={
+            <PrivateRoute>
+              <MobileV2AccessGate feature={MOBILE_FEATURES.cleanings}>
+                {(access) => (
+                  <MobileV2Shell access={access}>
+                    <MobileV2Cleanings access={access} />
                   </MobileV2Shell>
                 )}
               </MobileV2AccessGate>

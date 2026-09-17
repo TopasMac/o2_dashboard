@@ -91,6 +91,7 @@ function MobileFormDrawer({
       onDelete={onDelete}
       fullScreenOnMobile
       mobileVariant={mobileVariant}
+      actionStyle="mobile"
       contentSx={{ p: 2, pb: 'max(16px, env(safe-area-inset-bottom))', ...contentSx }}
       {...props}
     >

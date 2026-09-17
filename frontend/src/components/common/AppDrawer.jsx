@@ -19,7 +19,7 @@ import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
  *  - onDelete?: function (called when Delete is clicked)
  *  - mode?: 'create' | 'edit' (optional; controls default action layout)
  */
-export default function AppDrawer({ size = 'default', fullScreenOnMobile = true, mobileVariant = 'fullscreen', title, hideHeader = false, headerLink, formId, showActions = false, mode, actions = {}, extraActions, onDelete, contentSx = {}, ...props }) {
+export default function AppDrawer({ size = 'default', fullScreenOnMobile = true, mobileVariant = 'fullscreen', actionStyle = 'default', title, hideHeader = false, headerLink, formId, showActions = false, mode, actions = {}, extraActions, onDelete, contentSx = {}, ...props }) {
   const presets = {
     compact: { sm: 420, md: 420 },
     default: { sm: 420, md: 420 },
@@ -32,6 +32,7 @@ export default function AppDrawer({ size = 'default', fullScreenOnMobile = true,
   const theme = useTheme();
   const isXs = useMediaQuery(theme.breakpoints.down('sm'));
   const isSheet = isXs && mobileVariant === 'sheet';
+  const useMobileActions = actionStyle === 'mobile';
   const drawerAnchor = isSheet ? 'bottom' : 'right';
 
   const [actionsWidth, setActionsWidth] = React.useState(null);
@@ -287,28 +288,77 @@ export default function AppDrawer({ size = 'default', fullScreenOnMobile = true,
           style={{
             position: 'sticky',
             bottom: 0,
-            background: 'rgba(255,255,255,0.6)',
+            background: useMobileActions ? '#ffffff' : 'rgba(255,255,255,0.6)',
             backdropFilter: 'blur(10px)',
             WebkitBackdropFilter: 'blur(10px)',
-            padding: '12px 24px 12px 12px', // reduced left padding
+            padding: useMobileActions
+              ? '12px 16px max(16px, env(safe-area-inset-bottom))'
+              : '12px 24px 12px 12px',
             borderTop: '1px solid rgba(0,0,0,0.06)',
-            zIndex: 2,
+            boxShadow: useMobileActions ? '0 -8px 24px rgba(23, 63, 59, 0.12)' : 'none',
+            zIndex: 3,
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
           <div style={{
-            width: actionsWidth ? Math.max(0, actionsWidth - 16) : '100%',
+            width: useMobileActions ? '100%' : (actionsWidth ? Math.max(0, actionsWidth - 16) : '100%'),
             margin: '0 auto',
-            paddingRight: 16, // ensure rightmost button is never clipped
+            paddingRight: useMobileActions ? 0 : 16,
             boxSizing: 'border-box',
-            display: 'flex',
+            display: useMobileActions ? 'grid' : 'flex',
+            gridTemplateColumns: useMobileActions ? 'repeat(2, minmax(0, 1fr))' : undefined,
             justifyContent: 'space-between',
             alignItems: 'center',
             columnGap: 12
           }}>
-            <div className="form-actions__left" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {useMobileActions ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => { if (typeof props.onClose === 'function') props.onClose(e, 'cancel'); }}
+                  disabled={actions.cancelDisabled === true}
+                  style={{
+                    width: '100%',
+                    minHeight: 44,
+                    borderRadius: 8,
+                    border: '1.5px solid #B42318',
+                    background: '#FFF7F6',
+                    color: '#B42318',
+                    fontSize: 14,
+                    fontWeight: 750,
+                    cursor: actions.cancelDisabled === true ? 'default' : 'pointer',
+                    opacity: actions.cancelDisabled === true ? 0.55 : 1,
+                  }}
+                >
+                  {actions.cancelLabel || 'Cancel'}
+                </button>
+                {(actions.showSave !== false) ? (
+                  <button
+                    type="submit"
+                    form={formId}
+                    disabled={actions.saveDisabled === true}
+                    style={{
+                      width: '100%',
+                      minHeight: 44,
+                      borderRadius: 8,
+                      border: '1.5px solid #1E6F68',
+                      background: '#1E6F68',
+                      color: '#ffffff',
+                      fontSize: 14,
+                      fontWeight: 750,
+                      cursor: actions.saveDisabled === true ? 'default' : 'pointer',
+                      opacity: actions.saveDisabled === true ? 0.6 : 1,
+                      boxShadow: '0 2px 8px rgba(30, 111, 104, 0.22)',
+                    }}
+                  >
+                    {actions.saveLabel || 'Save'}
+                  </button>
+                ) : <span />}
+              </>
+            ) : (
+            <><div className="form-actions__left" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               {(actions.showSave !== false) && (
                 <button
                   type="submit"
@@ -345,6 +395,8 @@ export default function AppDrawer({ size = 'default', fullScreenOnMobile = true,
                 </div>
               ) : null}
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
