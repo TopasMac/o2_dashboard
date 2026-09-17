@@ -12,6 +12,8 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 /**
  * Write endpoints for HK Cleanings (status changes, side-effects, etc.)
@@ -73,6 +75,64 @@ class HKCleaningsWriteController extends AbstractController
             }
         }
         return null;
+    }
+
+    private function currentEmployee(): ?Employee
+    {
+        $user = $this->getUser();
+        if ($user instanceof Employee) {
+            return $user;
+        }
+        if ($user && method_exists($user, 'getEmployee')) {
+            $employee = $user->getEmployee();
+            if ($employee instanceof Employee) {
+                return $employee;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve and authorize the employee attached to an explicit completion.
+     * Cleaners may only complete as themselves. Managers/admins may optionally
+     * identify the cleaner who performed the work.
+     */
+    private function resolveCompletionActor(?int $requestedEmployeeId = null): ?Employee
+    {
+        $currentEmployee = $this->currentEmployee();
+        $isManager = $this->isGranted('ROLE_MANAGER');
+        $isCleaner = $this->isGranted('ROLE_EMPLOYEE')
+            && strtolower(trim((string) $this->currentEmployeeArea())) === 'cleaner';
+
+        if (!$isManager && !$isCleaner) {
+            throw new AccessDeniedHttpException('Only cleaners, managers, or administrators may complete a cleaning.');
+        }
+
+        if (!$isManager) {
+            if (!$currentEmployee instanceof Employee) {
+                throw new AccessDeniedHttpException('The authenticated cleaner is not linked to an employee record.');
+            }
+            if ($requestedEmployeeId !== null && $requestedEmployeeId !== (int) $currentEmployee->getId()) {
+                throw new AccessDeniedHttpException('Cleaners may only complete a cleaning as themselves.');
+            }
+
+            return $currentEmployee;
+        }
+
+        if ($requestedEmployeeId !== null) {
+            $employee = $this->em->getRepository(Employee::class)->find($requestedEmployeeId);
+            if (!$employee instanceof Employee) {
+                throw new BadRequestHttpException('The selected completion employee does not exist.');
+            }
+            if (strtolower(trim((string) $employee->getArea())) !== 'cleaner') {
+                throw new BadRequestHttpException('The selected completion employee is not a cleaner.');
+            }
+
+            return $employee;
+        }
+
+        return $currentEmployee;
     }
 
     /**
@@ -326,6 +386,14 @@ class HKCleaningsWriteController extends AbstractController
             $hk->setDoneAt(null);
         }
 
+        $completionActor = null;
+        if ($statusRaw === 'done') {
+            $requestedEmployeeId = isset($data['employeeId']) && is_numeric($data['employeeId'])
+                ? (int) $data['employeeId']
+                : null;
+            $completionActor = $this->resolveCompletionActor($requestedEmployeeId);
+        }
+
         // Set status
         if (method_exists($hk, 'setStatus')) {
             if ($statusRaw === 'pending' && \defined(HKCleanings::class.'::STATUS_PENDING')) {
@@ -352,9 +420,7 @@ class HKCleaningsWriteController extends AbstractController
         $createdStatus = method_exists($hk, 'getStatus') ? strtolower((string)$hk->getStatus()) : $statusRaw;
         if ($createdStatus === 'done') {
             try {
-                if (method_exists($this->hkCleaningManager, 'markDoneAndCreateTransaction')) {
-                    $txResult = $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
-                }
+                $txResult = $this->hkCleaningManager->completeCleaning($hk, $completionActor);
             } catch (\Throwable $e) {
                 // Do not fail create if tx creation fails
                 return $this->json([
@@ -529,6 +595,12 @@ SQL;
     #[Route('/api/hk-cleanings/{id}/mark-done', name: 'api_hk_cleanings_mark_done', methods: ['POST'])]
     public function markDone(int $id, Request $request): JsonResponse
     {
+        $data = json_decode($request->getContent() ?: '[]', true) ?: [];
+        $requestedEmployeeId = isset($data['employeeId']) && is_numeric($data['employeeId'])
+            ? (int) $data['employeeId']
+            : null;
+        $completionActor = $this->resolveCompletionActor($requestedEmployeeId);
+
         $hk = $this->em->getRepository(HKCleanings::class)->find($id);
         if (!$hk) {
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
@@ -563,9 +635,7 @@ SQL;
         // Delegate transaction creation to the manager (idempotent inside the service)
         $txResult = null;
         try {
-            if (method_exists($this->hkCleaningManager, 'markDoneAndCreateTransaction')) {
-                $txResult = $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
-            }
+            $txResult = $this->hkCleaningManager->completeCleaning($hk, $completionActor);
         } catch (\Throwable $e) {
             // We do not fail the status update if tx creation fails; return warning for UI
             return $this->json([
@@ -599,6 +669,10 @@ SQL;
 public function markDoneBy(Request $request): JsonResponse
 {
     $data = json_decode($request->getContent() ?: '[]', true) ?: [];
+    $requestedEmployeeId = isset($data['employeeId']) && is_numeric($data['employeeId'])
+        ? (int) $data['employeeId']
+        : null;
+    $completionActor = $this->resolveCompletionActor($requestedEmployeeId);
 
     // Require reservationCode + checkoutDate. unitId optional (only used to prefill if we create a missing row).
     $resCode  = isset($data['reservationCode']) ? trim((string)$data['reservationCode']) : null;
@@ -697,9 +771,7 @@ public function markDoneBy(Request $request): JsonResponse
     // Call the manager to create/reuse the transaction (idempotent)
     $txResult = null;
     try {
-        if (method_exists($this->hkCleaningManager, 'markDoneAndCreateTransaction')) {
-            $txResult = $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
-        }
+        $txResult = $this->hkCleaningManager->completeCleaning($hk, $completionActor);
     } catch (\Throwable $e) {
         // Do not roll back status; surface warning for UI.
         return $this->json([
@@ -794,6 +866,8 @@ public function markDoneBy(Request $request): JsonResponse
             }
         }
 
+        $completionActor = null;
+
         // status
         if (array_key_exists('status', $data) && $data['status']) {
             $status = strtolower((string)$data['status']);
@@ -804,6 +878,12 @@ public function markDoneBy(Request $request): JsonResponse
             ];
             if (!in_array($status, $allowed, true)) {
                 return $this->json(['ok' => false, 'error' => 'Invalid status value'], Response::HTTP_BAD_REQUEST);
+            }
+            if ($oldStatus !== 'done' && $status === 'done') {
+                $requestedEmployeeId = isset($data['employeeId']) && is_numeric($data['employeeId'])
+                    ? (int) $data['employeeId']
+                    : null;
+                $completionActor = $this->resolveCompletionActor($requestedEmployeeId);
             }
             if (method_exists($hk, 'setStatus')) {
                 // Map back to canonical constant if available
@@ -943,7 +1023,7 @@ public function markDoneBy(Request $request): JsonResponse
         if ($transitionToDone) {
             $txResult = null;
             try {
-                $txResult = $this->hkCleaningManager->markDoneAndCreateTransaction($hk);
+                $txResult = $this->hkCleaningManager->completeCleaning($hk, $completionActor);
             } catch (\Throwable $e) {
                 return $this->json([
                     'ok' => true,
@@ -1044,22 +1124,10 @@ public function markDoneBy(Request $request): JsonResponse
             return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
         }
 
-        // Resolve cleaner (employee) either from explicit employeeId or from the logged-in user.
-        $employee = null;
+        // Resolve cleaner from the authenticated actor. Cleaners can only submit
+        // as themselves; managers/admins may select a cleaner.
         $employeeId = $request->request->get('employeeId');
-        if ($employeeId) {
-            $employee = $this->em->getRepository(Employee::class)->find((int)$employeeId);
-        } else {
-            $user = $this->getUser();
-            if ($user instanceof Employee) {
-                $employee = $user;
-            } elseif ($user && method_exists($user, 'getEmployee')) {
-                $maybe = $user->getEmployee();
-                if ($maybe instanceof Employee) {
-                    $employee = $maybe;
-                }
-            }
-        }
+        $employee = $this->resolveCompletionActor($employeeId && is_numeric($employeeId) ? (int) $employeeId : null);
 
         if (!$employee instanceof Employee) {
             return $this->json(['ok' => false, 'error' => 'Cleaner (employee) could not be resolved'], Response::HTTP_BAD_REQUEST);

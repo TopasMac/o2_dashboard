@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 class HKCleaningController
 {
@@ -26,6 +27,7 @@ class HKCleaningController
     }
 
     #[Route('/api/hk-cleanings/bulk', name: 'api_hk_cleanings_bulk', methods: ['POST'])]
+    #[IsGranted('ROLE_MANAGER')]
     public function bulk(Request $request): JsonResponse
     {
         try {

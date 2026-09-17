@@ -102,6 +102,17 @@ Critical commands include:
 - `app:update-booking-calculations`
 - housekeeping backfill commands
 
+Housekeeping completion policy:
+
+- Booking lifecycle synchronization may create or update the checkout cleaning, but a new cleaning remains `pending`.
+- Changing a reservation to `Past` must not mark its cleaning `done`.
+- Only an authenticated Cleaner acting as themselves, or an Admin/Manager, may explicitly complete a cleaning.
+- Explicit completion records `done_at` and, when an employee identity is available, `done_by` before running the existing reconciliation/transaction logic.
+- Booking cancellation synchronization remains in place.
+- Overdue cleanings remain pending and should be highlighted by the client rather than silently completed.
+
+The local production-derived snapshot contains 40 post-2026-06-01 `done` cleanings with neither `done_at` nor an employee and no submitted checklist. These are strong candidates for historical automatic completion, but any correction must be a separate backed-up, reviewed data operation because older manual bulk actions may be indistinguishable.
+
 These operations must become covered by repeatable tests before booking entities, statuses, or date rules are refactored.
 
 ### Documents, S3, reports, and email — Protect external writes
