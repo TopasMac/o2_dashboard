@@ -337,6 +337,11 @@ export default function BookingNewFormRHF({
 
   const handleInternalSubmit = async (values) => {
     try {
+      if (calendarConflicts.length > 0) {
+        toast.error('Cannot create booking: selected dates conflict with an existing reservation.');
+        return;
+      }
+
       // Build payload (camelCase) then POST to proper endpoint
       const payload = {
         source: values.source,
@@ -415,8 +420,17 @@ export default function BookingNewFormRHF({
     await handleInternalSubmit(values);
   };
 
-  const shouldDisableCalendarDate = useCallback(
-    (day) => wide.shouldDisableCalendarDate(day),
+  const shouldDisableStartDate = useCallback(
+    (day) => (typeof wide.shouldDisableStartDate === 'function'
+      ? wide.shouldDisableStartDate(day)
+      : wide.shouldDisableCalendarDate(day)),
+    [wide],
+  );
+
+  const shouldDisableEndDate = useCallback(
+    (day) => (typeof wide.shouldDisableEndDate === 'function'
+      ? wide.shouldDisableEndDate(day)
+      : wide.shouldDisableCalendarDate(day)),
     [wide],
   );
 
@@ -500,13 +514,13 @@ export default function BookingNewFormRHF({
             name="checkIn"
             control={control}
             label="Check In"
-            shouldDisableDate={shouldDisableCalendarDate}
+            shouldDisableDate={shouldDisableStartDate}
           />
           <RHFDatePicker
             name="checkOut"
             control={control}
             label="Check Out"
-            shouldDisableDate={shouldDisableCalendarDate}
+            shouldDisableDate={shouldDisableEndDate}
           />
         </Stack>
         {unitId && checkInVal && checkOutVal && (
