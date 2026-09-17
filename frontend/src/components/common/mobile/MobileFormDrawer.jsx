@@ -1,6 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import AppDrawer from '../AppDrawer';
 
 /**
@@ -20,7 +20,7 @@ function MobileFormDrawer({
   headerLink = null,
   formId,
   showActions = true,
-  actions = [],
+  actions = {},
   onDelete,
   onSubmitSuccess,
   onSubmitError,
@@ -50,10 +50,11 @@ function MobileFormDrawer({
   const header = (
     <Box
       sx={{
+        position: 'absolute',
+        inset: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        width: '100%',
         bgcolor: TEAL,
         color: '#fff',
         px: 2,
@@ -77,12 +78,7 @@ function MobileFormDrawer({
     if (typeof onSubmitError === 'function') onSubmitError(error);
   };
 
-  const effectiveActions = (Array.isArray(actions) && actions.length > 0)
-    ? actions
-    : [
-        <Button key="cancel" onClick={onClose}>Cancel</Button>,
-        <Button key="save" variant="contained" type="submit" form={formId}>Save</Button>,
-      ];
+  const effectiveActions = (!Array.isArray(actions) && actions) ? actions : {};
 
   return (
     <AppDrawer
@@ -95,6 +91,7 @@ function MobileFormDrawer({
       onDelete={onDelete}
       fullScreenOnMobile
       mobileVariant={mobileVariant}
+      actionStyle="mobile"
       contentSx={{ p: 2, pb: 'max(16px, env(safe-area-inset-bottom))', ...contentSx }}
       {...props}
     >
@@ -118,7 +115,7 @@ MobileFormDrawer.propTypes = {
   headerLink: PropTypes.node,
   formId: PropTypes.string,
   showActions: PropTypes.bool,
-  actions: PropTypes.array,
+  actions: PropTypes.oneOfType([PropTypes.object, PropTypes.array]),
   onDelete: PropTypes.func,
   onSubmitSuccess: PropTypes.func,
   onSubmitError: PropTypes.func,
