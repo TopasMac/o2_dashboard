@@ -65,9 +65,9 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `9b4707b` — `release: deploy Admin-only Mobile V2`
-- **GitHub `main`:** `3f78a09` — `fix: keep HausIn login on Mobile V2 (#13)`
-- **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; the login-routing fix was deployed and the CloudFront cache was invalidated.
+- **Production server checkout last verified:** `dad4c85` — `release: enable Cleaner pilot and stabilize Mobile V2 (#16)`
+- **GitHub `main`:** `dad4c85` — `release: enable Cleaner pilot and stabilize Mobile V2 (#16)`
+- **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed.
 - **Production server state after the last backend deployment:** clean and synchronized with `origin/main` at that time.
 - **Nginx:** active
 - **Doctrine migrations:** 234 executed, 234 available, 0 new; latest `Version20260529050811`
@@ -77,12 +77,14 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 
 The release included no schema migration, cron modification, or historical data correction.
 
-Mobile V2 in production remains restricted to administrators. The current release candidate contains a controlled Cleaner pilot: verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. The candidate also preserves the dedicated `app.myhausin.com` login destination, adds HausIn branding, and stabilizes the mobile viewport. It must still pass a real-account Cleaner verification after promotion through the normal release process.
+Mobile V2 in production supports administrators and the controlled Cleaner pilot. Verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. Manager access is not enabled.
+
+On the mobile feature branch, Mobile V2 is a clean restart. Installed-app and old `/m/*` entry points enter Mobile V2, while pre-V2 Client, task, cash, unit-detail, and inventory workflows remain unsupported until they are rebuilt.
 
 ## Verification baseline
 
-- Backend service suite: 25 tests, 68 assertions passed for the Cleaner-pilot release candidate.
-- Focused Mobile V2, login-routing, and branding frontend suite: 32 tests passed.
+- Backend service suite: 25 tests, 68 assertions passed for the Cleaner-pilot release.
+- Focused Mobile V2, login-routing, and branding frontend suite: 39 tests passed.
 - Symfony service-container validation passed in development and production modes.
 - Optimized frontend production build passed.
 - The legacy frontend `App.test.js` cannot resolve `react-router-dom` in the current Jest setup; this is a known test-harness issue.

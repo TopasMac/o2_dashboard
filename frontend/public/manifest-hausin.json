@@ -1,6 +1,7 @@
 {
   "name": "HausIn App",
   "short_name": "HausIn",
+  "id": "/m/v2",
   "description": "HausIn property operations app",
   "start_url": "/m/v2",
   "scope": "/",
@@ -9,13 +10,13 @@
   "theme_color": "#1E6F68",
   "icons": [
     {
-      "src": "/branding/hausin/icon-192x192.png",
+      "src": "/branding/hausin/app-icon-192x192-white.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/branding/hausin/icon-512x512.png",
+      "src": "/branding/hausin/app-icon-512x512-white.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

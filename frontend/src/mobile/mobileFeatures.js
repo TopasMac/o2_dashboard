@@ -82,3 +82,7 @@ export function getAccessibleMobileFeatures(access, { includeUnavailable = false
       (includeUnavailable || feature.available) && canAccessMobileFeature(access, feature)
   );
 }
+
+export function getMobileV2EntryPath(access) {
+  return getAccessibleMobileFeatures(access)[0]?.path || null;
+}
