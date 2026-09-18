@@ -584,6 +584,7 @@ export default function MobileV2Calendar() {
         actions={{ saveLabel: 'Guardar', cancelLabel: 'Cancelar', showDelete: false }}
         formProps={createType === 'booking' ? {
           formId: 'mobile-v2-booking-new-form',
+          layout: 'mobile',
           initialUnit: selectedUnit ? {
             id: selectedUnit.id,
             label: selectedUnit.unit_name || '',

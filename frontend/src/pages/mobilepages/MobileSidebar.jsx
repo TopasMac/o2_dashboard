@@ -111,7 +111,7 @@ export default function MobileSidebar({
     }
 
     return [
-      { to: '/m/dashboard',         label: t('dashboard', 'Dashboard') },
+      { to: '/m/v2',                label: t('dashboard', 'Dashboard') },
       { to: '/m/unit-details',      label: t('unitDetails', 'Unit Details') },
       { to: '/m/bookings-calendar', label: t('bookings', 'Bookings') },
       { to: '/m/hk',                label: t('housekeepers', 'Housekeepers') },

@@ -2,6 +2,7 @@ import {
   MOBILE_FEATURES,
   canAccessMobileFeature,
   getAccessibleMobileFeatures,
+  getMobileV2EntryPath,
 } from './mobileFeatures';
 
 describe('Mobile V2 feature access', () => {
@@ -40,6 +41,7 @@ describe('Mobile V2 feature access', () => {
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(true);
     expect(getAccessibleMobileFeatures(access).map((feature) => feature.id)).toEqual(['cleanings']);
+    expect(getMobileV2EntryPath(access)).toBe('/m/v2/cleanings');
   });
 
   test('keeps managers outside the non-admin pilot', () => {
@@ -68,5 +70,6 @@ describe('Mobile V2 feature access', () => {
       'calendar',
       'cleanings',
     ]);
+    expect(getMobileV2EntryPath(access)).toBe('/m/v2');
   });
 });

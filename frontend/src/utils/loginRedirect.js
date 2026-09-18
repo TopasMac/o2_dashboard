@@ -9,7 +9,7 @@ export function resolveLoginTarget({
   const normalizedHostname = String(hostname).trim().toLowerCase();
   const normalizedRoles = Array.isArray(roles) ? roles : [];
   const hasRole = (role) => normalizedRoles.includes(role);
-  const requestedTarget = redirectParam || from;
+  const requestedTarget = getInternalTarget(redirectParam) || getInternalTarget(from);
   const isCleanerEmployee =
     String(employeeArea || '').trim().toLowerCase() === 'cleaner'
     && hasRole('ROLE_EMPLOYEE')
@@ -17,10 +17,13 @@ export function resolveLoginTarget({
     && !hasRole('ROLE_ADMIN')
     && !hasRole('ROLE_CLIENT');
 
-  // The dedicated HausIn app always uses Mobile V2. Keep the legacy mobile
-  // destination for the existing dashboard-domain mobile entry points.
+  const isLegacyMobileTarget = requestedTarget === '/m'
+    || (requestedTarget?.startsWith('/m/') && !requestedTarget.startsWith('/m/v2'));
+
+  // The dedicated HausIn app always uses Mobile V2. Preserve an explicit V2
+  // destination, but never restore one of the retired legacy mobile routes.
   if (normalizedHostname === 'app.myhausin.com') {
-    if (typeof requestedTarget === 'string' && requestedTarget.startsWith('/m/v2')) {
+    if (requestedTarget?.startsWith('/m/v2')) {
       return requestedTarget;
     }
     if (isCleanerEmployee) {
@@ -29,7 +32,7 @@ export function resolveLoginTarget({
     return '/m/v2';
   }
 
-  if (requestedTarget) {
+  if (requestedTarget && !isLegacyMobileTarget) {
     return requestedTarget;
   }
 
@@ -37,7 +40,13 @@ export function resolveLoginTarget({
     if (isCleanerEmployee) {
       return '/m/v2/cleanings';
     }
-    return '/m/dashboard';
+    if (hasRole('ROLE_ADMIN')) {
+      return '/m/v2';
+    }
+    if (hasRole('ROLE_MANAGER')) {
+      return '/manager-dashboard';
+    }
+    return '/m/v2';
   }
 
   if (hasRole('ROLE_MANAGER') && !hasRole('ROLE_ADMIN')) {
@@ -53,8 +62,32 @@ export function resolveLoginTarget({
   }
 
   if (hasRole('ROLE_CLIENT')) {
-    return '/m/dashboard';
+    return '/m/v2';
+  }
+
+  if (hasRole('ROLE_EMPLOYEE')) {
+    return '/m/v2';
   }
 
   return '/';
+}
+
+function getInternalTarget(target) {
+  if (typeof target !== 'string') return null;
+  return target.startsWith('/') && !target.startsWith('//') ? target : null;
+}
+
+export function getRouterStateTarget(from) {
+  if (typeof from === 'string') {
+    return getInternalTarget(from);
+  }
+
+  if (!from || typeof from !== 'object') return null;
+
+  const pathname = getInternalTarget(from.pathname);
+  if (!pathname) return null;
+
+  const search = typeof from.search === 'string' ? from.search : '';
+  const hash = typeof from.hash === 'string' ? from.hash : '';
+  return `${pathname}${search}${hash}`;
 }

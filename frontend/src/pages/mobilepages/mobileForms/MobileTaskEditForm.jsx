@@ -254,7 +254,7 @@ export default function MobileTaskEditForm() {
       }
 
       // After saving, route to the mobile dashboard, preserving the originating view when available.
-      navigate('/m/dashboard', {
+      navigate('/m/v2', {
         state: fromView ? { restoreView: fromView } : undefined,
         replace: true,
       });
@@ -269,7 +269,7 @@ export default function MobileTaskEditForm() {
 
   const handleCancel = () => {
     // Always go back to the mobile dashboard, restoring the originating view when available.
-    navigate('/m/dashboard', {
+    navigate('/m/v2', {
       state: fromView ? { restoreView: fromView } : undefined,
       replace: true,
     });

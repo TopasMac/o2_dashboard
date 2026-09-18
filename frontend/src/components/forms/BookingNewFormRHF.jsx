@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { Box, Stack, Button, TextField, Autocomplete, Typography, InputAdornment } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  InputAdornment,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -81,6 +91,7 @@ function normalizeNumberString(s) {
 }
 
 export default function BookingNewFormRHF({
+  layout = 'desktop', // 'desktop' | 'mobile'
   initialUnit = null, // { id, label, city, cleaningFee? }
   initialCheckIn = '',
   initialCheckOut = '',
@@ -439,11 +450,16 @@ export default function BookingNewFormRHF({
     [wide],
   );
 
+  const isMobileLayout = layout === 'mobile';
+  const isPrivateSource = String(source).toLowerCase() === 'private';
+
   return (
     <Box component="form" id={formId || 'booking-new-form'} onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-        New Booking
-      </Typography>
+      {!isMobileLayout && (
+        <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+          New Booking
+        </Typography>
+      )}
 
       <Stack spacing={2}>
         {/* Unit */}
@@ -466,9 +482,10 @@ export default function BookingNewFormRHF({
                   size="small"
                   error={!!fieldState.error}
                   helperText={fieldState.error?.message}
+                  fullWidth={isMobileLayout}
                 />
               )}
-              sx={{ minWidth: 260, maxWidth: 420, flex: '0 0 auto' }}
+              sx={isMobileLayout ? { width: '100%' } : { minWidth: 260, maxWidth: 420, flex: '0 0 auto' }}
             />
           )}
         />
@@ -480,7 +497,8 @@ export default function BookingNewFormRHF({
           label="City"
           size="small"
           InputProps={{ readOnly: true }}
-          sx={{ maxWidth: 280 }}
+          fullWidth={isMobileLayout}
+          sx={isMobileLayout ? { width: '100%' } : { maxWidth: 280 }}
         />
 
         {/* Guest Type */}
@@ -490,44 +508,95 @@ export default function BookingNewFormRHF({
           label="Guest Type"
           options={GUEST_TYPE_OPTIONS}
           size="small"
-          sx={{ maxWidth: 260 }}
+          fullWidth={isMobileLayout}
+          sx={isMobileLayout ? { width: '100%' } : { maxWidth: 260 }}
+        />
+
+        {/* Status (auto from dates, read-only) */}
+        <RHFTextField
+          name="status"
+          control={control}
+          label="Status"
+          size="small"
+          InputProps={{ readOnly: true }}
+          fullWidth={isMobileLayout}
+          sx={isMobileLayout ? { width: '100%' } : { maxWidth: 260 }}
         />
 
         {/* Guest Name / Guests */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <RHFTextField
-            name="guestName"
-            control={control}
-            label="Guest Name"
-            size="small"
-            fullWidth
-          />
-          <RHFTextField
-            name="guests"
-            control={control}
-            label="Guests"
-            size="small"
-            type="number"
-            inputProps={{ min: 0 }}
-            sx={{ width: 140 }}
-          />
-        </Stack>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? 'minmax(0, 1fr) 84px'
+              : { xs: '1fr', sm: 'minmax(0, 1fr) 140px' },
+            gap: isMobileLayout ? 1.25 : 2,
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <RHFTextField
+              name="guestName"
+              control={control}
+              label="Guest Name"
+              size="small"
+              fullWidth
+            />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <RHFTextField
+              name="guests"
+              control={control}
+              label="Guests"
+              size="small"
+              type="number"
+              inputProps={{ min: 0 }}
+              InputProps={{ endAdornment: <InputAdornment position="end">#</InputAdornment> }}
+              fullWidth
+            />
+          </Box>
+        </Box>
 
         {/* Check In / Check Out */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <RHFDatePicker
-            name="checkIn"
-            control={control}
-            label="Check In"
-            shouldDisableDate={shouldDisableStartDate}
-          />
-          <RHFDatePicker
-            name="checkOut"
-            control={control}
-            label="Check Out"
-            shouldDisableDate={shouldDisableEndDate}
-          />
-        </Stack>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? 'repeat(2, minmax(0, 1fr))'
+              : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: isMobileLayout ? 1.25 : 2,
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <RHFDatePicker
+              name="checkIn"
+              control={control}
+              label="Check In"
+              format="DD/MM/YYYY"
+              fullWidth
+              size={isMobileLayout ? 'small' : undefined}
+              sx={isMobileLayout ? {
+                '& .MuiInputBase-input': { px: 0.75, fontSize: 13.5 },
+                '& .MuiInputAdornment-root': { ml: 0 },
+              } : undefined}
+              shouldDisableDate={shouldDisableStartDate}
+            />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <RHFDatePicker
+              name="checkOut"
+              control={control}
+              label="Check Out"
+              format="DD/MM/YYYY"
+              fullWidth
+              size={isMobileLayout ? 'small' : undefined}
+              sx={isMobileLayout ? {
+                '& .MuiInputBase-input': { px: 0.75, fontSize: 13.5 },
+                '& .MuiInputAdornment-root': { ml: 0 },
+              } : undefined}
+              shouldDisableDate={shouldDisableEndDate}
+            />
+          </Box>
+        </Box>
         {unitId && checkInVal && checkOutVal && (
           <Box sx={{ mt: 0.5 }}>
             {calendarLoading && (
@@ -562,68 +631,90 @@ export default function BookingNewFormRHF({
           </Box>
         )}
 
-        {/* Status (auto from dates, read-only) */}
-        <RHFTextField
-          name="status"
-          control={control}
-          label="Status"
-          size="small"
-          InputProps={{ readOnly: true }}
-          sx={{ maxWidth: 260 }}
-        />
+        {/* Payout / Cleaning / Paid */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? (isPrivateSource
+                ? 'minmax(0, 1.05fr) minmax(0, .8fr) auto'
+                : 'minmax(0, 1.05fr) minmax(0, .8fr)')
+              : (isPrivateSource ? 'repeat(3, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))'),
+            gap: isMobileLayout ? 1.25 : 2,
+            alignItems: 'center',
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <RHFTextField
+              name="payout"
+              control={control}
+              label="Payout"
+              size="small"
+              inputMode="decimal"
+              fullWidth
+            />
+          </Box>
+          <Box sx={{ minWidth: 0, order: 2 }}>
+            <RHFTextField
+              name="cleaningFee"
+              control={control}
+              label={isMobileLayout ? 'Cleaning' : 'Cleaning Fee'}
+              size="small"
+              inputMode="decimal"
+              fullWidth
+            />
+          </Box>
+          {isPrivateSource && (
+            <Box sx={{ order: 3 }}>
+              <Controller
+                name="isPaid"
+                control={control}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={<Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />}
+                    label="Paid"
+                    sx={{ flex: '0 0 auto', mr: 0, whiteSpace: 'nowrap' }}
+                  />
+                )}
+              />
+            </Box>
+          )}
+        </Box>
 
-        {/* Payout / Paid */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-          <RHFTextField
-            name="payout"
-            control={control}
-            label="Payout"
-            size="small"
-            inputMode="decimal"
-            sx={{ minWidth: 180 }}
-          />
-          <Controller
-            name="isPaid"
-            control={control}
-            render={({ field }) => (
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                <input type="checkbox" checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />
-                Paid
-              </label>
-            )}
-          />
-        </Stack>
-
-        {/* Payment Method */}
-        <RHFSelect
-          name="paymentMethod"
-          control={control}
-          label="Payment Method"
-          options={PAYMENT_METHODS}
-          size="small"
-          sx={{ maxWidth: 260 }}
-        />
-
-        {/* Cleaning Fee / Commission % (auto from unit, editable) */}
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-          <RHFTextField
-            name="cleaningFee"
-            control={control}
-            label="Cleaning Fee"
-            size="small"
-            inputMode="decimal"
-            sx={{ width: 148 }}
-          />
-          <RHFTextField
-            name="commissionPercent"
-            control={control}
-            label="Commission %"
-            size="small"
-            inputMode="decimal"
-            InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
-            sx={{ width: 148 }}
-          />
-        </Stack>
+        {/* Payment Method / Commission */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: isMobileLayout
+              ? 'minmax(0, 1.45fr) minmax(96px, .75fr)'
+              : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: isMobileLayout ? 1.25 : 2,
+            alignItems: 'start',
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <RHFSelect
+              name="paymentMethod"
+              control={control}
+              label="Payment Method"
+              options={PAYMENT_METHODS}
+              size="small"
+              margin={isMobileLayout ? 'none' : 'dense'}
+              fullWidth
+            />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <RHFTextField
+              name="commissionPercent"
+              control={control}
+              label={isMobileLayout ? 'Commission' : 'Commission %'}
+              size="small"
+              inputMode="decimal"
+              InputProps={{ endAdornment: <InputAdornment position="end">%</InputAdornment> }}
+              fullWidth
+            />
+          </Box>
+        </Box>
 
         {/* Notes */}
         <RHFTextField
@@ -642,9 +733,9 @@ export default function BookingNewFormRHF({
           control={control}
           label="Check-In Notes"
           size="small"
+          fullWidth
           multiline
           minRows={2}
-          sx={{ width: 312 }}
         />
 
         {/* Check-Out Notes */}
@@ -653,9 +744,9 @@ export default function BookingNewFormRHF({
           control={control}
           label="Check-Out Notes"
           size="small"
+          fullWidth
           multiline
           minRows={2}
-          sx={{ width: 312 }}
         />
 
         {/* Actions (hidden when using AppDrawer) */}

@@ -26,7 +26,7 @@ function replaceIcons(isHausIn) {
     type: 'image/png',
     sizes: '180x180',
     href: isHausIn
-      ? `${HAUSIN_ICON_ROOT}/icon-180x180.png`
+      ? `${HAUSIN_ICON_ROOT}/app-icon-180x180-white.png`
       : '/apple-touch-icon.png',
   };
 

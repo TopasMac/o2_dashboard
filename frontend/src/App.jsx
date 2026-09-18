@@ -40,19 +40,6 @@ import AccountingRecords from './pages/AccountingRecords';
 import Occupancy from './pages/Occupancy';
 import Login from './pages/Login';
 import ManagerDashboard from './pages/ManagerDashboard';
-import MobileBookingsSearch from './pages/mobilepages/MobileBookingsSearch';
-import MobileUnitDetails from './pages/mobilepages/MobileUnitDetails';
-import MobileDashboard from './pages/mobilepages/MobileDashboard';
-import MobileBookingsCalendar from './pages/mobilepages/MobileBookingsCalendar';
-import MobileShell from './pages/mobilepages/MobileShell';
-import MobileInventoryNew from './pages/mobilepages/MobileInventoryNew';
-import MobileCheckInOutView from './pages/mobilepages/MobileCheckInOutView';
-import MobileInventoryForm from './pages/mobilepages/mobileForms/MobileInventoryForm';
-import MobileInventoryReview from './pages/mobilepages/MobileInventoryReview';
-import MobileEmployeeCash from './pages/mobilepages/MobileEmployeeCash';
-import MobileCashForm from './pages/mobilepages/mobileForms/MobileCashForm';
-import MobileCashEditForm from './pages/mobilepages/mobileForms/MobileCashEditForm';
-import MobileTaskEditForm from './pages/mobilepages/mobileForms/MobileTaskEditForm';
 import './styles/form.css';
 import NewClientUnitNote from './components/forms/NewClientUnitNote';
 import UnitBalance from './pages/UnitBalance';
@@ -81,6 +68,7 @@ import MobileV2Shell from './mobile/MobileV2Shell';
 import MobileV2Home from './mobile/MobileV2Home';
 import MobileV2Calendar from './mobile/MobileV2Calendar';
 import MobileV2Cleanings from './mobile/MobileV2Cleanings';
+import MobileV2EntryRedirect from './mobile/MobileV2EntryRedirect';
 import { MOBILE_FEATURES } from './mobile/mobileFeatures';
 
 // --- Sticky mobile/desktop shell preference ---
@@ -94,7 +82,9 @@ function PreferredShellStickyRedirect() {
     const path = location.pathname || '';
     try {
       if (path === '/m' || path.startsWith('/m/')) {
-        localStorage.setItem('o2_preferred_shell', 'mobile');
+        // Every mobile route belongs to Mobile V2. Pre-V2 paths are handled by
+        // the Mobile V2 entry route below.
+        localStorage.setItem('o2_preferred_shell', 'mobile-v2');
       } else if (path && path !== '/login') {
         // any non-/m and non-login path counts as desktop shell
         localStorage.setItem('o2_preferred_shell', 'desktop');
@@ -102,15 +92,16 @@ function PreferredShellStickyRedirect() {
     } catch {}
   }, [location.pathname]);
 
-  // On first load only, if user prefers mobile shell and we're not on /m, jump to mobile dashboard
+  // On first load only, migrate both the previous generic "mobile" value and
+  // the current value to Mobile V2. Never send users to the legacy shell.
   useEffect(() => {
     if (!firstLoadRef.current) return;
     firstLoadRef.current = false;
     try {
       const pref = localStorage.getItem('o2_preferred_shell');
       const path = location.pathname || '';
-      if (pref === 'mobile' && !path.startsWith('/m')) {
-        navigate('/m/dashboard', { replace: true });
+      if ((pref === 'mobile' || pref === 'mobile-v2') && !path.startsWith('/m')) {
+        navigate('/m/v2', { replace: true });
       }
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -168,7 +159,10 @@ function LandingRedirect() {
   if (Array.isArray(roles) && roles.includes('ROLE_MANAGER')) {
     return <Navigate to="/manager-dashboard" replace />;
   }
-  return <Navigate to="/dashboard" replace />;
+  if (Array.isArray(roles) && roles.includes('ROLE_ADMIN')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Navigate to="/m/v2" replace />;
 }
 
 // PrivateRoute wrapper to check authentication
@@ -230,7 +224,7 @@ function App() {
             path="/see-bookings-basic"
             element={<Navigate to="/bookings?view=basic" replace />}
           />
-          <Route path="/bookings/search" element={<MobileBookingsSearch />} />
+          <Route path="/bookings/search" element={<Navigate to="/bookings" replace />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/service-providers" element={<ServiceProviders />} />
           <Route path="/clients/new" element={<ClientForm />} />
@@ -398,132 +392,17 @@ function App() {
             </PrivateRoute>
           }
         />
+        {/* Mobile V2 is the only supported mobile application. Any pre-V2
+            /m/* bookmark enters Mobile V2 and its current access gate. */}
         <Route
-          path="/m/dashboard"
+          path="/m/*"
           element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.dashboard">
-                <MobileDashboard />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/tasks/:id"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_CLIENT','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.editTask">
-                <MobileTaskEditForm />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/unit-details"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_CLIENT','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.unitDetails">
-                <MobileUnitDetails />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/bookings-calendar"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_CLIENT','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.bookingsCalendar">
-                <MobileBookingsCalendar />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/bookings-search"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_CLIENT']}>
-              <MobileShell titleKey="mobile.searchBookings">
-                <MobileBookingsSearch />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/check-activity"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_CLIENT','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.checkActivity">
-                <MobileCheckInOutView />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/employee-cash"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.cashLedger">
-                <MobileEmployeeCash />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/employee-cash/new"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.newCashEntry">
-                <MobileCashForm />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/employee-cash/edit/:id"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER','ROLE_EMPLOYEE']}>
-              <MobileShell titleKey="mobile.editCashEntry">
-                <MobileCashEditForm />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/inventory"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
-              <MobileShell titleKey="mobile.onboardingUnits">
-                <MobileInventoryNew />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/inventory/form/:sessionId"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
-              <MobileShell titleKey="mobile.unitInventory">
-                <MobileInventoryForm />
-              </MobileShell>
-            </RoleRoute>
-          }
-        />
-        <Route
-          path="/m/inventory/review/:sessionId"
-          element={
-            <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
-              <MobileShell titleKey="mobile.reviewSubmit">
-                <MobileInventoryReview />
-              </MobileShell>
-            </RoleRoute>
+            <PrivateRoute>
+              <MobileV2EntryRedirect />
+            </PrivateRoute>
           }
         />
         {/* =================== End Mobile Routes (no desktop Layout) =================== */}
-
-        <Route
-          path="/m"
-          element={<Navigate to="/m/dashboard" replace />}
-        />
         {/* Default route: redirect to login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
