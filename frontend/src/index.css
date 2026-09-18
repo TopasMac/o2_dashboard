@@ -12,6 +12,10 @@ html, body {
   overflow-y: auto;
   overscroll-behavior-x: none;
 }
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -56,6 +60,18 @@ p, body, button, input, select, textarea {
   font-family: var(--font-primary);
   font-weight: 400;
   font-size: var(--fs-14);
+}
+
+/* iOS zooms the visual viewport when a focused form control is below 16px.
+   Standalone/Home Screen mode may retain that scale after navigation. */
+@media (max-width: 899px) {
+  input,
+  select,
+  textarea,
+  .MuiInputBase-input,
+  .MuiSelect-select {
+    font-size: 16px !important;
+  }
 }
 
 code {
