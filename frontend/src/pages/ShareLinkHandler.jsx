@@ -66,9 +66,10 @@ export default function ShareLinkHandler() {
       const rid = share.resourceId;
 
       if (rt === 'unit_inventory_session') {
-        // Decide initial tab
-        const tab = (Array.isArray(share.scope) && share.scope.includes('photos')) ? 'photos' : 'items';
-        navigate(`/m/inventory/form/${rid}?tab=${tab}`, { replace: true });
+        // Pre-V2 inventory is no longer part of the supported mobile app.
+        // Inventory will receive a new Mobile V2 workflow before share links
+        // can open an editable mobile inventory page again.
+        navigate('/m/v2', { replace: true });
         return;
       }
 
@@ -78,8 +79,8 @@ export default function ShareLinkHandler() {
         return;
       }
 
-      // Fallback: go to mobile dashboard with a small hint
-      navigate('/m/dashboard', { replace: true });
+      // Fallback: use the current mobile application entry point.
+      navigate('/m/v2', { replace: true });
     } catch (e) {
       setError(e.message || 'Could not process the shared link.');
       setBusy(false);

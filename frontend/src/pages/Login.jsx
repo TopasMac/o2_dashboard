@@ -3,7 +3,7 @@ import api from '../api';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Container, Box, Avatar, Typography, TextField, Button, Paper, Alert } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import { resolveLoginTarget } from '../utils/loginRedirect';
+import { getRouterStateTarget, resolveLoginTarget } from '../utils/loginRedirect';
 
 // Minimal JWT parser to extract roles if backend doesn't send them explicitly
 function parseJwtRoles(token) {
@@ -28,7 +28,8 @@ function Login() {
   const expired = params.get('expired') === '1';
   const disabled = params.get('disabled') === '1';
   const redirectParam = params.get('redirect') ? decodeURIComponent(params.get('redirect')) : null;
-  const from = params.get('from') ? decodeURIComponent(params.get('from')) : null;
+  const queryFrom = params.get('from') ? decodeURIComponent(params.get('from')) : null;
+  const from = queryFrom || getRouterStateTarget(location.state?.from);
   const isStandalone =
     (typeof window !== 'undefined' &&
       window.matchMedia &&
@@ -111,7 +112,7 @@ function Login() {
         }
 
         // Keep app.myhausin.com on Mobile V2, route verified Cleaners to the
-        // cleaning pilot, and preserve legacy/desktop behavior on other hosts.
+        // cleaning pilot, and never restore a legacy mobile destination.
         const target = resolveLoginTarget({
           hostname: typeof window !== 'undefined' ? window.location.hostname : '',
           redirectParam,
