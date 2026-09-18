@@ -122,6 +122,13 @@ function Login() {
           employeeArea,
         });
 
+        // Release the focused input before changing routes. In iOS Home Screen
+        // mode this prevents the login field's visual viewport from carrying
+        // its keyboard/zoom state into Mobile V2.
+        if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+
         navigate(target, { replace: true });
         try {
           sessionStorage.removeItem('loginError');
@@ -231,7 +238,6 @@ function Login() {
               autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoFocus
             />
             <TextField
               margin="normal"
