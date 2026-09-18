@@ -65,17 +65,18 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `dad4c85` — `release: enable Cleaner pilot and stabilize Mobile V2 (#16)`
-- **GitHub `main`:** `dad4c85` — `release: enable Cleaner pilot and stabilize Mobile V2 (#16)`
-- **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed.
-- **Production server state after the last backend deployment:** clean and synchronized with `origin/main` at that time.
+- **Production server checkout last verified:** `9778910` — `release: prevent iOS standalone login zoom`
+- **GitHub `main`:** `9778910` — `release: prevent iOS standalone login zoom`
+- **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
+- **Production server state after the latest frontend deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
 - **Doctrine migrations:** 234 executed, 234 available, 0 new; latest `Version20260529050811`
-- **Smoke tests:** normal dashboard login and Bookings verified by the owner; Mobile V2 route returns `200` and its protected API returns `401` without authentication.
-- **Database backup:** `owners2_dashboard_2026-09-16-02-30.sql` confirmed before deployment.
+- **Smoke tests:** Mobile V2 returns `200`, its protected API returns `401` without authentication, and the owner verified the iPhone Home Screen logout/login flow without retained Safari focus zoom.
+- **Database backup:** `owners2_dashboard_2026-09-17-02-30.sql` was structurally verified. The owner explicitly authorized its use for the frontend-only September 18 release because no September 18 backup was yet available.
+- **Rollback point:** `c02f802` — `release: deploy Mobile V2 routing and layout cleanup`
 - **Safety recovery:** production WIP was archived and retained in stash `pre-deploy-production-wip-2026-09-16`; do not reapply it without review because its intended behavior is now reconciled in Git.
 
-The release included no schema migration, cron modification, or historical data correction.
+The latest release changed only frontend login/viewport behavior. It included no backend, schema, migration, cron, Nginx-configuration, environment-variable, or historical-data change.
 
 Mobile V2 in production supports administrators and the controlled Cleaner pilot. Verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. Manager access is not enabled.
 
