@@ -793,6 +793,14 @@ const SeeBookings = () => {
               }
               if (originalKey === 'guestName') {
                 const guestLabel = row.guestName || row.guest_name || '-';
+                const source = String(row.source || '').toLowerCase();
+                const guestType = String(row.guestType || row.guest_type || '').toLowerCase();
+                const status = String(row.status || '').toLowerCase();
+                const isHold = guestType === 'hold' || status === 'hold';
+                const isBlock = guestType === 'block'
+                  || status === 'block'
+                  || (source === 'owners2' && !isHold);
+                const displayGuestLabel = isBlock ? `Block - ${guestLabel}` : guestLabel;
                 const pax = row.guests ?? row.pax ?? row.guest_count ?? null;
                 const nights = row.days ?? row.nights ?? null;
                 const metaPieces = [];
@@ -803,7 +811,7 @@ const SeeBookings = () => {
                 if (nights != null && nights !== '') metaPieces.push(<span key="nights">{nights} nights</span>);
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-                    <span style={{ fontWeight: 600 }}>{guestLabel}</span>
+                    <span style={{ fontWeight: 600 }}>{displayGuestLabel}</span>
                     {metaPieces.length > 0 && (
                       <span style={{ fontSize: 12, color: '#475467', display: 'flex', gap: 6 }}>
                         {metaPieces}

@@ -12,6 +12,7 @@ import RHFDatePicker from './rhf/RHFDatePicker';
 import RHFAutocomplete from './rhf/RHFAutocomplete';
 import { widthMap } from '../forms/rhf/widthMap';
 import RHFDateRange from './rhf/RHFDateRange';
+import api from '../../api';
 
 // Helper: convert label to value used by backend
 const PAYMENT_METHODS = [
@@ -103,18 +104,10 @@ export default function BlockCalFormRHF({
   // Load units for autocomplete
   const loadUnits = useCallback(async () => {
     try {
-      const res = await fetch('/api/units?pagination=false&lifecycle=active,onboarding', {
-        headers: { 'Content-Type': 'application/json', ...buildAuthHeaders() },
-        credentials: 'include',
-      });
-      if (res.status === 401) {
-        alert('Not authorized. Please sign in again.');
-        throw new Error('Not authorized (401).');
-      }
-      const json = await res.json();
-      const options = (Array.isArray(json) ? json : json['hydra:member'] || []).map((u) => ({
+      const { data } = await api.get('/api/unit-list/active');
+      const options = (Array.isArray(data) ? data : []).map((u) => ({
         id: u.id,
-        label: u.unitName || u.listingName || u.name || `Unit #${u.id}`,
+        label: u.unit_name || u.unitName || u.listingName || u.name || `Unit #${u.id}`,
         value: u.id,
         raw: u,
       }));

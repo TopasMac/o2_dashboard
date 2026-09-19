@@ -37,22 +37,25 @@ class BookingStatusUpdaterService
                 continue;
             }
 
-            // Owners2 soft-rows handling: respect user status; auto-mark past blocks as Done
+            // Owners2 soft-rows handling: respect user status for Holds, but derive Block status from dates.
             $source = method_exists($booking, 'getSource') ? (string)$booking->getSource() : '';
             if ($source === 'Owners2') {
                 $guestType = method_exists($booking, 'getGuestType') ? (string)$booking->getGuestType() : '';
                 $co = method_exists($booking, 'getCheckOut') ? $booking->getCheckOut() : null;
 
-                // If this is a maintenance/cleaning/late-checkout block and it's in the past, mark as Done (unless user cancelled)
-                $isBlockType = in_array($guestType, ['Cleaning', 'Maintenance', 'Late Check-Out'], true);
+                $isBlockType = in_array(strtolower(trim($guestType)), [
+                    'block',
+                    'cleaning',
+                    'maintenance',
+                    'late check-out',
+                ], true);
                 if ($isBlockType && $co instanceof \DateTimeInterface) {
-                    $nowCancun = new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun'));
-                    if ($co < $nowCancun && !in_array($currentStatus, ['cancelled','canceled'], true)) {
-                        if ($booking->getStatus() !== 'Done') {
-                            $booking->setStatus('Done');
+                    if ($co < $now && !in_array($currentStatus, ['cancelled','canceled'], true)) {
+                        if ($booking->getStatus() !== 'Past') {
+                            $booking->setStatus('Past');
                             $this->entityManager->persist($booking);
                         }
-                        continue; // finalized; skip normal logic
+                        continue;
                     }
                 }
 
