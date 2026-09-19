@@ -356,7 +356,7 @@ function App() {
             <PrivateRoute>
               <MobileV2AccessGate feature={MOBILE_FEATURES.dashboard}>
                 {(access) => (
-                  <MobileV2Shell access={access}>
+                  <MobileV2Shell access={access} disableScroll>
                     <MobileV2Home />
                   </MobileV2Shell>
                 )}

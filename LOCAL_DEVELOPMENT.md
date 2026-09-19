@@ -54,10 +54,17 @@ After restoring a snapshot, add or refresh the local-only administrator without 
 php bin/console doctrine:fixtures:load --append --no-interaction
 ```
 
-Local login:
+Local administrator login:
 
 - Email: `admin@owners2.local`
 - Password: `Owners2Local!2026`
+
+Local Cleaner login:
+
+- Email: `cleaner@owners2.local`
+- Password: `Owners2Local!2026`
+- Mobile access: Cleanings only
+- City scope: Playa del Carmen
 
 The fixture refuses to run when `APP_ENV=prod`.
 

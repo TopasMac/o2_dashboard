@@ -58,7 +58,7 @@ class DashboardAlertsService
     /**
      * Build alerts for service payments (HOA / Internet / Water / CFE):
      *  - Overdue: payment expected, missing, and period is past or after due day in current month.
-     *  - Due soon: payment expected, missing, current month, and within 3 days of deadline.
+     *  - Due soon: payment expected, missing, current month, and within 7 days of deadline.
      *  - Mismatch: payment recorded but total != expected amount (currently HOA & Internet only).
      *
      * This delegates business rules to ServicesPaymentStatusService so that all monthly
@@ -113,6 +113,29 @@ class DashboardAlertsService
                 $valueWarnings  = $status['valueWarnings'] ?? [];
                 $paidTotals     = $status['paidTotalsThisMonth'] ?? [];
                 $paidTransactionIds = $status['paidTransactionIdsThisMonth'] ?? [];
+
+                $serviceDetails = [
+                    'CFE' => [
+                        'reference' => $unit->getCfeReference(),
+                        'provider' => null,
+                        'amount' => null,
+                    ],
+                    'HOA' => [
+                        'reference' => null,
+                        'provider' => null,
+                        'amount' => $unit->getHoaAmount(),
+                    ],
+                    'Internet' => [
+                        'reference' => $unit->getInternetReference(),
+                        'provider' => $unit->getInternetIsp(),
+                        'amount' => $unit->getInternetCost(),
+                    ],
+                    'Water' => [
+                        'reference' => $unit->getWaterReference(),
+                        'provider' => null,
+                        'amount' => null,
+                    ],
+                ];
 
                 // --- Overdue / Due soon alerts ---
 
@@ -170,6 +193,9 @@ class DashboardAlertsService
                             'city'       => $city,
                             'yearMonth'  => $yearMonth,
                             'deadline'   => (int) $deadline,
+                            'serviceReference' => $serviceDetails[$svc]['reference'],
+                            'serviceProvider' => $serviceDetails[$svc]['provider'],
+                            'amount' => $serviceDetails[$svc]['amount'],
                             'message'    => sprintf('%s payment overdue — due date %d (%s)', $svc, (int) $deadline, $yearMonth),
                             'link'       => sprintf('/service-payments?unit=%d&period=%s', $unitId, $yearMonth),
                         ];
@@ -189,7 +215,7 @@ class DashboardAlertsService
                         $todayDay = (int) $today->format('j');
                         $daysUntil = $deadlineDay - $todayDay;
 
-                        if ($daysUntil >= 0 && $daysUntil <= 3) {
+                        if ($daysUntil >= 0 && $daysUntil <= 7) {
                             $alerts[] = [
                                 'id'         => sprintf('service-due-soon-%s-%d-%s', strtolower($svc), $unitId, str_replace('-', '', $yearMonth)),
                                 'type'       => 'service-payment-due-soon',
@@ -200,6 +226,9 @@ class DashboardAlertsService
                                 'city'       => $city,
                                 'yearMonth'  => $yearMonth,
                                 'deadline'   => $deadlineDay,
+                                'serviceReference' => $serviceDetails[$svc]['reference'],
+                                'serviceProvider' => $serviceDetails[$svc]['provider'],
+                                'amount' => $serviceDetails[$svc]['amount'],
                                 'message'    => sprintf('%s payment due soon — due date %d (%s)', $svc, $deadlineDay, $yearMonth),
                                 'link'       => sprintf('/service-payments?unit=%d&period=%s', $unitId, $yearMonth),
                             ];
