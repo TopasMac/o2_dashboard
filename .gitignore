@@ -42,4 +42,15 @@ frontend/src/tailwind_build/
 
 # Ignore build/static assets
 /public/static/
+/public/index.html
+/public/asset-manifest.json
+/public/manifest.json
+/public/manifest-hausin.json
+/public/robots.txt
+/public/favicon.ico
+/public/apple-touch-icon.png
+/public/icon-*.png
+/public/branding/
+/public/images/
+/public/img/
 *.map
