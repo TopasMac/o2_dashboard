@@ -24,6 +24,17 @@ describe('resolveLoginTarget', () => {
     })).toBe('/m/v2/cleanings');
   });
 
+  test('redirects a Cleaner from unsupported explicit Mobile V2 destinations', () => {
+    const cleaner = {
+      hostname: 'app.myhausin.com',
+      roles: ['ROLE_USER', 'ROLE_EMPLOYEE'],
+      employeeArea: 'Cleaner',
+    };
+
+    expect(resolveLoginTarget({ ...cleaner, from: '/m/v2' })).toBe('/m/v2/cleanings');
+    expect(resolveLoginTarget({ ...cleaner, from: '/m/v2/calendar' })).toBe('/m/v2/cleanings');
+  });
+
   test('sends a verified Cleaner to the Mobile V2 cleaning pilot', () => {
     expect(resolveLoginTarget({
       hostname: 'app.myhausin.com',
