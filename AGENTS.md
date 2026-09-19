@@ -80,6 +80,8 @@ Before every production deployment:
 5. Confirm a current database backup, the exact target commit, and a rollback plan.
 6. Obtain explicit deployment authorization, then run smoke checks and retain the safety stash until verification is complete.
 
+If a manual backup uses `umask 077`, run it in a subshell or restore `umask 022` before deployment. Leaving the restrictive umask active can make newly checked-out application files unreadable by PHP-FPM or Nginx.
+
 Never discard, reset, overwrite, or reapply a production stash without reviewing its relationship to the deployed revision.
 
 ## Communication
