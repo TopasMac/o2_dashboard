@@ -127,6 +127,7 @@ class DashboardAlertsService
                     ],
                     'Internet' => [
                         'reference' => $unit->getInternetReference(),
+                        'paymentReference' => $unit->getInternetPago(),
                         'provider' => $unit->getInternetIsp(),
                         'amount' => $unit->getInternetCost(),
                     ],
@@ -194,6 +195,7 @@ class DashboardAlertsService
                             'yearMonth'  => $yearMonth,
                             'deadline'   => (int) $deadline,
                             'serviceReference' => $serviceDetails[$svc]['reference'],
+                            'paymentReference' => $serviceDetails[$svc]['paymentReference'] ?? null,
                             'serviceProvider' => $serviceDetails[$svc]['provider'],
                             'amount' => $serviceDetails[$svc]['amount'],
                             'message'    => sprintf('%s payment overdue — due date %d (%s)', $svc, (int) $deadline, $yearMonth),
@@ -227,6 +229,7 @@ class DashboardAlertsService
                                 'yearMonth'  => $yearMonth,
                                 'deadline'   => $deadlineDay,
                                 'serviceReference' => $serviceDetails[$svc]['reference'],
+                                'paymentReference' => $serviceDetails[$svc]['paymentReference'] ?? null,
                                 'serviceProvider' => $serviceDetails[$svc]['provider'],
                                 'amount' => $serviceDetails[$svc]['amount'],
                                 'message'    => sprintf('%s payment due soon — due date %d (%s)', $svc, $deadlineDay, $yearMonth),

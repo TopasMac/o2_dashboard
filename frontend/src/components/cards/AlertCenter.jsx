@@ -1,6 +1,41 @@
 import React from 'react';
+import ElectricBoltRoundedIcon from '@mui/icons-material/ElectricBoltRounded';
+import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import WaterDropOutlinedIcon from '@mui/icons-material/WaterDropOutlined';
+import WifiRoundedIcon from '@mui/icons-material/WifiRounded';
 import api from '../../api';
 import { CANCUN_TZ } from '../../utils/dateTimeCancun';
+
+const SERVICE_ALERT_STYLES = {
+  CFE: { color: '#d8a600', icon: ElectricBoltRoundedIcon },
+  HOA: { color: '#1E8279', icon: HomeRoundedIcon },
+  Internet: { color: '#735aa8', icon: WifiRoundedIcon },
+  Water: { color: '#2878bd', icon: WaterDropOutlinedIcon },
+};
+
+const DEADLINE_PILL_STYLES = {
+  overdue: { color: '#a12732', background: '#fff0f1', border: '#d55b65' },
+  today: { color: '#a51f2a', background: '#ffdfe2', border: '#ef4d62' },
+  tomorrow: { color: '#9a5d00', background: '#fff3d8', border: '#e9a61a' },
+  later: { color: '#315d58', background: '#edf5f3', border: '#9abdb8' },
+};
+
+function serviceAlertPriority(alert) {
+  if (alert.type === 'service-payment-mismatch') return 4;
+  if (alert.type === 'service-payment-overdue') return 0;
+  if (alert.type !== 'service-payment-due-soon' || !alert.yearMonth || alert.deadline == null) return 4;
+
+  const [year, month] = String(alert.yearMonth).split('-').map(Number);
+  const deadline = new Date(year, month - 1, Number(alert.deadline));
+  const todayYmd = new Date().toLocaleString('sv-SE', { timeZone: CANCUN_TZ }).slice(0, 10);
+  const today = new Date(`${todayYmd}T00:00:00`);
+  const daysUntil = Math.round((deadline.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+  if (daysUntil <= 0) return daysUntil === 0 ? 1 : 0;
+  if (daysUntil === 1) return 2;
+  return 3;
+}
 
 export default function AlertCenter({ alerts, dismissAlert, embedded = false }) {
   const handleServiceDismiss = async (alert) => {
@@ -51,6 +86,11 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
   const renderContent = () => {
     if (alerts.length > 0) {
       const sortedAlerts = [...alerts].sort((a, b) => {
+        const aService = a.type && a.type.startsWith('service-payment-');
+        const bService = b.type && b.type.startsWith('service-payment-');
+        if (aService && bService) {
+          return serviceAlertPriority(a) - serviceAlertPriority(b);
+        }
         if (a.severity === 'danger' && b.severity !== 'danger') return -1;
         if (a.severity !== 'danger' && b.severity === 'danger') return 1;
         return 0;
@@ -705,6 +745,9 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
               a.type === 'service-payment-mismatch'
             ) {
               const serviceLabel = a.service || 'Service';
+              const displayServiceLabel = serviceLabel === 'Water' ? 'Agua' : serviceLabel;
+              const serviceStyle = SERVICE_ALERT_STYLES[serviceLabel] || { color: '#1E6F68', icon: NotificationsActiveRoundedIcon };
+              const ServiceIcon = serviceStyle.icon;
               const yearMonth = a.yearMonth || '';
               const deadlineDay = a.deadline != null ? Number(a.deadline) : null;
 
@@ -738,15 +781,10 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
                 ? yearMonth.split('-')
                 : [null, null];
 
-              const dueDateLabel =
-                periodYear && periodMonth && deadlineDay
-                  ? `${String(deadlineDay).padStart(2, '0')}-${String(periodMonth).padStart(2, '0')}-${periodYear}`
-                  : null;
-
-              // Compute daysUntil for due-soon alerts (based on Cancun calendar dates)
+              // Compute daysUntil from the Cancun calendar date for all deadline pills.
               let daysUntil = null;
               if (
-                a.type === 'service-payment-due-soon' &&
+                a.type !== 'service-payment-mismatch' &&
                 periodYear &&
                 periodMonth &&
                 deadlineDay
@@ -772,19 +810,24 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
                 }
               }
 
-              let statusLabel = '';
-              let statusColor = '#8d6e00'; // amber by default
-
-              if (a.type === 'service-payment-overdue') {
-                statusLabel = 'OVERDUE';
-                statusColor = '#b71c1c';
-              } else if (a.type === 'service-payment-due-soon') {
-                statusLabel = 'DUE SOON';
-                statusColor = '#8d6e00';
-              } else if (a.type === 'service-payment-mismatch') {
-                statusLabel = 'MISMATCH';
-                statusColor = '#F57C4D';
-              }
+              const deadlineState = daysUntil === null
+                ? 'later'
+                : daysUntil < 0
+                ? 'overdue'
+                : daysUntil === 0
+                ? 'today'
+                : daysUntil === 1
+                ? 'tomorrow'
+                : 'later';
+              const deadlinePillStyle = DEADLINE_PILL_STYLES[deadlineState];
+              const deadlinePillLabel = deadlineState === 'today'
+                ? 'Hoy'
+                : periodMonth && periodYear && deadlineDay
+                ? new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: CANCUN_TZ })
+                    .format(new Date(Number(periodYear), Number(periodMonth) - 1, Number(deadlineDay)))
+                    .replace('.', '')
+                    .toLowerCase()
+                : 'Sin fecha';
 
               const formatMoney = (value) => {
                 if (value == null || Number.isNaN(Number(value))) return null;
@@ -796,6 +839,11 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
 
               const expectedAmount = formatMoney(a.expected);
               const paidAmount = formatMoney(a.paid);
+              const internetPaymentDetails = a.service === 'Internet'
+                ? [a.serviceProvider, a.paymentReference ? String(a.paymentReference) : null]
+                    .filter(Boolean)
+                    .join(': ') + (a.amount != null ? ` (${formatMoney(a.amount) || a.amount})` : '')
+                : '';
 
               return (
                 <li
@@ -808,7 +856,7 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Top row: bullet + unit + service + status label + Open */}
+                    {/* Top row: service icon + service + unit + deadline state + Open */}
                     <div
                       style={{
                         display: 'flex',
@@ -817,7 +865,23 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
                         marginBottom: 2,
                       }}
                     >
-                      <span style={{ color: '#4B4F56' }}>•</span>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          background: `${serviceStyle.color}18`,
+                          color: serviceStyle.color,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.85rem',
+                          flex: '0 0 auto',
+                        }}
+                      >
+                        <ServiceIcon sx={{ fontSize: '0.85rem' }} />
+                      </span>
                       <span
                         style={{
                           fontWeight: 600,
@@ -827,46 +891,26 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
                           textOverflow: 'ellipsis',
                         }}
                       >
-                        {unitLabel}
+                        {displayServiceLabel} · {unitLabel}
                       </span>
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          marginLeft: 6,
-                        }}
-                      >
+                      {deadlineDay && (
                         <span
                           style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            background: '#6b7280',
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: '0.7rem',
-                            textTransform: 'uppercase',
-                            letterSpacing: 0.4,
-                            color: '#1E6F68',
+                            color: deadlinePillStyle.color,
+                            background: deadlinePillStyle.background,
+                            border: `1px solid ${deadlinePillStyle.border}`,
+                            borderRadius: 999,
+                            padding: '2px 8px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            marginLeft: 'auto',
+                            flex: '0 0 auto',
                           }}
                         >
-                          {serviceLabel}
+                          {deadlinePillLabel}
                         </span>
-                      </span>
-                      <span
-                        style={{
-                          marginLeft: 6,
-                          fontSize: '0.7rem',
-                          textTransform: 'uppercase',
-                          letterSpacing: 0.4,
-                          color: statusColor,
-                        }}
-                      >
-                        {statusLabel}
-                      </span>
+                      )}
                       {a.type === 'service-payment-mismatch' && mismatchHref && (
                         <a
                           href={mismatchHref}
@@ -928,47 +972,10 @@ export default function AlertCenter({ alerts, dismissAlert, embedded = false }) 
                         )
                       ) : (
                         <>
-                          {/* Deadline / period row */}
-                          {(dueDateLabel || yearMonth) && (
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                flexWrap: 'wrap',
-                              }}
-                            >
-                              {dueDateLabel ? (
-                                <span>
-                                  Vencimiento {dueDateLabel}
-                                </span>
-                              ) : null}
-                              {a.type === 'service-payment-due-soon' && daysUntil !== null ? (
-                                <span
-                                  style={{
-                                    fontSize: '0.8rem',
-                                    color: '#4B4F56',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {daysUntil === 0
-                                    ? 'Hoy'
-                                    : daysUntil === 1
-                                    ? '1 día'
-                                    : `${daysUntil} días`}
-                                </span>
-                              ) : yearMonth ? (
-                                <span
-                                  style={{
-                                    fontSize: '0.75rem',
-                                    color: '#6b7280',
-                                  }}
-                                >
-                                  ({yearMonth})
-                                </span>
-                              ) : null}
-                            </div>
-                          )}
+                          {serviceLabel === 'CFE' && a.serviceReference ? <div>Referencia: {a.serviceReference}</div> : null}
+                          {serviceLabel === 'Water' && a.serviceReference ? <div>Referencia: {a.serviceReference}</div> : null}
+                          {serviceLabel === 'Internet' && internetPaymentDetails ? <div>{internetPaymentDetails}</div> : null}
+                          {serviceLabel === 'HOA' && a.amount != null ? <div>Monto: {formatMoney(a.amount)}</div> : null}
 
                           {/* Amount row (if available) */}
                           {(expectedAmount || paidAmount) && (

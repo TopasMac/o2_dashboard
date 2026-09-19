@@ -33,7 +33,6 @@ const DashboardAlertCenterCard = () => {
       // New unified service-payment alert types
       'service-payment-overdue',
       'service-payment-due-soon',
-      'service-payment-mismatch',
     ].includes(a.type)
   );
 

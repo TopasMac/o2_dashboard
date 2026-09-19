@@ -131,6 +131,8 @@ class UnitsController extends AbstractController
         $unit->setLinensFee($nf($data['linens_fee'] ?? null));
         $unit->setHoaAmount($nf($data['hoa_amount'] ?? null));
         $unit->setInternetCost($nf($data['internet_cost'] ?? null));
+        $internetPago = $data['internet_pago'] ?? null;
+        $unit->setInternetPago(($internetPago === '' || $internetPago === null) ? null : (preg_match('/^\d+$/', (string)$internetPago) ? (string)$internetPago : null));
         $unit->setPax($ni($data['pax'] ?? null));
         $unit->setBaths($ni($data['baths'] ?? null));
         $unit->setBeds($ni($data['beds'] ?? null));
@@ -302,6 +304,7 @@ class UnitsController extends AbstractController
         $setIfHas('linens_fee', fn($v) => $unit->setLinensFee($toNum($v)));
         $setIfHas('hoa_amount', fn($v) => $unit->setHoaAmount($toNum($v)));
         $setIfHas('internet_cost', fn($v) => $unit->setInternetCost($toNum($v)));
+        $setIfHas('internet_pago', fn($v) => $unit->setInternetPago(($v === '' || $v === null) ? null : (preg_match('/^\d+$/', (string)$v) ? (string)$v : null)));
         $setIfHas('pax', fn($v) => $unit->setPax(($v === '' || $v === null) ? null : (is_numeric($v) ? (int)$v : null)));
         $setIfHas('baths', fn($v) => $unit->setBaths(($v === '' || $v === null) ? null : (is_numeric($v) ? (int)$v : null)));
         $setIfHas('beds', fn($v) => $unit->setBeds(($v === '' || $v === null) ? null : (is_numeric($v) ? (int)$v : null)));

@@ -232,6 +232,10 @@ class Unit
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?float $internetCost = null;
 
+    #[ORM\Column(name: 'internet_pago', type: 'bigint', nullable: true)]
+    #[Groups(['unit:list', 'unit:read', 'unit:write'])]
+    private ?string $internetPago = null;
+
     #[ORM\Column(name: 'internet_deadline', type: 'integer', nullable: true)]
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?int $internetDeadline = null;
@@ -581,6 +585,12 @@ class Unit
         return $this;
     }
 
+    public function setInternetPago(?string $internetPago): self
+    {
+        $this->internetPago = $internetPago;
+        return $this;
+    }
+
     public function setInternetDeadline(?int $internetDeadline): self
     {
         $this->internetDeadline = $internetDeadline;
@@ -830,6 +840,11 @@ class Unit
     public function getInternetCost(): ?float
     {
         return $this->internetCost;
+    }
+
+    public function getInternetPago(): ?string
+    {
+        return $this->internetPago;
     }
 
     #[Groups(['unit:list', 'unit:read'])]

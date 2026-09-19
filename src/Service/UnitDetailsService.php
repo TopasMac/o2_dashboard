@@ -116,6 +116,7 @@ class UnitDetailsService
             'internet_isp'        => $unit->getInternetIsp(),
             'internet_reference'  => $unit->getInternetReference(),
             'internet_cost'       => $unit->getInternetCost(),
+            'internet_pago'       => $unit->getInternetPago(),
             'internet_deadline'   => $unit->getInternetDeadline(),
 
             // Water

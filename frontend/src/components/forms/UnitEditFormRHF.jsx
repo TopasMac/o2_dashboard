@@ -71,6 +71,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
     internet_isp: '',
     internet_reference: '',
     internet_cost: '',
+    internet_pago: '',
     internet_deadline: '',
     water_reference: '',
     water_deadline: '',
@@ -305,6 +306,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
             internet_isp: u.internet_isp || u.internetIsp || '',
             internet_reference: u.internet_reference || u.internetReference || '',
             internet_cost: (u.internet_cost ?? u.internetCost) ?? '',
+            internet_pago: (u.internet_pago ?? u.internetPago) ?? '',
             internet_deadline: (u.internet_deadline ?? u.internetDeadline ?? u.internetDeadLine) ?? '',
             water_reference: u.water_reference || u.waterReference || '',
             water_deadline: (u.water_deadline ?? u.waterDeadline ?? u.waterDeadLine) ?? '',
@@ -416,6 +418,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
   const onSubmit = async (formValues) => {
     const toNullNum = (v) => (v === '' || v === null || typeof v === 'undefined') ? null : Number(v);
     const toNullInt = (v) => (v === '' || v === null || typeof v === 'undefined') ? null : parseInt(v, 10);
+    const toNullIntegerString = (v) => (v === '' || v === null || typeof v === 'undefined') ? null : String(v).trim();
     const payload = {
       unit_name: (formValues.unit_name || '').trim(),
       listing_name: formValues.listing_name || '',
@@ -466,6 +469,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
       internet_isp: formValues.internet_isp || '',
       internet_reference: formValues.internet_reference || '',
       internet_cost: toNullNum(formValues.internet_cost),
+      internet_pago: toNullIntegerString(formValues.internet_pago),
       internet_deadline: toNullInt(formValues.internet_deadline),
       water_reference: formValues.water_reference || '',
       water_deadline: toNullInt(formValues.water_deadline),
@@ -856,6 +860,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
                     <RHFTextField name="internet_cost" label="Monthly Cost" inputProps={{ type: 'number', step: '0.01', inputMode: 'decimal' }} />
                     <RHFTextField name="internet_deadline" label="Pay Day" inputProps={{ type: 'number', min: 1, max: 31 }} />
                   </div>
+                  <RHFTextField name="internet_pago" label="Payment Reference" inputProps={{ type: 'number', inputMode: 'numeric' }} />
                 </div>
               )}
             </div>
