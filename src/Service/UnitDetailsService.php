@@ -87,6 +87,7 @@ class UnitDetailsService
 
             // listing
             'listing_name'    => $unit->getListingName(),
+            'airbnb_link'     => $unit->getAirbnbLink(),
             'seo_short_description' => $unit->getSeoShortDescription(),
 
             // financials

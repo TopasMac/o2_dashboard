@@ -24,6 +24,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
   const defaults = React.useMemo(() => ({
     unit_name: '',
     listing_name: '',
+    airbnb_link: '',
     airbnb_ical: '',
     host_type: 'Host',
     payment_type: 'OWNERS2',
@@ -244,6 +245,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
             ...defaults,
             unit_name: u.unit_name || u.unitName || '',
             listing_name: u.listing_name || u.listingName || '',
+            airbnb_link: u.airbnb_link || u.airbnbLink || '',
             airbnb_ical: u.airbnb_ical || u.airbnbIcal || '',
             host_type: u.host_type || u.hostType || 'Host',
             payment_type: u.payment_type || u.paymentType || 'OWNERS2',
@@ -422,6 +424,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
     const payload = {
       unit_name: (formValues.unit_name || '').trim(),
       listing_name: formValues.listing_name || '',
+      airbnb_link: (formValues.airbnb_link || '').trim(),
       airbnb_ical: formValues.airbnb_ical || '',
       host_type: formValues.host_type || '',
       payment_type: (formValues.payment_type || '').toUpperCase(),
@@ -937,6 +940,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
           <summary onClick={onOpen('airbnb')} style={summaryStyle}>Airbnb Info</summary>
           <div style={{ display: 'grid', gap: 12 }}>
             <RHFTextField name="listing_name" label="Listing Name" sx={{ width: widthMap.full }} />
+            <RHFTextField name="airbnb_link" label="Airbnb Link" sx={{ width: widthMap.full }} />
             <RHFTextField name="airbnb_ical" label="Airbnb iCal" sx={{ width: widthMap.full }} />
             <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', alignItems: 'center', columnGap: 12 }}>
               <button

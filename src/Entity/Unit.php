@@ -64,6 +64,10 @@ class Unit
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?string $listingName = null;
 
+    #[ORM\Column(name: 'airbnb_link', type: 'string', length: 512, nullable: true)]
+    #[Groups(['unit:read', 'unit:write'])]
+    private ?string $airbnbLink = null;
+
     #[ORM\Column(type: 'string', nullable: true)]
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?string $status = null;
@@ -321,6 +325,17 @@ class Unit
     public function setListingName(?string $listingName): self
     {
         $this->listingName = $listingName ? strtoupper($listingName) : null;
+        return $this;
+    }
+
+    public function getAirbnbLink(): ?string
+    {
+        return $this->airbnbLink;
+    }
+
+    public function setAirbnbLink(?string $airbnbLink): self
+    {
+        $this->airbnbLink = $airbnbLink;
         return $this;
     }
 

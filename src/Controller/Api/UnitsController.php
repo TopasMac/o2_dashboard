@@ -102,6 +102,8 @@ class UnitsController extends AbstractController
         $unit->setCity((string)($data['city'] ?? ''));
         $unit->setType((string)($data['type'] ?? ''));
         $unit->setListingName((string)($data['listing_name'] ?? ''));
+        $airbnbLink = $data['airbnb_link'] ?? null;
+        $unit->setAirbnbLink(($airbnbLink === '' || $airbnbLink === null) ? null : (string)$airbnbLink);
         $unit->setHostType((string)($data['host_type'] ?? ''));
         $unit->setPaymentType((string)($data['payment_type'] ?? ''));
 
@@ -265,6 +267,7 @@ class UnitsController extends AbstractController
         $setIfHas('city', fn($v) => $unit->setCity((string)$v));
         $setIfHas('type', fn($v) => $unit->setType((string)$v));
         $setIfHas('listing_name', fn($v) => $unit->setListingName((string)$v));
+        $setIfHas('airbnb_link', fn($v) => $unit->setAirbnbLink(($v === '' || $v === null) ? null : trim((string)$v)));
         $setIfHas('host_type', fn($v) => $unit->setHostType((string)$v));
         $setIfHas('payment_type', fn($v) => $unit->setPaymentType((string)$v));
         $setIfHas('unit_number', fn($v) => $unit->setUnitNumber((string)$v));
