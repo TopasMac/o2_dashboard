@@ -24,6 +24,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
   const defaults = React.useMemo(() => ({
     unit_name: '',
     listing_name: '',
+    airbnb_link: '',
     airbnb_ical: '',
     host_type: 'Host',
     payment_type: 'OWNERS2',
@@ -71,6 +72,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
     internet_isp: '',
     internet_reference: '',
     internet_cost: '',
+    internet_pago: '',
     internet_deadline: '',
     water_reference: '',
     water_deadline: '',
@@ -243,6 +245,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
             ...defaults,
             unit_name: u.unit_name || u.unitName || '',
             listing_name: u.listing_name || u.listingName || '',
+            airbnb_link: u.airbnb_link || u.airbnbLink || '',
             airbnb_ical: u.airbnb_ical || u.airbnbIcal || '',
             host_type: u.host_type || u.hostType || 'Host',
             payment_type: u.payment_type || u.paymentType || 'OWNERS2',
@@ -305,6 +308,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
             internet_isp: u.internet_isp || u.internetIsp || '',
             internet_reference: u.internet_reference || u.internetReference || '',
             internet_cost: (u.internet_cost ?? u.internetCost) ?? '',
+            internet_pago: (u.internet_pago ?? u.internetPago) ?? '',
             internet_deadline: (u.internet_deadline ?? u.internetDeadline ?? u.internetDeadLine) ?? '',
             water_reference: u.water_reference || u.waterReference || '',
             water_deadline: (u.water_deadline ?? u.waterDeadline ?? u.waterDeadLine) ?? '',
@@ -416,9 +420,11 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
   const onSubmit = async (formValues) => {
     const toNullNum = (v) => (v === '' || v === null || typeof v === 'undefined') ? null : Number(v);
     const toNullInt = (v) => (v === '' || v === null || typeof v === 'undefined') ? null : parseInt(v, 10);
+    const toNullIntegerString = (v) => (v === '' || v === null || typeof v === 'undefined') ? null : String(v).trim();
     const payload = {
       unit_name: (formValues.unit_name || '').trim(),
       listing_name: formValues.listing_name || '',
+      airbnb_link: (formValues.airbnb_link || '').trim(),
       airbnb_ical: formValues.airbnb_ical || '',
       host_type: formValues.host_type || '',
       payment_type: (formValues.payment_type || '').toUpperCase(),
@@ -466,6 +472,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
       internet_isp: formValues.internet_isp || '',
       internet_reference: formValues.internet_reference || '',
       internet_cost: toNullNum(formValues.internet_cost),
+      internet_pago: toNullIntegerString(formValues.internet_pago),
       internet_deadline: toNullInt(formValues.internet_deadline),
       water_reference: formValues.water_reference || '',
       water_deadline: toNullInt(formValues.water_deadline),
@@ -856,6 +863,11 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
                     <RHFTextField name="internet_cost" label="Monthly Cost" inputProps={{ type: 'number', step: '0.01', inputMode: 'decimal' }} />
                     <RHFTextField name="internet_deadline" label="Pay Day" inputProps={{ type: 'number', min: 1, max: 31 }} />
                   </div>
+                  <RHFTextField
+                    name="internet_pago"
+                    label="Payment Reference"
+                    inputProps={{ type: 'text', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 64 }}
+                  />
                 </div>
               )}
             </div>
@@ -932,6 +944,7 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
           <summary onClick={onOpen('airbnb')} style={summaryStyle}>Airbnb Info</summary>
           <div style={{ display: 'grid', gap: 12 }}>
             <RHFTextField name="listing_name" label="Listing Name" sx={{ width: widthMap.full }} />
+            <RHFTextField name="airbnb_link" label="Airbnb Link" sx={{ width: widthMap.full }} />
             <RHFTextField name="airbnb_ical" label="Airbnb iCal" sx={{ width: widthMap.full }} />
             <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', alignItems: 'center', columnGap: 12 }}>
               <button

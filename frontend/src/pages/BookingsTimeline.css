@@ -181,7 +181,7 @@
   position: relative;
   align-self: center;      /* center as grid item */
   margin: auto 0;          /* equal space top/bottom, no horizontal margin by default */
-  height: 20px;            /* slightly taller for a 52px row */
+  height: 22px;            /* leave room for the source logo */
   border-radius: 6px;
   color: #fff;
   display: flex;
@@ -207,6 +207,19 @@
   vertical-align: middle;
   flex-shrink: 0;
   transform: translateY(-1px); /* nudge icon slightly up inside the bar */
+}
+
+.bt-source-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+  box-sizing: border-box;
+  object-fit: contain;
+  flex: 0 0 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 /* Notes icon for tooltips and bars */
@@ -252,6 +265,7 @@
 }
 .bt-bar .bt-bar-text {
   display: block;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

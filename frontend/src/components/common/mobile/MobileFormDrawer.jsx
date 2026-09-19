@@ -6,7 +6,8 @@ import AppDrawer from '../AppDrawer';
 /**
  * MobileFormDrawer
  * Lightweight wrapper around AppDrawer preconfigured for mobile forms.
- * - Full-screen on mobile by default
+ * - Consistent right-side panel on mobile, leaving room to dismiss it
+ * - Blurred/dimmed backdrop to keep the panel visually distinct
  * - Teal header (#1E6F68) with white text to match MobileShell
  * - Leaves actions/footer behavior to AppDrawer
  * - Can host any form via `FormComponent` and `formProps`, or render `children` directly
@@ -32,6 +33,9 @@ function MobileFormDrawer({
   titleSx,
   contentSx,
   mobileVariant = 'sheet',
+  fullScreenOnMobile = false,
+  mobilePanelWidth = 'min(90vw, 520px)',
+  blurBackdrop = true,
   ...props
 }) {
   const grabHandle = (
@@ -89,10 +93,12 @@ function MobileFormDrawer({
       showActions={showActions}
       actions={effectiveActions}
       onDelete={onDelete}
-      fullScreenOnMobile
+      fullScreenOnMobile={fullScreenOnMobile}
+      mobilePanelWidth={mobilePanelWidth}
+      blurBackdrop={blurBackdrop}
       mobileVariant={mobileVariant}
       actionStyle="mobile"
-      contentSx={{ p: 2, pb: 'max(16px, env(safe-area-inset-bottom))', ...contentSx }}
+      contentSx={{ p: 2, pb: 'max(16px, env(safe-area-inset-bottom))', bgcolor: '#f7faf9', ...contentSx }}
       {...props}
     >
       {mobileVariant === 'sheet' && grabHandle}
@@ -127,6 +133,9 @@ MobileFormDrawer.propTypes = {
   formProps: PropTypes.object,
   componentKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   mobileVariant: PropTypes.oneOf(['sheet', 'fullscreen']),
+  fullScreenOnMobile: PropTypes.bool,
+  mobilePanelWidth: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
+  blurBackdrop: PropTypes.bool,
 };
 
 export default MobileFormDrawer;

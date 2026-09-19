@@ -19,7 +19,7 @@ import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline';
  *  - onDelete?: function (called when Delete is clicked)
  *  - mode?: 'create' | 'edit' (optional; controls default action layout)
  */
-export default function AppDrawer({ size = 'default', fullScreenOnMobile = true, mobileVariant = 'fullscreen', actionStyle = 'default', title, hideHeader = false, headerLink, formId, showActions = false, mode, actions = {}, extraActions, onDelete, contentSx = {}, ...props }) {
+export default function AppDrawer({ size = 'default', fullScreenOnMobile = true, mobilePanelWidth = 'min(90vw, 520px)', blurBackdrop = false, mobileVariant = 'fullscreen', actionStyle = 'default', title, hideHeader = false, headerLink, formId, showActions = false, mode, actions = {}, extraActions, onDelete, contentSx = {}, ...props }) {
   const presets = {
     compact: { sm: 420, md: 420 },
     default: { sm: 420, md: 420 },
@@ -160,18 +160,18 @@ export default function AppDrawer({ size = 'default', fullScreenOnMobile = true,
           sx: {
             top: { xs: 0, sm: 0 },
             height: { xs: '100vh', sm: '100vh' },
-            backgroundColor: 'transparent',
-            backdropFilter: 'none',
-            WebkitBackdropFilter: 'none',
+            backgroundColor: blurBackdrop ? 'rgba(15, 40, 37, 0.22)' : 'transparent',
+            backdropFilter: blurBackdrop ? 'blur(4px)' : 'none',
+            WebkitBackdropFilter: blurBackdrop ? 'blur(4px)' : 'none',
           },
         },
       }}
       PaperProps={{
         sx: {
           // Full screen on phones for easier interaction
-          width: { xs: isSheet ? '100vw' : (fullScreenOnMobile ? '100vw' : 'min(92vw, 520px)'), sm: preset.sm, md: preset.md },
+          width: { xs: isSheet ? '100vw' : (fullScreenOnMobile ? '100vw' : mobilePanelWidth), sm: preset.sm, md: preset.md },
           height: {
-            xs: isSheet ? '85dvh' : (fullScreenOnMobile ? '100dvh' : 'auto'),
+            xs: isSheet ? '85dvh' : '100dvh',
             sm: '100dvh',
           },
           maxHeight: '100dvh',

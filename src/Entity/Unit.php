@@ -64,6 +64,10 @@ class Unit
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?string $listingName = null;
 
+    #[ORM\Column(name: 'airbnb_link', type: 'string', length: 512, nullable: true)]
+    #[Groups(['unit:read', 'unit:write'])]
+    private ?string $airbnbLink = null;
+
     #[ORM\Column(type: 'string', nullable: true)]
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?string $status = null;
@@ -232,6 +236,10 @@ class Unit
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?float $internetCost = null;
 
+    #[ORM\Column(name: 'internet_pago', type: 'string', length: 64, nullable: true)]
+    #[Groups(['unit:list', 'unit:read', 'unit:write'])]
+    private ?string $internetPago = null;
+
     #[ORM\Column(name: 'internet_deadline', type: 'integer', nullable: true)]
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?int $internetDeadline = null;
@@ -317,6 +325,17 @@ class Unit
     public function setListingName(?string $listingName): self
     {
         $this->listingName = $listingName ? strtoupper($listingName) : null;
+        return $this;
+    }
+
+    public function getAirbnbLink(): ?string
+    {
+        return $this->airbnbLink;
+    }
+
+    public function setAirbnbLink(?string $airbnbLink): self
+    {
+        $this->airbnbLink = $airbnbLink;
         return $this;
     }
 
@@ -581,6 +600,12 @@ class Unit
         return $this;
     }
 
+    public function setInternetPago(?string $internetPago): self
+    {
+        $this->internetPago = $internetPago;
+        return $this;
+    }
+
     public function setInternetDeadline(?int $internetDeadline): self
     {
         $this->internetDeadline = $internetDeadline;
@@ -830,6 +855,11 @@ class Unit
     public function getInternetCost(): ?float
     {
         return $this->internetCost;
+    }
+
+    public function getInternetPago(): ?string
+    {
+        return $this->internetPago;
     }
 
     #[Groups(['unit:list', 'unit:read'])]

@@ -34,6 +34,7 @@ import {
   getCleaningTypeLabel,
   summarizeCleaningCards,
 } from './cleaningsModel';
+import { formatMobileGuestName } from './mobileFormatters';
 
 const CITY_OPTIONS = [
   { value: '', label: 'Todas' },
@@ -87,7 +88,7 @@ function EventLine({ type, event }) {
       <Icon sx={{ color, fontSize: 18, mt: 0.1 }} />
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" noWrap sx={{ fontSize: 12.5, fontWeight: 700 }}>
-          {isCheckOut ? 'Salida' : 'Entrada'}{event.guest ? ` · ${event.guest}` : ''}
+          {isCheckOut ? 'Salida' : 'Entrada'}{event.guest ? ` · ${formatMobileGuestName(event.guest)}` : ''}
         </Typography>
         <Typography
           variant="caption"

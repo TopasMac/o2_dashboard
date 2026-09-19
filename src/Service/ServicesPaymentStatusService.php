@@ -236,13 +236,22 @@ class ServicesPaymentStatusService
             }
         }
 
-        // Water deadline & overdue computation (uses condo.water_deadline when available)
+        // Water deadline & overdue computation. Unit water_deadline is authoritative;
+        // retain the condo fallback for older records that stored it there.
         if ($expected['Water']) {
-            $condo = method_exists($unit, 'getCondo') ? $unit->getCondo() : null;
-            if ($condo && method_exists($condo, 'getWaterDeadline')) {
-                $waterDueDay = $condo->getWaterDeadline();
+            if (method_exists($unit, 'getWaterDeadline')) {
+                $waterDueDay = $unit->getWaterDeadline();
                 if ($waterDueDay !== null) {
-                    $waterDueDay = (int)$waterDueDay;
+                    $waterDueDay = (int) $waterDueDay;
+                }
+            }
+            if ($waterDueDay === null) {
+                $condo = method_exists($unit, 'getCondo') ? $unit->getCondo() : null;
+                if ($condo && method_exists($condo, 'getWaterDeadline')) {
+                    $waterDueDay = $condo->getWaterDeadline();
+                    if ($waterDueDay !== null) {
+                        $waterDueDay = (int) $waterDueDay;
+                    }
                 }
             }
 

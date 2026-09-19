@@ -8,6 +8,7 @@ use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 class DashboardController
 {
@@ -59,6 +60,7 @@ class DashboardController
     }
 
     #[Route('/api/dashboard/alerts', name: 'api_dashboard_alerts', methods: ['GET'])]
+    #[IsGranted('ROLE_MANAGER')]
     public function alerts(DashboardAlertsService $alertsService, Security $security): JsonResponse
     {
         $user = $security->getUser();
