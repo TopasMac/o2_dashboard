@@ -19,10 +19,16 @@ export function resolveLoginTarget({
 
   const isLegacyMobileTarget = requestedTarget === '/m'
     || (requestedTarget?.startsWith('/m/') && !requestedTarget.startsWith('/m/v2'));
+  const isCleanerMobileV2Target = isCleanerEmployee
+    && requestedTarget?.startsWith('/m/v2')
+    && !requestedTarget.startsWith('/m/v2/cleanings');
 
   // The dedicated HausIn app always uses Mobile V2. Preserve an explicit V2
   // destination, but never restore one of the retired legacy mobile routes.
   if (normalizedHostname === 'app.myhausin.com') {
+    if (isCleanerMobileV2Target) {
+      return '/m/v2/cleanings';
+    }
     if (requestedTarget?.startsWith('/m/v2')) {
       return requestedTarget;
     }
@@ -30,6 +36,10 @@ export function resolveLoginTarget({
       return '/m/v2/cleanings';
     }
     return '/m/v2';
+  }
+
+  if (isCleanerMobileV2Target) {
+    return '/m/v2/cleanings';
   }
 
   if (requestedTarget && !isLegacyMobileTarget) {
