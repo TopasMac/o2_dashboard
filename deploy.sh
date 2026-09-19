@@ -24,6 +24,9 @@ echo "🔨 Building frontend..."
 npm run build || { echo "❌ Frontend build failed"; exit 1; }
 cd ..
 
+echo "📤 Publishing frontend build to Symfony public directory..."
+sudo rsync -a --chown=www-data:www-data frontend/build/ public/ || { echo "❌ Frontend publish failed"; exit 1; }
+
 echo "🚀 Restarting Nginx..."
 sudo systemctl restart nginx || { echo "❌ Nginx restart failed"; exit 1; }
 
