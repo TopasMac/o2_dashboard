@@ -1250,6 +1250,12 @@ function BookingBar({ booking, days, onClick }) {
         ? 'block'
         : (['airbnb', 'private'].includes(rawSourceClass) ? rawSourceClass : ''));
 
+  const sourceIcon = rawSourceClass === 'airbnb'
+    ? { src: '/images/airbnb.png', alt: 'Airbnb' }
+    : rawSourceClass === 'private'
+      ? { src: '/branding/hausin/icon-512x512.png', alt: 'HausIn' }
+      : null;
+
   // Tooltip content (JSX) using global O2Tooltip styles
   let tooltipContent;
   if (isHold) {
@@ -1340,6 +1346,14 @@ function BookingBar({ booking, days, onClick }) {
           cursor: 'pointer'
         }}
       >
+        {sourceIcon && (
+          <img
+            className="bt-source-icon"
+            src={sourceIcon.src}
+            alt={sourceIcon.alt}
+            title={sourceIcon.alt}
+          />
+        )}
         <span className="bt-bar-text">{label}</span>
       </div>
     </O2Tooltip>

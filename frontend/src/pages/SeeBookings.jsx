@@ -680,17 +680,17 @@ const SeeBookings = () => {
                         src="/images/airbnb.png"
                         alt="Airbnb"
                         title="Airbnb"
-                        style={{ width: 14, height: 14, objectFit: 'contain' }}
+                        style={{ display: 'block', width: 16, height: 16, objectFit: 'contain' }}
                       />
                     );
                   }
                   if (sourceNorm === 'private' || sourceNorm === 'owners2') {
                     return (
                       <img
-                        src="/images/o2icon.svg"
-                        alt="Owners2"
-                        title="Owners2"
-                        style={{ width: 14, height: 14, objectFit: 'contain' }}
+                        src="/branding/hausin/icon-512x512.png"
+                        alt="HausIn"
+                        title="HausIn"
+                        style={{ display: 'block', width: 18, height: 18, objectFit: 'contain' }}
                       />
                     );
                   }
