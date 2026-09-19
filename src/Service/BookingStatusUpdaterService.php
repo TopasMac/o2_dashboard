@@ -50,7 +50,8 @@ class BookingStatusUpdaterService
                     'late check-out',
                 ], true);
                 if ($isBlockType && $co instanceof \DateTimeInterface) {
-                    if ($co < $now && !in_array($currentStatus, ['cancelled','canceled'], true)) {
+                    $isPastCalendarDate = $co->format('Y-m-d') < $now->format('Y-m-d');
+                    if ($isPastCalendarDate && !in_array($currentStatus, ['cancelled','canceled'], true)) {
                         if ($booking->getStatus() !== 'Past') {
                             $booking->setStatus('Past');
                             $this->entityManager->persist($booking);

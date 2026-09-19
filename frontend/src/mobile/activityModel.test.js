@@ -124,4 +124,3 @@ describe('Mobile V2 daily activity model', () => {
     expect(activity.cityGroups[0].cleanings[0].typeLabel).toBe('Limpieza inicial');
   });
 });
-

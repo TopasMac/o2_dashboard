@@ -62,14 +62,14 @@ class UpdateBookingStatusCommand extends Command
             ['today' => $today]
         );
 
-                $pastBlocks = $connection->executeStatement(
+        $pastBlocks = $connection->executeStatement(
             "UPDATE all_bookings
-                         SET status = 'Past'
+             SET status = 'Past'
              WHERE source = 'Owners2'
-                             AND LOWER(guest_type) IN ('block', 'cleaning', 'maintenance', 'late check-out')
+               AND LOWER(guest_type) IN ('block', 'cleaning', 'maintenance', 'late check-out')
                AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'canceled')
                AND check_out < :today
-                             AND status <> 'Past'",
+               AND status <> 'Past'",
             ['today' => $today]
         );
 

@@ -85,6 +85,28 @@ final class BookingStatusUpdaterServiceTest extends TestCase
         self::assertSame('Past', $booking->getStatus());
     }
 
+    public function testOwners2BlockCheckingOutTodayRemainsActive(): void
+    {
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('America/Cancun'));
+        $booking = $this->booking($today->modify('-1 day'), $today)
+            ->setSource('Owners2')
+            ->setGuestType('Block')
+            ->setStatus('Active');
+
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $entityManager->expects(self::never())->method('persist');
+        $entityManager->expects(self::once())->method('flush');
+
+        $cleaningManager = $this->createMock(HKCleaningManager::class);
+        $cleaningManager->expects(self::never())->method('markDoneAndCreateTransaction');
+        $cleaningManager->expects(self::never())->method('syncCheckoutCleaningForBooking');
+
+        (new BookingStatusUpdaterService($entityManager, $cleaningManager))
+            ->updateStatuses([$booking], true);
+
+        self::assertSame('Active', $booking->getStatus());
+    }
+
     public function testIncompleteBookingDatesDoNotCauseStatusUpdateFailure(): void
     {
         $booking = (new AllBookings())

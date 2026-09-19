@@ -236,7 +236,7 @@ class Unit
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?float $internetCost = null;
 
-    #[ORM\Column(name: 'internet_pago', type: 'bigint', nullable: true)]
+    #[ORM\Column(name: 'internet_pago', type: 'string', length: 64, nullable: true)]
     #[Groups(['unit:list', 'unit:read', 'unit:write'])]
     private ?string $internetPago = null;
 

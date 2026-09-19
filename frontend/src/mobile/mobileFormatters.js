@@ -15,4 +15,3 @@ export function formatMobileGuestName(value) {
   if (parts.length <= 2) return parts.join(' ');
   return `${parts[0]} ${parts[parts.length - 1]}`;
 }
-

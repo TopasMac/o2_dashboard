@@ -863,7 +863,11 @@ export default function UnitEditFormRHF({ unitId, initialValues, onSuccess }) {
                     <RHFTextField name="internet_cost" label="Monthly Cost" inputProps={{ type: 'number', step: '0.01', inputMode: 'decimal' }} />
                     <RHFTextField name="internet_deadline" label="Pay Day" inputProps={{ type: 'number', min: 1, max: 31 }} />
                   </div>
-                  <RHFTextField name="internet_pago" label="Payment Reference" inputProps={{ type: 'number', inputMode: 'numeric' }} />
+                  <RHFTextField
+                    name="internet_pago"
+                    label="Payment Reference"
+                    inputProps={{ type: 'text', inputMode: 'numeric', pattern: '[0-9]*', maxLength: 64 }}
+                  />
                 </div>
               )}
             </div>

@@ -165,4 +165,3 @@ export function buildDailyActivity(rows, selectedYmd) {
 
   return { cityGroups, summary };
 }
-
