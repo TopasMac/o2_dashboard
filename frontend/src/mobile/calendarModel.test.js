@@ -128,7 +128,7 @@ describe('Mobile V2 calendar model', () => {
     expect(segments[0].end).toBe(segments[1].start);
     expect(segments[0].lane).toBe(0);
     expect(segments[1].lane).toBe(0);
-    expect(segments.map((segment) => segment.label)).toEqual(['Ana', 'Luis']);
+    expect(segments.map((segment) => segment.label)).toEqual(['Ana López', 'Luis Pérez']);
   });
 
   test('splits a stay across week rows while preserving rounded outer ends', () => {

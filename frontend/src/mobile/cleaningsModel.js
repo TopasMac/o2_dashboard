@@ -37,6 +37,7 @@ function isDone(row) {
 export function getCleaningTypeLabel(value) {
   const type = String(value || '').trim().toLowerCase().replaceAll('_', '-');
   if (type === 'checkout' || type === 'owner') return 'Salida';
+  if (type === 'initial') return 'Limpieza inicial';
   if (type === 'refresh') return 'Repaso';
   if (type === 'mid-stay' || type === 'midstay') return 'Estancia';
   if (type === 'redo' || type === 're-do') return 'Rehacer';

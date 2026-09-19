@@ -62,14 +62,14 @@ class UpdateBookingStatusCommand extends Command
             ['today' => $today]
         );
 
-        $doneBlocks = $connection->executeStatement(
+        $pastBlocks = $connection->executeStatement(
             "UPDATE all_bookings
-             SET status = 'Done'
+             SET status = 'Past'
              WHERE source = 'Owners2'
-               AND guest_type IN ('Cleaning', 'Maintenance', 'Late Check-Out')
+               AND LOWER(guest_type) IN ('block', 'cleaning', 'maintenance', 'late check-out')
                AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'canceled')
                AND check_out < :today
-               AND status <> 'Done'",
+               AND status <> 'Past'",
             ['today' => $today]
         );
 
@@ -107,11 +107,11 @@ class UpdateBookingStatusCommand extends Command
         }
 
         $output->writeln(sprintf(
-            'Booking statuses updated successfully. Past: %d, Upcoming: %d, Ongoing: %d, Done blocks: %d, HK synced: %d, HK created: %d, HK removed: %d, HK errors: %d.',
-            $past,
+            'Booking statuses updated successfully. Past: %d, Upcoming: %d, Ongoing: %d, Past blocks: %d, HK synced: %d, HK created: %d, HK removed: %d, HK errors: %d.',
+            $past + $pastBlocks,
             $upcoming,
             $ongoing,
-            $doneBlocks,
+            $pastBlocks,
             $hkSynced,
             $hkCreated,
             $hkRemoved,

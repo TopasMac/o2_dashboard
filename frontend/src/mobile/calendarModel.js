@@ -1,3 +1,5 @@
+import { formatMobileGuestName } from './mobileFormatters';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function pad(value) {
@@ -141,10 +143,10 @@ export function getBookingColor(booking) {
   return BOOKING_COLORS[getBookingKind(booking)];
 }
 
-function firstName(booking) {
+function displayName(booking) {
   const name = String(booking?.guestName || '').trim();
   if (!name) return booking?.isBlock ? 'Bloqueo' : booking?.isHold ? 'Hold' : '';
-  return name.split(/\s+/)[0];
+  return formatMobileGuestName(name);
 }
 
 /**
@@ -193,7 +195,7 @@ export function buildCalendarSegments(bookings, gridDays) {
       return {
         ...segment,
         lane: 0,
-        label: firstName(segment.booking),
+        label: displayName(segment.booking),
         leftPercent: (segment.start / 7) * 100,
         widthPercent: ((segment.end - segment.start) / 7) * 100,
       };

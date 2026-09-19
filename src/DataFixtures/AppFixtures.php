@@ -87,5 +87,67 @@ class AppFixtures extends Fixture
         $admin->setEmployee($employee);
         $manager->persist($admin);
         $manager->flush();
+
+        $cleaner = $manager->getRepository(User::class)->findOneBy([
+            'email' => 'cleaner@owners2.local',
+        ]);
+
+        if (!$cleaner instanceof User) {
+            $cleaner = new User();
+        }
+
+        $cleaner
+            ->setEmail('cleaner@owners2.local')
+            ->setName('Local Cleaner')
+            ->setRoles(['ROLE_EMPLOYEE'])
+            ->setIsEnabled(true);
+
+        $cleaner->setPassword(
+            $this->passwordHasher->hashPassword(
+                $cleaner,
+                'Owners2Local!2026',
+            ),
+        );
+
+        $manager->persist($cleaner);
+        $manager->flush();
+
+        $cleanerEmployee = $cleaner->getEmployee();
+        if (!$cleanerEmployee instanceof Employee) {
+            $cleanerEmployee = $manager->getRepository(Employee::class)->findOneBy([
+                'employeeCode' => 'O2LOCAL002',
+            ]);
+        }
+        if (!$cleanerEmployee instanceof Employee) {
+            $cleanerEmployee = $manager->getRepository(Employee::class)->findOneBy([
+                'email' => 'cleaner@owners2.local',
+            ]);
+        }
+        if (!$cleanerEmployee instanceof Employee) {
+            $cleanerEmployee = new Employee();
+        }
+
+        $cleanerEmployee
+            ->setEmployeeCode('O2LOCAL002')
+            ->setName('Local Cleaner')
+            ->setShortName('Local Cleaner')
+            ->setDivision('Housekeepers')
+            ->setArea('Cleaner')
+            ->setCity('Playa del Carmen')
+            ->setDateStarted(new \DateTimeImmutable('2026-01-01'))
+            ->setInitialSalary('0.00')
+            ->setCurrentSalary('0.00')
+            ->setStatus('Active')
+            ->setPlatformEnabled(true)
+            ->setNotes('Synthetic cleaner for local development only.')
+            ->setUser($cleaner)
+            ->setEmail('cleaner@owners2.local');
+
+        $manager->persist($cleanerEmployee);
+        $manager->flush();
+
+        $cleaner->setEmployee($cleanerEmployee);
+        $manager->persist($cleaner);
+        $manager->flush();
     }
 }

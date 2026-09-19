@@ -35,6 +35,7 @@ import {
   getTodayYmd,
   normalizeBookings,
 } from './calendarModel';
+import { formatMobileGuestName } from './mobileFormatters';
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 const CALENDAR_ROW_HEIGHT = 58;
@@ -388,7 +389,7 @@ export default function MobileV2Calendar() {
               {calendarSegments.map((segment, index) => (
                 <Box
                   key={`${segment.booking.id}-${segment.row}-${index}`}
-                  title={`${segment.booking.guestName}: ${segment.booking.checkIn} – ${segment.booking.checkOut}`}
+                  title={`${formatMobileGuestName(segment.booking.guestName)}: ${segment.booking.checkIn} – ${segment.booking.checkOut}`}
                   sx={{
                     position: 'absolute',
                     zIndex: 1,
@@ -467,14 +468,14 @@ export default function MobileV2Calendar() {
                   disabled={booking.isHold || booking.isBlock}
                   onClick={() => openEditor(booking)}
                   aria-label={booking.isHold || booking.isBlock
-                    ? `${kindLabel(booking)} de ${booking.guestName}`
-                    : `Editar reservación de ${booking.guestName}`}
+                    ? `${kindLabel(booking)} de ${formatMobileGuestName(booking.guestName)}`
+                    : `Editar reservación de ${formatMobileGuestName(booking.guestName)}`}
                   sx={{ textAlign: 'left' }}
                 >
                   <CardContent sx={{ py: 1.15, px: 1.5, '&:last-child': { pb: 1.15 } }}>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography noWrap sx={{ fontWeight: 800 }}>{booking.guestName}</Typography>
+                        <Typography noWrap sx={{ fontWeight: 800 }}>{formatMobileGuestName(booking.guestName)}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.45 }}>
                         <Typography variant="caption" sx={{ color: getBookingColor(booking), fontWeight: 900 }}>

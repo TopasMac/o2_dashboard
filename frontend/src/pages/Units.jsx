@@ -122,6 +122,7 @@ const Units = () => {
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <ListBulletIcon
               className="unit-details-icon"
+              style={{ flexShrink: 0 }}
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedUnitId(u.id);
@@ -134,12 +135,14 @@ const Units = () => {
                 height: 16,
                 color: u.privateIcalEnabled ? '#0d9488' : '#9ca3af',
                 marginRight: 6,
+                flexShrink: 0,
                 cursor: 'default'
               }}
             />
-            <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+            <span style={{ display: 'flex', minWidth: 0, flexDirection: 'column', lineHeight: 1.25 }}>
               <span
                 className="unit-link"
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                 onClick={() => { setSelectedUnitId(u.id); setIsEditOpen(true); }}
               >
                 {u.unitName}
