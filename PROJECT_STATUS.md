@@ -65,27 +65,27 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `9778910` — `release: prevent iOS standalone login zoom`
-- **GitHub `main`:** `9778910` — `release: prevent iOS standalone login zoom`
+- **Production server checkout last verified:** `c99a921` — `release: deploy Mobile V2 home and operational improvements (#29)`
+- **GitHub `main`:** `c99a921` — `release: deploy Mobile V2 home and operational improvements (#29)`
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
-- **Production server state after the latest frontend deployment:** clean and synchronized with `origin/main`.
+- **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
-- **Doctrine migrations:** 234 executed, 234 available, 0 new; latest `Version20260529050811`
-- **Smoke tests:** Mobile V2 returns `200`, its protected API returns `401` without authentication, and the owner verified the iPhone Home Screen logout/login flow without retained Safari focus zoom.
-- **Database backup:** `owners2_dashboard_2026-09-17-02-30.sql` was structurally verified. The owner explicitly authorized its use for the frontend-only September 18 release because no September 18 backup was yet available.
-- **Rollback point:** `c02f802` — `release: deploy Mobile V2 routing and layout cleanup`
+- **Doctrine migrations:** 238 executed, 238 available, 0 new; latest `Version20260918000300`
+- **Smoke tests:** dashboard and Mobile V2 return `200`, the protected alerts API returns `401` without authentication, and authenticated Admin and Cleaner workflows were verified by the owner after the S3/CloudFront refresh.
+- **Database backup:** `/home/ubuntu/backups/owners2_dashboard_2026-09-19-pre-c99a921.sql.gz` was integrity-checked and its completed SQL dump was structurally verified before migration.
+- **Rollback point:** `9778910` — `release: prevent iOS standalone login zoom`
 - **Safety recovery:** production WIP was archived and retained in stash `pre-deploy-production-wip-2026-09-16`; do not reapply it without review because its intended behavior is now reconciled in Git.
 
-The latest release changed only frontend login/viewport behavior. It included no backend, schema, migration, cron, Nginx-configuration, environment-variable, or historical-data change.
+The latest release added the Mobile V2 Admin home and alerts, improved service-payment and calendar-block behavior, added optional Unit payment-reference and Airbnb-link fields, and added booking-source branding. It introduced the reviewed `unit.internet_pago` and `unit.airbnb_link` columns through four forward migrations; it did not change cron, Nginx configuration, environment variables, or historical data.
 
 Mobile V2 in production supports administrators and the controlled Cleaner pilot. Verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. Manager access is not enabled.
 
-On the mobile feature branch, Mobile V2 is a clean restart. Installed-app and old `/m/*` entry points enter Mobile V2, while pre-V2 Client, task, cash, unit-detail, and inventory workflows remain unsupported until they are rebuilt.
+Mobile V2 remains a clean restart. Installed-app and old `/m/*` entry points enter Mobile V2, while pre-V2 Client, task, cash, unit-detail, and inventory workflows remain unsupported until they are rebuilt.
 
 ## Verification baseline
 
-- Backend service suite: 25 tests, 68 assertions passed for the Cleaner-pilot release.
-- Focused Mobile V2, login-routing, and branding frontend suite: 39 tests passed.
+- Backend service suite: 28 tests, 85 assertions passed for the current release.
+- Focused Mobile V2, login-routing, alerts, formatters, and branding frontend suite: 51 tests passed.
 - Symfony service-container validation passed in development and production modes.
 - Optimized frontend production build passed.
 - The legacy frontend `App.test.js` cannot resolve `react-router-dom` in the current Jest setup; this is a known test-harness issue.
