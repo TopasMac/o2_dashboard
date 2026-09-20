@@ -237,7 +237,7 @@ function CleaningPanel({ card, open, onClose, onSaved }) {
 
   React.useEffect(() => {
     if (!open) return;
-    setNotes(card?.cleaningNotes || '');
+    setNotes(card?.cleanerNotes || '');
     setMarkCompleted(Boolean(card?.cleaningDone));
     setError('');
   }, [card, open]);
@@ -402,15 +402,14 @@ function CleaningCard({ card, onOpenAccess, onOpenCleaning }) {
           {card.checkIns.map((event, index) => <EventLine key={`in-${event.bookingId || index}`} type="checkin" event={event} />)}
         </Stack>
 
-        {card.checkOuts.length > 0 ? (
+        {card.cleaningId ? (
           <Typography
             variant="caption"
-            noWrap
-            title={card.cleaningNotes || '–'}
             color="text.secondary"
-            sx={{ display: 'block', fontSize: 10.5, mt: 0.65, pl: '28px' }}
+            sx={{ display: 'block', fontSize: 10.5, mt: 0.65, pl: '28px', whiteSpace: 'pre-wrap' }}
           >
-            Notas limpieza: {card.cleaningNotes || '–'}
+            <Box component="span" sx={{ display: 'block' }}>Coment: {card.cleaningNotes || '-'}</Box>
+            <Box component="span" sx={{ display: 'block' }}>Notas: {card.cleanerNotes || '-'}</Box>
           </Typography>
         ) : null}
 

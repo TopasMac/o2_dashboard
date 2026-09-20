@@ -18,7 +18,7 @@ export default function NewHKCleaningsForm({ onSuccess, onCancel }) {
   const [form, setForm] = useState({
     reservation_code: '',
     checkout_date: '', // yyyy-mm-dd
-    status: '', // pending|done|cancelled (autofilled on date change if empty)
+    status: 'pending', // pending|done|cancelled
     unit_id: null,
     unit_name: '',
     city: '',
@@ -27,8 +27,6 @@ export default function NewHKCleaningsForm({ onSuccess, onCancel }) {
     o2_collected_fee: '',
     notes: '',
   });
-
-  const [statusTouched, setStatusTouched] = useState(false);
 
   // --- Fetch units (id, name, city, fees) ---
   useEffect(() => {
@@ -107,19 +105,7 @@ export default function NewHKCleaningsForm({ onSuccess, onCancel }) {
 
   const handleDateChange = (e) => {
     const val = e.target.value; // yyyy-mm-dd
-    setForm((prev) => {
-      let next = { ...prev, checkout_date: val };
-      if (!statusTouched && val) {
-        const today = new Date();
-        const todayYmd = today.toISOString().slice(0,10);
-        if (val > todayYmd) {
-          next.status = 'pending';
-        } else {
-          next.status = 'done';
-        }
-      }
-      return next;
-    });
+    setForm((prev) => ({ ...prev, checkout_date: val }));
   };
 
   const canSave = Boolean(form.checkout_date && form.unit_id);
@@ -189,7 +175,7 @@ export default function NewHKCleaningsForm({ onSuccess, onCancel }) {
           select
           size="small"
           value={form.status}
-          onChange={(e) => { setStatusTouched(true); setForm((p) => ({ ...p, status: e.target.value })); }}
+          onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
         >
           <MenuItem value="pending">Pending</MenuItem>
           <MenuItem value="done">Done</MenuItem>

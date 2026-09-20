@@ -257,6 +257,7 @@ class CheckActivityController extends AbstractController
         $hkSql[] = '       DATE(h.checkout_date) AS checkoutDate,';
         $hkSql[] = '       h.cleaning_type AS cleaningType,';
         $hkSql[] = '       h.reservation_code AS reservationCode,';
+        $hkSql[] = '       h.assign_notes AS cleaningNotes,';
         $hkSql[] = '       h.status,';
         $hkSql[] = '       h.o2_collected_fee AS collectedFee,';
         $hkSql[] = '       h.assigned_to_id AS assignedToId,';
@@ -298,6 +299,7 @@ class CheckActivityController extends AbstractController
                 'checkoutDate' => (string)($h['checkoutDate'] ?? ''),
                 'cleaningType' => (string)($h['cleaningType'] ?? ''),
                 'reservationCode' => $h['reservationCode'] ?? null,
+                'cleaningNotes' => $h['cleaningNotes'] ?? null,
                 'status' => (string)($h['status'] ?? ''),
                 'collectedFee' => number_format((float)($h['collectedFee'] ?? 0), 2, '.', ''),
                 'assignedToId' => isset($h['assignedToId']) ? (int)$h['assignedToId'] : null,
@@ -324,6 +326,9 @@ class CheckActivityController extends AbstractController
             $row['hk_assigned_to_id'] = null;
             $row['hk_assigned_to_short_name'] = null;
             $row['hk_cleaning_type'] = null;
+            $row['hk_status'] = null;
+            $row['cleaning_notes'] = null;
+            $row['cleaner_notes'] = null;
 
             if (!empty($row['event_check_out'])) {
                 $u = isset($row['unit_id']) ? (int) $row['unit_id'] : null;
@@ -354,6 +359,7 @@ class CheckActivityController extends AbstractController
                     $row['hk'] = [
                         'id'   => $h['id'],
                         'done' => $isDone,
+                        'status' => $h['status'],
                         'cleaningType' => $h['cleaningType'],
                         'assignedToId' => $h['assignedToId'] ?? null,
                         'assignedToShortName' => $h['assignedToShortName'] ?? null,
@@ -361,8 +367,10 @@ class CheckActivityController extends AbstractController
                     $row['hk_cleaning_id'] = $h['id'];
                     $row['hk_done'] = $isDone;
                     $row['hk_cleaning_type'] = $h['cleaningType'];
+                    $row['hk_status'] = $h['status'];
                     $row['hk_assigned_to_id'] = $h['assignedToId'] ?? null;
                     $row['hk_assigned_to_short_name'] = $h['assignedToShortName'] ?? null;
+                    $row['cleaning_notes'] = $h['cleaningNotes'] ?? null;
                     $representedCleaningIds[(int)$h['id']] = true;
                 } else {
                     // No matching hk_cleanings row
@@ -402,11 +410,15 @@ class CheckActivityController extends AbstractController
                 'hk_cleaning_id' => $h['id'],
                 'hk_done' => $isDone,
                 'hk_cleaning_type' => $h['cleaningType'],
+                'hk_status' => $h['status'],
                 'hk_assigned_to_id' => $h['assignedToId'],
                 'hk_assigned_to_short_name' => $h['assignedToShortName'],
+                'cleaning_notes' => $h['cleaningNotes'],
+                'cleaner_notes' => null,
                 'hk' => [
                     'id' => $h['id'],
                     'done' => $isDone,
+                    'status' => $h['status'],
                     'cleaningType' => $h['cleaningType'],
                     'assignedToId' => $h['assignedToId'],
                     'assignedToShortName' => $h['assignedToShortName'],
@@ -473,6 +485,7 @@ class CheckActivityController extends AbstractController
                 $row['checklist_cleaner_id'] = $checklistIndex[$cid]['cleanerId'] ?? null;
                 $row['checklist_cleaner_short_name'] = $checklistIndex[$cid]['cleanerShortName'] ?? null;
                 $row['checklist_cleaning_notes'] = $checklistIndex[$cid]['cleaningNotes'] ?? null;
+                $row['cleaner_notes'] = $checklistIndex[$cid]['cleaningNotes'] ?? null;
 
                 // If submitted_at is NULL => draft exists (saved but not submitted)
                 if ($submittedAt === null) {

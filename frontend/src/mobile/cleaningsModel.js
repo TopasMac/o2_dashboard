@@ -77,7 +77,8 @@ export function buildDailyCleaningCards(rows, selectedYmd) {
         cleaningId: row?.hk_cleaning_id ?? row?.hk?.id ?? null,
         cleaningType: row?.hk_cleaning_type ?? row?.hk?.cleaningType ?? '',
         cleaningDone: isDone(row),
-        cleaningNotes: row?.checklist_cleaning_notes ?? row?.hk?.cleaningNotes ?? '',
+        cleaningNotes: row?.cleaning_notes ?? row?.hk?.cleaningNotes ?? '',
+        cleanerNotes: row?.cleaner_notes ?? row?.checklist_cleaning_notes ?? '',
         assignedCleaner: row?.hk_assigned_to_short_name || row?.hk?.assignedToShortName || '',
       });
     }
@@ -95,7 +96,8 @@ export function buildDailyCleaningCards(rows, selectedYmd) {
       card.cleaningId = row?.hk_cleaning_id ?? row?.hk?.id ?? card.cleaningId;
       card.cleaningType = row?.hk_cleaning_type ?? row?.hk?.cleaningType ?? card.cleaningType;
       card.cleaningDone = card.cleaningDone || isDone(row);
-      card.cleaningNotes = row?.checklist_cleaning_notes ?? row?.hk?.cleaningNotes ?? card.cleaningNotes;
+      card.cleaningNotes = row?.cleaning_notes ?? row?.hk?.cleaningNotes ?? card.cleaningNotes;
+      card.cleanerNotes = row?.cleaner_notes ?? row?.checklist_cleaning_notes ?? card.cleanerNotes;
       card.assignedCleaner = row?.hk_assigned_to_short_name
         || row?.hk?.assignedToShortName
         || card.assignedCleaner;
