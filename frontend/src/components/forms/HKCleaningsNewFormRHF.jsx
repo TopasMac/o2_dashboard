@@ -51,6 +51,7 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
       status: 'pending',
       o2_collected_fee: '',
       bill_to: 'CLIENT',
+      notes: '',
     }),
     []
   );
@@ -59,20 +60,6 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
   // RHFForm in this codebase usually wraps FormProvider internally; if it does,
   // this still works because we pass `form` down.
   const form = useForm({ defaultValues });
-
-  // Auto-set status to 'done' when the selected date is before today
-  const selectedDate = form.watch('date');
-
-  useEffect(() => {
-    if (!selectedDate) return;
-    const today = todayISO();
-
-    if (selectedDate <= today) {
-      form.setValue('status', 'done', { shouldDirty: true });
-    } else {
-      form.setValue('status', 'pending', { shouldDirty: true });
-    }
-  }, [selectedDate, form]);
 
   const selectedCleaningType = form.watch('cleaning_type');
   const selectedUnitId = form.watch('unit_id');
@@ -171,6 +158,7 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
       cleaning_type: values.cleaning_type || 'midstay',
       o2_collected_fee: values.o2_collected_fee === '' ? 0 : Number(values.o2_collected_fee),
       status: values.status || 'pending',
+      notes: values.notes?.trim() || null,
       assigned_to_id: null,
       assign_notes: null,
       created_at: null,
@@ -329,6 +317,22 @@ export default function NewHKCleaningsFormRHF({ onSaved, onCancel }) {
                 <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
               ))}
             </TextField>
+          )}
+        />
+
+        <Controller
+          name="notes"
+          control={form.control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Note for cleaner"
+              size="small"
+              multiline
+              minRows={3}
+              fullWidth
+              placeholder="Instructions for this cleaning"
+            />
           )}
         />
 

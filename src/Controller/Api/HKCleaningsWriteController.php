@@ -3,6 +3,7 @@
 namespace App\Controller\Api;
 
 use App\Entity\HKCleanings;
+use App\Entity\HKCleaningChecklist;
 use App\Entity\Unit;
 use App\Entity\Employee;
 use App\Service\CleaningCityScopeService;
@@ -223,6 +224,15 @@ class HKCleaningsWriteController extends AbstractController
         $statusRaw = strtolower(trim((string)($data['status'] ?? 'pending')));
         $billTo    = $data['bill_to'] ?? $data['billTo'] ?? null;
         $source    = $data['source'] ?? null;
+        $assignNotes = $data['notes'] ?? $data['assign_notes'] ?? $data['assignNotes'] ?? null;
+        if (is_string($assignNotes)) {
+            $assignNotes = trim($assignNotes);
+            if ($assignNotes === '') {
+                $assignNotes = null;
+            }
+        } else {
+            $assignNotes = null;
+        }
 
         $costCentre = $data['cost_centre'] ?? $data['costCentre'] ?? null;
         if (is_string($costCentre)) {
@@ -386,7 +396,7 @@ class HKCleaningsWriteController extends AbstractController
             $hk->setAssignedToId(null);
         }
         if (method_exists($hk, 'setAssignNotes')) {
-            $hk->setAssignNotes(null);
+            $hk->setAssignNotes($assignNotes);
         }
         if (method_exists($hk, 'setCleaningCost')) {
             $hk->setCleaningCost(null);
@@ -1067,6 +1077,85 @@ public function markDoneBy(Request $request): JsonResponse
                 'status' => method_exists($hk, 'getStatus') ? $hk->getStatus() : null,
             ],
         ]);
+    }
+
+    /**
+     * Update the notes shown with a booking's checkout cleaning.
+     *
+     * PUT /api/hk-cleanings/{id}/notes
+     * Body JSON: { cleaningNotes?: string|null, cleanerNotes?: string|null }
+     */
+    #[Route('/api/hk-cleanings/{id<\d+>}/notes', name: 'api_hk_cleanings_notes_update', methods: ['PUT'])]
+    public function updateCleaningNotes(int $id, Request $request): JsonResponse
+    {
+        $hk = $this->em->getRepository(HKCleanings::class)->find($id);
+        if (!$hk) {
+            return $this->json(['ok' => false, 'error' => 'Cleaning not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (!$this->isGranted('ROLE_ADMIN') && !$this->isGranted('ROLE_MANAGER') && !$this->isGranted('ROLE_SUPERVISOR')) {
+            throw new AccessDeniedHttpException('Only administrators, managers, or supervisors may edit cleaning notes.');
+        }
+
+        $data = json_decode($request->getContent() ?: '[]', true) ?: [];
+        $normalize = static function ($value): ?string {
+            if (!is_string($value)) {
+                return null;
+            }
+            $value = trim($value);
+            return $value === '' ? null : $value;
+        };
+
+        $conn = $this->em->getConnection();
+        if (array_key_exists('cleaningNotes', $data)) {
+            $notes = $normalize($data['cleaningNotes']);
+            $conn->executeStatement(
+                'UPDATE hk_cleanings SET assign_notes = :notes WHERE id = :id',
+                ['notes' => $notes, 'id' => $id],
+            );
+        }
+
+        if (array_key_exists('cleanerNotes', $data)) {
+            $notes = $normalize($data['cleanerNotes']);
+            $checklistId = $conn->fetchOne(
+                'SELECT id FROM hk_cleaning_checklist WHERE cleaning_id = :id ORDER BY id DESC LIMIT 1',
+                ['id' => $id],
+            );
+            if ($checklistId) {
+                $conn->executeStatement(
+                    'UPDATE hk_cleaning_checklist SET cleaning_notes = :notes WHERE id = :checklistId',
+                    ['notes' => $notes, 'checklistId' => $checklistId],
+                );
+            } elseif ($notes !== null) {
+                $cleaner = null;
+                if ($hk->getAssignedToId()) {
+                    $cleaner = $this->em->getRepository(Employee::class)->find($hk->getAssignedToId());
+                }
+                if (!$cleaner instanceof Employee) {
+                    $cleaner = $this->currentEmployee();
+                }
+                if (!$cleaner instanceof Employee) {
+                    return $this->json([
+                        'ok' => false,
+                        'error' => 'Assign a cleaner before adding cleaner notes.',
+                    ], Response::HTTP_BAD_REQUEST);
+                }
+
+                $checklist = new HKCleaningChecklist();
+                $checklist
+                    ->setCleaningId($id)
+                    ->setCleaner($cleaner)
+                    ->setChecklistData([])
+                    ->setChecklistVersion('v1')
+                    ->setCleaningNotes($notes)
+                    ->setHasIssues(true)
+                    ->setUpdatedAt(new \DateTimeImmutable('now', new \DateTimeZone('UTC')));
+                $this->em->persist($checklist);
+                $this->em->flush();
+            }
+        }
+
+        return $this->json(['ok' => true, 'data' => ['id' => $id]]);
     }
 
 

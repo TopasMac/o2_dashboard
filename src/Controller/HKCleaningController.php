@@ -47,6 +47,10 @@ class HKCleaningController
             $normalized = [];
             foreach ($items as $i) {
                 if (!is_array($i)) { continue; }
+                $status = strtolower(trim((string)($i['status'] ?? 'pending')));
+                if (!in_array($status, ['pending', 'done', 'cancelled'], true)) {
+                    $status = 'pending';
+                }
                 $normalized[] = [
                     'unitId'         => $i['unitId']         ?? null,
                     'city'           => $i['city']           ?? null,
@@ -54,7 +58,8 @@ class HKCleaningController
                     'cleaningType'   => $i['cleaningType']   ?? null, // will default to 'checkout' in service
                     'bookingId'      => $i['bookingId']      ?? null,
                     'reservationCode'=> $i['reservationCode']?? null,
-                    'status'         => 'done', // checkbox implies completion
+                    'notes'          => $i['notes']          ?? $i['assign_notes'] ?? $i['assignNotes'] ?? null,
+                    'status'         => $status,
                 ];
             }
 
