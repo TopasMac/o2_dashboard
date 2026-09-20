@@ -11,6 +11,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use App\Service\AirbnbEmailPayoutCorrector;
 
 #[AsCommand(
     name: 'app:import-airbnb-email',
@@ -20,12 +21,14 @@ class ImportAirbnbEmailCommand extends Command
 {
     private EntityManagerInterface $entityManager;
     private BookingProcessingService $bookingProcessor;
+    private AirbnbEmailPayoutCorrector $payoutCorrector;
 
-    public function __construct(EntityManagerInterface $entityManager, BookingProcessingService $bookingProcessor)
+    public function __construct(EntityManagerInterface $entityManager, BookingProcessingService $bookingProcessor, AirbnbEmailPayoutCorrector $payoutCorrector)
     {
         parent::__construct();
         $this->entityManager = $entityManager;
         $this->bookingProcessor = $bookingProcessor;
+        $this->payoutCorrector = $payoutCorrector;
     }
 
     protected function configure(): void
@@ -99,25 +102,11 @@ class ImportAirbnbEmailCommand extends Command
         }
         $io->note("Extracted Check-in: " . var_export($checkIn, true));
         $io->note("Extracted Check-out: " . var_export($checkOut, true));
-        $payout = $this->match('/YOU EARN\s+\$?([0-9.,]+)/i', $content);
-        $cleaningFee = $this->match('/Cleaning fee\s+\$?([0-9.,]+)/i', $content);
-        // Extract room fee from GUEST PAID section only (skip empty line after and match next one)
-        $roomFee = null;
-        for ($i = 0; $i < count($lines); $i++) {
-            if (stripos(trim($lines[$i]), 'GUEST PAID') !== false) {
-                $seenGuestPaid = true;
-                for ($j = $i + 1; $j < count($lines); $j++) {
-                    $trimmedLine = trim($lines[$j]);
-                    if ($trimmedLine === '') {
-                        continue; // skip empty lines
-                    }
-                    if (preg_match('/\$([0-9.,]+)\s*x\s+\d+\s+nights?/i', $trimmedLine, $matches)) {
-                        $roomFee = $matches[1];
-                    }
-                    break;
-                }
-                break;
-            }
+        try {
+            $financials = $this->payoutCorrector->parse($content);
+        } catch (\InvalidArgumentException $e) {
+            $io->error($e->getMessage());
+            return Command::FAILURE;
         }
 
         if (!$reservationCode) {
@@ -136,12 +125,9 @@ class ImportAirbnbEmailCommand extends Command
         $record->setCheckIn($checkIn);
         $io->note("Check-out raw value: " . var_export($checkOut, true));
         $record->setCheckOut($checkOut);
-        $payout = $payout !== null ? (float) str_replace(',', '', $payout) : null;
-        $record->setPayout($payout);
-        $cleaningFee = $cleaningFee !== null ? (float) str_replace(',', '', $cleaningFee) : null;
-        $record->setCleaningFee($cleaningFee);
-        $roomFee = $roomFee !== null ? (float) str_replace(',', '', $roomFee) : null;
-        $record->setRoomFee($roomFee);
+        $record->setPayout($financials['payout']);
+        $record->setCleaningFee($financials['cleaningFee']);
+        $record->setRoomFee($financials['roomFee']);
 
         $this->entityManager->persist($record);
         $this->entityManager->flush();
@@ -152,13 +138,5 @@ class ImportAirbnbEmailCommand extends Command
         $io->success("Parsing triggered.");
 
         return Command::SUCCESS;
-    }
-
-    private function match(string $pattern, string $content): ?string
-    {
-        if (preg_match($pattern, $content, $matches)) {
-            return trim(str_replace('$', '', $matches[1]));
-        }
-        return null;
     }
 }
