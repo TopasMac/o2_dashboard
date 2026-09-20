@@ -31,6 +31,7 @@ describe('Mobile V2 cleanings model', () => {
         hk_cleaning_id: 42,
         hk_done: false,
         hk_cleaning_type: 'owner',
+        cleaning_notes: 'Leave extra towels',
         checklist_cleaning_notes: 'Cambiar filtro del aire acondicionado',
         condo_name: 'Central Park',
         unit_number: '202',
@@ -59,7 +60,8 @@ describe('Mobile V2 cleanings model', () => {
     expect(cards[0].checkOuts[0].notes).toBe('Leave keys at reception');
     expect(cards[0].checkIns[0].guest).toBe('Arriving Guest');
     expect(cards[0].checkIns[0].notes).toBe('Needs crib');
-    expect(cards[0].cleaningNotes).toBe('Cambiar filtro del aire acondicionado');
+    expect(cards[0].cleaningNotes).toBe('Leave extra towels');
+    expect(cards[0].cleanerNotes).toBe('Cambiar filtro del aire acondicionado');
     expect(cards[0].access).toEqual({
       condoName: 'Central Park',
       unitNumber: '202',
@@ -87,6 +89,8 @@ describe('Mobile V2 cleanings model', () => {
       event_cleaning_only: true,
       hk_cleaning_id: 941,
       hk_cleaning_type: 'Refresh',
+      cleaning_notes: 'After 15:00',
+      cleaner_notes: '',
       hk_done: true,
       hk_assigned_to_short_name: 'Ana',
     }], '2026-08-03');
@@ -97,6 +101,8 @@ describe('Mobile V2 cleanings model', () => {
       cleaningType: 'Refresh',
       cleaningDone: true,
       assignedCleaner: 'Ana',
+      cleaningNotes: 'After 15:00',
+      cleanerNotes: '',
     });
     expect(cards[0].checkIns).toEqual([]);
     expect(cards[0].checkOuts).toEqual([]);

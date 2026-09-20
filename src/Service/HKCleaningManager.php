@@ -353,7 +353,7 @@ class HKCleaningManager
     /**
      * Bulk create hk_cleanings rows.
      *
-     * @param array $items Each item: [unitId, city, checkoutDate (Y-m-d), cleaningType, bookingId?, reservationCode?]
+    * @param array $items Each item: [unitId, city, checkoutDate (Y-m-d), cleaningType, bookingId?, reservationCode?, notes?]
      * @param bool $createLedgerForTulum (deprecated, no effect)
      *
      * @return array Summary: [created => int, skipped => int, ledgerCreated => int (always 0)]
@@ -522,6 +522,11 @@ class HKCleaningManager
                     }
                 }
 
+                if (array_key_exists('notes', $data) && method_exists($existing, 'setAssignNotes')) {
+                    $notes = is_string($data['notes']) ? trim($data['notes']) : null;
+                    $existing->setAssignNotes($notes !== '' ? $notes : null);
+                }
+
                 // Ensure cost_centre is set (default from city). Only set when missing.
                 if (method_exists($existing, 'setCostCentre') && method_exists($existing, 'getCostCentre')) {
                     $curCc = (string)($existing->getCostCentre() ?? '');
@@ -542,6 +547,10 @@ class HKCleaningManager
             $hk->setCleaningType($cleaningType);
             $hk->setBookingId($data['bookingId'] ?? null);
             $hk->setReservationCode($data['reservationCode'] ?? null);
+            if (method_exists($hk, 'setAssignNotes')) {
+                $notes = is_string($data['notes'] ?? null) ? trim($data['notes']) : null;
+                $hk->setAssignNotes($notes !== '' ? $notes : null);
+            }
 
             // bill_to: prefer payload, otherwise default from guestType
             $billToRaw = $data['bill_to'] ?? $data['billTo'] ?? null;

@@ -1,9 +1,156 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api';
-import { ArrowDownCircleIcon, ArrowUpCircleIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
-import { CheckIcon } from '@heroicons/react/24/solid';
+import { ArrowDownCircleIcon, ArrowUpCircleIcon, ArrowPathIcon, SparklesIcon } from '@heroicons/react/24/solid';
+import { CheckCircleIcon, ClockIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import AppShell from '../components/layout/AppShell';
 import Page from '../components/layout/Page';
+import AppDrawer from '../components/common/AppDrawer';
+import { getCleaningTypeLabel } from '../mobile/cleaningsModel';
+import { Alert, Box, TextField, Typography } from '@mui/material';
+
+function CleaningStatusIcon({ row }) {
+  if (!row?.event_check_out && !row?.event_cleaning_only) return null;
+
+  const status = String(row?.hk_status ?? row?.hk?.status ?? 'pending').toLowerCase();
+  if (status === 'cancelled') {
+    return <XCircleIcon title="Cancelled" style={{ width: 18, height: 18, color: '#d32f2f' }} />;
+  }
+  if (status === 'done') {
+    return <CheckCircleIcon title="Done" style={{ width: 18, height: 18, color: '#2e7d32' }} />;
+  }
+  return <ClockIcon title="Pending" style={{ width: 18, height: 18, color: '#ed9b00' }} />;
+}
+
+function ActivityDetailsPanel({ activity, open, onClose, onSaved }) {
+  const [values, setValues] = useState({ guest: '', bookingNotes: '', eventNotes: '', cleaningNotes: '', cleanerNotes: '', status: 'pending' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!activity || !open) return;
+    const isCheckout = Boolean(activity.event_check_out);
+    const isManual = Boolean(activity.event_cleaning_only);
+    setValues({
+      guest: activity.guest || '',
+      bookingNotes: activity.notes || '',
+      eventNotes: (isCheckout ? activity.check_out_notes : activity.check_in_notes) || '',
+      cleaningNotes: activity.cleaning_notes || '',
+      cleanerNotes: activity.cleaner_notes || '',
+      status: activity.hk_status || activity.hk?.status || 'pending',
+    });
+    setError('');
+  }, [activity, open]);
+
+  if (!activity) return null;
+
+  const isCheckout = Boolean(activity.event_check_out);
+  const isManual = Boolean(activity.event_cleaning_only);
+  const formId = 'check-in-out-activity-details-form';
+  const updateValue = (field) => (event) => setValues((current) => ({ ...current, [field]: event.target.value }));
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (!activity.id || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      if (isManual) {
+        await api.put(`/api/hk-cleanings/${activity.hk_cleaning_id}`, { status: values.status });
+      } else {
+        await api.put(`/api/bookings/${activity.id}`, {
+          notes: values.bookingNotes,
+          ...(isCheckout ? { checkOutNotes: values.eventNotes } : { checkInNotes: values.eventNotes }),
+        });
+      }
+
+      if ((isCheckout || isManual) && activity.hk_cleaning_id) {
+        await api.put(`/api/hk-cleanings/${activity.hk_cleaning_id}/notes`, {
+          cleaningNotes: values.cleaningNotes,
+          cleanerNotes: values.cleanerNotes,
+        });
+      }
+
+      onSaved({
+        ...activity,
+        ...(isManual
+          ? {
+              hk_status: values.status,
+              cleaning_notes: values.cleaningNotes,
+              cleaner_notes: values.cleanerNotes,
+              hk: { ...(activity.hk || {}), status: values.status },
+            }
+          : { notes: values.bookingNotes }),
+        ...(isCheckout
+          ? {
+              check_out_notes: values.eventNotes,
+              cleaning_notes: values.cleaningNotes,
+              cleaner_notes: values.cleanerNotes,
+            }
+          : { check_in_notes: values.eventNotes }),
+      });
+      onClose();
+    } catch (requestError) {
+      setError(requestError?.response?.data?.error || requestError?.message || 'Could not save changes.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AppDrawer
+      open={open}
+      onClose={saving ? () => {} : onClose}
+      title={isManual ? 'Cleaning details' : (isCheckout ? 'Check-out details' : 'Check-in details')}
+      size="default"
+      formId={formId}
+      showActions
+      actionStyle="mobile"
+      actions={{ saveLabel: saving ? 'Saving...' : 'Save', cancelLabel: 'Cancel', saveDisabled: saving, cancelDisabled: saving }}
+    >
+      <Box component="form" id={formId} onSubmit={save} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, p: 1 }}>
+        <Box>
+          <Typography sx={{ fontSize: 18, color: '#173f3b' }}>{activity.unit_name || '-'}</Typography>
+          <Typography sx={{ mt: 0.25, fontSize: 12, color: '#71807d' }}>
+            {isManual ? 'Cleaning' : (isCheckout ? 'Check-out' : 'Check-in')}{activity.guest ? ` · ${activity.guest}` : ''}
+          </Typography>
+        </Box>
+
+        {error ? <Alert severity="error">{error}</Alert> : null}
+        {isManual ? (
+          <>
+            <TextField
+              select
+              label="Status"
+              value={values.status}
+              onChange={updateValue('status')}
+              size="small"
+              fullWidth
+              SelectProps={{ native: true }}
+            >
+              <option value="pending">Pending</option>
+              <option value="done">Done</option>
+              <option value="cancelled">Cancelled</option>
+            </TextField>
+            <TextField label="Coment" value={values.cleaningNotes} onChange={updateValue('cleaningNotes')} multiline minRows={2} fullWidth />
+            <TextField label="Notas" value={values.cleanerNotes} onChange={updateValue('cleanerNotes')} multiline minRows={2} fullWidth />
+          </>
+        ) : (
+          <>
+            <TextField label="Guest Name" value={values.guest} size="small" disabled fullWidth />
+            <TextField label="Booking notes" value={values.bookingNotes} onChange={updateValue('bookingNotes')} multiline minRows={2} fullWidth />
+            <TextField label={isCheckout ? 'Check-out notes' : 'Check-in notes'} value={values.eventNotes} onChange={updateValue('eventNotes')} multiline minRows={2} fullWidth />
+          {isCheckout ? (
+            <>
+              <TextField label="Cleaning notes" value={values.cleaningNotes} onChange={updateValue('cleaningNotes')} multiline minRows={2} fullWidth />
+              <TextField label="Cleaner notes" value={values.cleanerNotes} onChange={updateValue('cleanerNotes')} multiline minRows={2} fullWidth />
+            </>
+          ) : null}
+          </>
+        )}
+      </Box>
+    </AppDrawer>
+  );
+}
 
 // New page dedicated to housekeeping creation/completion from check-outs
 // Data source: GET /api/bookings/check-activity?start=YYYY-MM-DD&end=YYYY-MM-DD&city=...
@@ -35,9 +182,9 @@ const CheckInOutView = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState({}); // key => entry
-  const [pending, setPending] = useState({}); // key => true while submitting
   const exportRef = useRef(null);
   const [capturing, setCapturing] = useState(false);
+  const [activityDetails, setActivityDetails] = useState(null);
 
   // Hide legacy sidebar on this page only (show our NavRail instead)
   useEffect(() => {
@@ -209,6 +356,16 @@ const CheckInOutView = () => {
         });
       }
 
+      if (r.event_cleaning_only && r.service_date) {
+        const bucket = ensureBucket(cityName, r.service_date);
+        bucket.push({
+          ...r,
+          type: 'Cleaning',
+          event_check_in: false,
+          event_check_out: false,
+        });
+      }
+
       // If neither flag is set, do nothing (no visible event)
     });
 
@@ -241,39 +398,6 @@ const CheckInOutView = () => {
       console.error('bulk complete error', e);
       const apiMsg = e?.response?.data?.error || e?.message || 'Unknown error';
       alert(`Some cleanings could not be completed: ${apiMsg}`);
-    }
-  };
-
-  const createCleaningForRow = async (entry) => {
-    const key = makeKey(entry.unit_id, entry.check_out);
-    if (pending[key]) return;
-    setPending((p) => ({ ...p, [key]: true }));
-    try {
-      const reservationCode = getResCode(entry);
-      if (!reservationCode) {
-        throw new Error('Missing reservationCode for this row.');
-      }
-      await api.post('/api/hk-cleanings/mark-done-by', {
-        unitId: entry.unit_id,
-        checkoutDate: entry.check_out,
-        reservationCode,
-        createIfMissing: true,
-      }, { headers: { 'Accept': 'application/json' } });
-
-      // Optimistically mark hk as done in local state
-      setRows((prev) => prev.map((r) => {
-        if (r.unit_id === entry.unit_id && r.check_out === entry.check_out) {
-          const hk = { ...(r.hk || {}), exists: true, status: 'done' };
-          return { ...r, hk };
-        }
-        return r;
-      }));
-    } catch (e) {
-      console.error('complete error', e);
-      const apiMsg = e?.response?.data?.error || e?.message || 'Unknown error';
-      alert(`Error completing cleaning for this checkout: ${apiMsg}`);
-    } finally {
-      setPending((p) => { const n = { ...p }; delete n[key]; return n; });
     }
   };
 
@@ -378,6 +502,7 @@ const CheckInOutView = () => {
                 if (capturing) {
                   const outs = dayRows.filter((r) => r.event_check_out);
                   const ins  = dayRows.filter((r) => r.event_check_in);
+                  const cleanings = dayRows.filter((r) => r.event_cleaning_only);
                   const turnoverIds = new Set(
                     outs.map(o => o.unit_id).filter(id => ins.some(i => i.unit_id === id))
                   );
@@ -421,7 +546,7 @@ const CheckInOutView = () => {
                       </span>
 
                       {/* Activity: two fixed-width columns so names stay on one line */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '180px 180px', columnGap: 24, marginTop: 6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '180px 180px 220px', columnGap: 24, marginTop: 6 }}>
                         {/* OUTS */}
                         <div>
                           <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 4 }}>Check-outs</div>
@@ -430,13 +555,18 @@ const CheckInOutView = () => {
                           ) : (
                             outs.map((r, i) => (
                               <div key={`o-${i}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 0' }}>
-                                <span style={{ width: 16, height: 16, minWidth: 16, minHeight: 16, flex: '0 0 16px', alignSelf: 'flex-start', marginTop: 1 }}>
+                                <span style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 3, width: 'auto', minWidth: 16, flex: '0 0 auto', alignSelf: 'flex-start', marginTop: 1 }}>
                                   {turnoverIds.has(r.unit_id)
                                     ? <ArrowPathIcon style={{ display: 'block', width: 16, height: 16, color: '#e53935' }} />
                                     : <ArrowUpCircleIcon style={{ display: 'block', width: 16, height: 16, color: '#e53935' }} />}
+                                  <CleaningStatusIcon row={r} />
                                 </span>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <span style={{ fontSize: 16, whiteSpace: 'nowrap' }}>{r.unit_name}</span>
+                                  <span style={{ fontSize: 16, whiteSpace: 'nowrap' }}>
+                                    {r.unit_name} <strong>{getCleaningTypeLabel(r.hk_cleaning_type || r.cleaning_type || 'checkout') || '-'}</strong>
+                                  </span>
+                                  <em style={{ opacity: 0.6, fontSize: 12, marginTop: 2 }}>Coment: {r.cleaning_notes || '-'}</em>
+                                  <em style={{ opacity: 0.6, fontSize: 12, marginTop: 2 }}>Notas: {r.cleaner_notes || '-'}</em>
                                   {(() => {
                                     const n = getEventNote(r);
                                     return n ? <em style={{ opacity: 0.6, fontSize: 12, marginTop: 2 }}>({n})</em> : null;
@@ -475,6 +605,29 @@ const CheckInOutView = () => {
                                 </div>
                               );
                             })
+                          )}
+                        </div>
+                        {/* MANUAL CLEANINGS */}
+                        <div>
+                          <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 4 }}>Cleanings</div>
+                          {cleanings.length === 0 ? (
+                            <div style={{ opacity: 0.5 }}>—</div>
+                          ) : (
+                            cleanings.map((r, i) => (
+                              <div key={`c-${i}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 0' }}>
+                                <span style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 3, flex: '0 0 auto', marginTop: 1 }}>
+                                  <SparklesIcon style={{ display: 'block', width: 16, height: 16, color: '#7e57c2' }} />
+                                  <CleaningStatusIcon row={r} />
+                                </span>
+                                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                  <span style={{ fontSize: 16, whiteSpace: 'nowrap' }}>
+                                    {r.unit_name} <strong>{getCleaningTypeLabel(r.hk_cleaning_type || r.cleaning_type) || '-'}</strong>
+                                  </span>
+                                  <em style={{ opacity: 0.6, fontSize: 12, marginTop: 2 }}>Coment: {r.cleaning_notes || '-'}</em>
+                                  <em style={{ opacity: 0.6, fontSize: 12, marginTop: 2 }}>Notas: {r.cleaner_notes || '-'}</em>
+                                </div>
+                              </div>
+                            ))
                           )}
                         </div>
                       </div>
@@ -518,7 +671,6 @@ const CheckInOutView = () => {
                   ) : (
                     <div style={{ display: 'grid', gap: 6 }}>
                       {dayRows.map((r, idx) => {
-                        const isDone = r?.hk?.status === 'done';
                         const idle = getIdleDays(r);
                         const isIdle = idle != null && idle > 5;
                         const isTurnover = !!(dayUnitStatus[r.unit_id]?.in && dayUnitStatus[r.unit_id]?.out);
@@ -546,44 +698,42 @@ const CheckInOutView = () => {
                           <ArrowUpCircleIcon style={{ display: 'block', width: 16, height: 16, color: '#e53935' }} />
                         ) : r.event_check_in ? (
                           <ArrowDownCircleIcon style={{ display: 'block', width: 16, height: 16, color: (!isTurnover && isIdle) ? '#FFB300' : '#43a047' }} />
+                        ) : r.event_cleaning_only ? (
+                          <SparklesIcon style={{ display: 'block', width: 16, height: 16, color: '#7e57c2' }} />
                         ) : (
                           <span>•</span>
                         )}
                       </span>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 13 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', marginTop: 1 }}>
+                        <CleaningStatusIcon row={r} />
+                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
                         <span>
-                          {r.unit_name}
+                          {(r.event_check_in || r.event_check_out || r.event_cleaning_only) ? (
+                            <button
+                              type="button"
+                              onClick={() => setActivityDetails(r)}
+                              style={{ border: 0, padding: 0, background: 'transparent', font: 'inherit', color: 'inherit', cursor: 'pointer', textAlign: 'left' }}
+                            >
+                              {r.unit_name}
+                            </button>
+                          ) : r.unit_name}
+                          {r.event_check_out || r.event_cleaning_only
+                            ? <> <strong>{getCleaningTypeLabel(r.hk_cleaning_type || r.cleaning_type || 'checkout') || '-'}</strong></>
+                            : null}
                           {r.event_check_in && isIdle && !isTurnover ? <em style={{ marginLeft: 6, opacity: 0.55, fontSize: 11 }}>({idle}d)</em> : null}
                         </span>
-                        {(() => {
+                        {r.event_check_out || r.event_cleaning_only ? (
+                          <>
+                            <em style={{ opacity: 0.55, fontSize: 11 }}>Coment: {r.cleaning_notes || '-'}</em>
+                            <em style={{ opacity: 0.55, fontSize: 11 }}>Notas: {r.cleaner_notes || '-'}</em>
+                          </>
+                        ) : (() => {
                           const n = getEventNote(r);
                           return n ? <em style={{ opacity: 0.55, fontSize: 11 }}>({n})</em> : null;
                         })()}
                       </div>
                     </div>
-                            {r.event_check_out ? (
-                              <span title={isDone ? 'Cleaning done' : `Mark cleaning done for ${r.unit_name} (${r.check_out})`}>
-                                {(() => {
-                                  const key = makeKey(r.unit_id, r.check_out);
-                                  const isBusy = !!pending[key];
-                                  if (isDone) {
-                                    return (
-                                      <CheckIcon style={{ width: 18, height: 18, color: '#2e7d32' }} />
-                                    );
-                                  }
-                                  return (
-                                    <input
-                                      type="checkbox"
-                                      checked={false}
-                                      disabled={isBusy}
-                                      onChange={() => { if (!isBusy) createCleaningForRow(r); }}
-                                      style={{ width: 16, height: 16, cursor: isBusy ? 'not-allowed' : 'pointer' }}
-                                      aria-label={`Mark cleaning done for ${r.unit_name} (${r.check_out})`}
-                                    />
-                                  );
-                                })()}
-                              </span>
-                            ) : null}
                           </div>
                         );
                       })}
@@ -847,6 +997,19 @@ const CheckInOutView = () => {
             </div>
           )}
         </div>
+        <ActivityDetailsPanel
+          activity={activityDetails}
+          open={Boolean(activityDetails)}
+          onClose={() => setActivityDetails(null)}
+          onSaved={(updated) => {
+            setRows((current) => current.map((row) => (
+              (updated.id && row.id === updated.id)
+              || (updated.hk_cleaning_id && row.hk_cleaning_id === updated.hk_cleaning_id)
+                ? updated
+                : row
+            )));
+          }}
+        />
       </Page>
     </AppShell>
   );
