@@ -14,6 +14,10 @@ class BookingCalculatorService
 
     public function recalculate(AllBookings $booking, ?Unit $unit, BookingConfig $config): AllBookings
     {
+        // Airbnb imports provide the displayed average nightly rate directly.
+        // Capture it before null numeric fields are initialized below.
+        $providedRoomFee = $booking->getRoomFee();
+
         // Ensure required numeric fields are initialized to defaults if null
         if ($booking->getDays() === null) {
             $booking->setDays(0);
@@ -161,13 +165,19 @@ class BookingCalculatorService
             $o2Total = $commissionValue + $cleaningFee;
         }
 
-        // Room fee: (payout - cleaningFee) / days, but 0 if Owner (no_pay)
+        // Room fee is the gross average accommodation rate per occupied night.
+        // Airbnb provides this value directly; other bookings derive it from
+        // gross payout less cleaning, before tax and commission deductions.
         if ($isCancelled) {
             $roomFee = 0;
         } elseif ($booking->getPaymentMethod() === 'no_pay') {
             $roomFee = 0;
+        } elseif (strcasecmp((string) $booking->getSource(), 'Airbnb') === 0 && $providedRoomFee !== null) {
+            $roomFee = round(max(0, $providedRoomFee), 2, PHP_ROUND_HALF_UP);
         } else {
-            $roomFee = $days > 0 ? ($payout - $cleaningFee) / $days : 0;
+            $roomFee = $days > 0
+                ? round(max(0, $payout - $cleaningFee) / $days, 2, PHP_ROUND_HALF_UP)
+                : 0;
         }
 
         $booking->setTaxPercent($taxPercent)
