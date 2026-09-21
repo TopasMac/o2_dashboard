@@ -283,7 +283,7 @@ const ManagerDashboard = () => {
           style={{
             display: 'grid',
             gap: 8,
-            gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+            gridTemplateColumns: 'minmax(0, 1.55fr) minmax(300px, 0.85fr)',
             alignItems: 'stretch',
           }}
         >
