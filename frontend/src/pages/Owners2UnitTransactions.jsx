@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api, { BACKEND_BASE } from '../api';
 import TableLite from '../components/layout/TableLite';
+import TableToolbar from '../components/layout/TableToolbar';
 import AppDrawer from '../components/common/AppDrawer';
 import UnitTransactionEditFormRHF from '../components/forms/UnitTransactionEditFormRHF';
 import UnitTransactionNewFormRHF from '../components/forms/UnitTransactionNewFormRHF';
@@ -8,9 +9,26 @@ import NewClientUnitNote from '../components/forms/NewClientUnitNote';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import DocumentPreview from '../components/common/DocumentPreview';
 import { HiOutlineDocumentText } from 'react-icons/hi';
-import { Button, Stack } from '@mui/material';
+import {
+  Autocomplete,
+  Button,
+  FormControl,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+} from '@mui/material';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import { alpha, darken, useTheme } from '@mui/material/styles';
 import PageScaffold from '../components/layout/PageScaffold';
+
+const INITIAL_FILTER_VALUES = {
+  unitName: '',
+  type: '',
+  description: '',
+};
 
 const formatDateDisplay = (value) => {
   if (!value) return '';
@@ -33,8 +51,10 @@ const formatDateDisplay = (value) => {
 };
 
 const Owners2UnitTransactions = () => {
+  const theme = useTheme();
+  const tokens = theme.hausin;
   const [transactions, setTransactions] = useState([]);
-  const [filterKey, setFilterKey] = useState(0);
+  const [filterValues, setFilterValues] = useState({ ...INITIAL_FILTER_VALUES });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [newDrawerOpen, setNewDrawerOpen] = useState(false);
@@ -209,6 +229,126 @@ const Owners2UnitTransactions = () => {
     window.history.replaceState({}, '', url.toString());
   }, [location.search, transactions]);
 
+  const unitOptions = useMemo(
+    () => Array.from(
+      new Set(
+        transactions
+          .map((transaction) => transaction.unitName)
+          .filter((value) => value !== undefined && value !== null)
+          .map((value) => String(value))
+      )
+    ).sort(),
+    [transactions]
+  );
+
+  const typeOptions = useMemo(
+    () => Array.from(
+      new Set(
+        transactions
+          .map((transaction) => transaction.type)
+          .filter((value) => value !== undefined && value !== null)
+          .map((value) => String(value))
+      )
+    ).sort(),
+    [transactions]
+  );
+
+  const handleFilterChange = (key, value) => {
+    if (!Object.prototype.hasOwnProperty.call(INITIAL_FILTER_VALUES, key)) {
+      return;
+    }
+    setFilterValues((previous) => ({
+      ...previous,
+      [key]: value || '',
+    }));
+  };
+
+  const hasActiveFilters = Object.values(filterValues).some((value) => value !== '');
+  const controlSx = {
+    '& .MuiInputLabel-root': {
+      color: tokens.colors.textSecondary,
+      fontSize: tokens.controls.fontSize,
+    },
+    '& .MuiInputLabel-root.Mui-focused': {
+      color: tokens.colors.primaryTeal,
+    },
+    '& .MuiOutlinedInput-root': {
+      height: tokens.controls.height,
+      borderRadius: `${tokens.controls.borderRadius}px`,
+      backgroundColor: theme.palette.common.white,
+      '& .MuiInputBase-input, & .MuiSelect-select': {
+        fontSize: tokens.controls.fontSize,
+        fontWeight: tokens.controls.fontWeight,
+      },
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.border,
+      },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.primaryTeal,
+      },
+      '&.Mui-focused': {
+        boxShadow: `0 0 0 2px ${alpha(tokens.colors.primaryTeal, 0.18)}`,
+      },
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.primaryTeal,
+      },
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline legend': {
+        maxWidth: '100%',
+      },
+    },
+  };
+  const primaryButtonSx = {
+    height: tokens.controls.height,
+    borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2,
+    fontSize: tokens.controls.fontSize,
+    fontWeight: tokens.controls.fontWeight,
+    backgroundColor: tokens.colors.primaryTeal,
+    '&:hover': {
+      backgroundColor: darken(tokens.colors.primaryTeal, 0.12),
+    },
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${tokens.colors.primaryTeal}`,
+      outlineOffset: 2,
+    },
+    '&.Mui-disabled': {
+      backgroundColor: tokens.colors.subtle,
+      color: tokens.colors.muted,
+    },
+  };
+  const secondaryButtonSx = {
+    height: tokens.controls.height,
+    borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2,
+    fontSize: tokens.controls.fontSize,
+    fontWeight: tokens.controls.fontWeight,
+    color: tokens.colors.primaryTeal,
+    borderColor: tokens.colors.primaryTeal,
+    backgroundColor: theme.palette.common.white,
+    '&:hover': {
+      borderColor: tokens.colors.primaryTeal,
+      backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+    },
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${tokens.colors.primaryTeal}`,
+      outlineOffset: 2,
+    },
+    '&.Mui-disabled': {
+      color: tokens.colors.muted,
+      borderColor: tokens.colors.border,
+    },
+  };
+  const utilityButtonSx = {
+    ...secondaryButtonSx,
+    color: tokens.colors.textSecondary,
+    borderColor: tokens.colors.border,
+    '&:hover': {
+      borderColor: tokens.colors.border,
+      backgroundColor: tokens.colors.subtle,
+      color: tokens.colors.textPrimary,
+    },
+  };
+
   const columns = [
     {
       header: 'Code',
@@ -347,25 +487,90 @@ const Owners2UnitTransactions = () => {
     }
   ];
 
-  const stickyHeader = (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-      <Button variant="contained" onClick={() => setNewDrawerOpen(true)}>
-        + New Transaction
-      </Button>
-      <Button
-        component={Link}
-        to="/report-comments"
-        variant="outlined"
-      >
-        View Comments
-      </Button>
-      <Button
-        variant="outlined"
-        onClick={() => setFilterKey((prev) => prev + 1)}
-      >
-        Reset Filters
-      </Button>
-    </Stack>
+  const toolbar = (
+    <TableToolbar
+      title="Unit Transactions"
+      layout="stacked"
+      actions={(
+        <>
+          <Button variant="contained" sx={primaryButtonSx} onClick={() => setNewDrawerOpen(true)}>
+            + New Transaction
+          </Button>
+          <Button component={Link} to="/report-comments" variant="outlined" sx={secondaryButtonSx}>
+            View Comments
+          </Button>
+        </>
+      )}
+      filters={(
+        <>
+          <Autocomplete
+            size="small"
+            options={unitOptions}
+            value={unitOptions.includes(filterValues.unitName) ? filterValues.unitName : null}
+            inputValue={filterValues.unitName}
+            onChange={(_, value) => handleFilterChange('unitName', value)}
+            onInputChange={(_, value, reason) => {
+              if (reason !== 'reset') {
+                handleFilterChange('unitName', value);
+              }
+            }}
+            sx={{ width: 200, ...controlSx }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Unit"
+                placeholder="All units"
+                inputProps={{
+                  ...params.inputProps,
+                  'aria-label': 'Filter by unit',
+                }}
+              />
+            )}
+          />
+          <FormControl size="small" sx={{ width: 160, ...controlSx }}>
+            <InputLabel id="unit-transactions-type-filter-label">Type</InputLabel>
+            <Select
+              labelId="unit-transactions-type-filter-label"
+              id="unit-transactions-type-filter"
+              value={filterValues.type}
+              label="Type"
+              onChange={(event) => handleFilterChange('type', event.target.value)}
+            >
+              <MenuItem value="">All types</MenuItem>
+              {typeOptions.map((type) => (
+                <MenuItem key={type} value={type}>
+                  {type}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            label="Description"
+            placeholder="Search description..."
+            value={filterValues.description}
+            onChange={(event) => handleFilterChange('description', event.target.value)}
+            inputProps={{ 'aria-label': 'Search description' }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ width: 360, minWidth: 320, flex: '0 1 360px', ...controlSx }}
+          />
+          <Button
+            variant="outlined"
+            sx={utilityButtonSx}
+            disabled={!hasActiveFilters}
+            onClick={() => setFilterValues({ ...INITIAL_FILTER_VALUES })}
+          >
+            Clear Filters
+          </Button>
+        </>
+      )}
+    />
   );
 
   return (
@@ -374,15 +579,18 @@ const Owners2UnitTransactions = () => {
       sectionKey="transactions"
       currentPath="/unit-transactions"
       layout="table"
-      stickyHeader={stickyHeader}
+      stickyHeader={toolbar}
+      tableToolbar
     >
       <div className="table-container">
         <TableLite
-          key={filterKey}
           columns={columns}
           rows={transactions}
           enableFilters
+          filterValues={filterValues}
+          onFilterChange={handleFilterChange}
           optionsSourceRows={transactions}
+          showHeaderFilters={false}
           rowProps={(row) => ({
             id: `row-${row.id}`
           })}

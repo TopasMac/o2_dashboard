@@ -38,6 +38,8 @@ introduced when a real use case requires it.
 - Use a meaningful placeholder such as `Search guest...`, `Search clients...`,
   or `Search transactions...`.
 - Search may be wider than normal filters.
+- Use sensible bounded widths on desktop; a search field should not
+  automatically consume all remaining toolbar width.
 - Avoid using a bare table-column underline as the primary search UI on
   redesigned pages.
 
@@ -78,16 +80,25 @@ introduced when a real use case requires it.
 
 - Use visible labels above controls when context is not obvious, especially
   paired controls such as `Check-in month` and `Check-out month`.
+- Floating labels are acceptable and useful when a filter's meaning would
+  otherwise become unclear after a value is selected.
 - Simple controls may rely on a clear selected value or placeholder when this
   saves useful vertical space without creating ambiguity.
 - Do not use placeholder text as the only accessible label when an accessible
   name is otherwise required.
+- Toolbar layout must leave sufficient vertical clearance for MUI floating
+  labels in default, focused, and selected states. Labels must never be clipped
+  by the row or container above them.
+- Outlined controls must preserve MUI's clean `fieldset`/`legend` notch around
+  a floating label in normal, focused, and selected states. The field border
+  must not visibly run through or behind the label.
 
 ## Clear behavior
 
 - Individual controls may expose a compact clear affordance when useful.
 - Toolbar-level `Clear Filters` or `Reset Filters` follows the button standard
-  and appears at or near the end of the filter group.
+  and appears immediately after, or at the end of, the filter group.
+- `Clear Filters` may be disabled when no filters are active.
 - Standardize terminology rather than arbitrarily mixing `Clear Filters` and
   `Reset Filters`.
 
@@ -105,6 +116,8 @@ introduced when a real use case requires it.
 - Controls in the same toolbar use consistent vertical alignment.
 - Use approximately `8-12px` between related controls.
 - Larger separation may distinguish logical groups.
+- Provide enough separation above outlined controls for their floating labels
+  without adding excessive whitespace.
 - Avoid excessive whitespace because HausIn is an operational desktop
   interface.
 
@@ -112,8 +125,18 @@ introduced when a real use case requires it.
 
 - Do not force every filter to the same width.
 - Select width should reflect expected content.
-- Search controls may expand to consume available space.
+- Search controls may be wider than selects, but should use bounded widths
+  appropriate to the page rather than consuming all available desktop space.
 - Avoid excessively wide controls that reduce table-toolbar efficiency.
+
+The Unit Transactions prototype validates these example desktop proportions:
+
+- Unit autocomplete: `190-220px`
+- Type select: `150-180px`
+- Description/search: `320-380px`
+
+Treat these values as examples of relative proportions, not universal fixed
+widths.
 
 ## Accessibility and behavior to preserve
 

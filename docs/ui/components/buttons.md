@@ -101,14 +101,19 @@ per page or toolbar group.
 
 ## Table toolbar usage
 
-In a table toolbar, order controls logically:
+On standard desktop table pages, put the primary page action in the
+title/actions row. Group it with secondary page actions and right-align that
+group opposite the page title.
+
+Order actions logically:
 
 1. Primary operational action
 2. Secondary operational actions
 3. Utility actions
 
-Filter-reset controls are secondary or utility actions, never primary. See
-[Table Toolbar](table-toolbar.md) for toolbar composition.
+Filters and filter-reset actions belong in the filters row, not the page-action
+group. Filter-reset controls are secondary or utility actions, never primary.
+See [Table Toolbar](table-toolbar.md) for toolbar composition.
 
 ## Do
 

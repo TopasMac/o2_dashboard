@@ -10,6 +10,7 @@ import AppShell from './AppShell';
  *  - sectionKey: string (for SectionHeader group nav)
  *  - currentPath: string (for SectionHeader selection)
  *  - stickyHeader: ReactNode (actions/filters)
+ *  - tableToolbar: opt into a full-width, multi-row-safe table toolbar header
  *  - stickyFooter: ReactNode (e.g., pager)
  *  - children: page content
  *  - withCard: boolean (whether to render the inner white card, default true)
@@ -28,6 +29,7 @@ const PageScaffold = ({
   sectionKey,
   currentPath,
   stickyHeader,
+  tableToolbar = false,
   stickyFooter,
   children,
   withCard = true,
@@ -44,9 +46,11 @@ const PageScaffold = ({
   const rootRef = useRef(null);
   const stickyRef = useRef(null);
   const footerRef = useRef(null);
+  const isTableLayout = layout === 'table';
+  const usesTableToolbar = tableToolbar && isTableLayout;
   const normalizedStickyHeader = React.useMemo(() => {
     if (!stickyHeader) return null;
-    if (React.isValidElement(stickyHeader)) {
+    if (React.isValidElement(stickyHeader) && !usesTableToolbar) {
       const existingStyle = stickyHeader.props?.style || {};
       return React.cloneElement(stickyHeader, {
         style: {
@@ -57,15 +61,27 @@ const PageScaffold = ({
       });
     }
     return stickyHeader;
-  }, [stickyHeader]);
+  }, [stickyHeader, usesTableToolbar]);
 
   const contentPaddingValue = typeof contentPadding === 'number' ? `${contentPadding}px` : String(contentPadding);
 
   // Derive placement defaults from layout
-  const isTableLayout = layout === 'table';
   const headerPlacement = stickyHeaderPlacement || (isTableLayout ? 'inside' : 'outside');
 
   const stickyWrapperPaddingTop = headerPlacement === 'inside' ? '2px' : contentPaddingValue;
+  const stickyHeaderContentStyle = usesTableToolbar
+    ? {
+        display: 'block',
+        width: '100%',
+        minWidth: 0,
+      }
+    : {
+        display: 'inline-flex',
+        flexWrap: 'nowrap',
+        alignItems: 'center',
+        gap: 12,
+        minWidth: 'max-content',
+      };
 
   let scrollPaddingBottom;
   if (!stickyFooter) {
@@ -191,19 +207,11 @@ const PageScaffold = ({
                   zIndex: 10,
                   background: '#fff',
                   borderBottom: 'none',
-                  overflowX: 'auto',
+                  overflowX: usesTableToolbar ? 'visible' : 'auto',
                   WebkitOverflowScrolling: 'touch',
                 }}
               >
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    gap: 12,
-                    minWidth: 'max-content',
-                  }}
-                >
+                <div style={stickyHeaderContentStyle}>
                   {normalizedStickyHeader}
                 </div>
               </div>
@@ -244,22 +252,14 @@ const PageScaffold = ({
                       zIndex: 10,
                       background: '#fff',
                       paddingTop: contentPaddingValue,
-                      paddingLeft: contentPaddingValue,
-                      paddingRight: contentPaddingValue,
+                      paddingLeft: usesTableToolbar ? 0 : contentPaddingValue,
+                      paddingRight: usesTableToolbar ? 0 : contentPaddingValue,
                       marginBottom: stickyGap,
-                      overflowX: 'auto',
+                      overflowX: usesTableToolbar ? 'visible' : 'auto',
                       WebkitOverflowScrolling: 'touch',
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        flexWrap: 'nowrap',
-                        alignItems: 'center',
-                        gap: 12,
-                        minWidth: 'max-content',
-                      }}
-                    >
+                    <div style={stickyHeaderContentStyle}>
                       {normalizedStickyHeader}
                     </div>
                   </div>
@@ -306,19 +306,11 @@ const PageScaffold = ({
                   top: 0,
                   zIndex: 10,
                   background: '#fff',
-                  overflowX: 'auto',
+                  overflowX: usesTableToolbar ? 'visible' : 'auto',
                   WebkitOverflowScrolling: 'touch',
                 }}
               >
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    flexWrap: 'nowrap',
-                    alignItems: 'center',
-                    gap: 12,
-                    minWidth: 'max-content',
-                  }}
-                >
+                <div style={stickyHeaderContentStyle}>
                   {normalizedStickyHeader}
                 </div>
               </div>
@@ -352,19 +344,11 @@ const PageScaffold = ({
                       background: '#fff',
                       paddingTop: contentPaddingValue,
                       marginBottom: stickyGap,
-                      overflowX: 'auto',
+                      overflowX: usesTableToolbar ? 'visible' : 'auto',
                       WebkitOverflowScrolling: 'touch',
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        flexWrap: 'nowrap',
-                        alignItems: 'center',
-                        gap: 12,
-                        minWidth: 'max-content',
-                      }}
-                    >
+                    <div style={stickyHeaderContentStyle}>
                       {normalizedStickyHeader}
                     </div>
                   </div>

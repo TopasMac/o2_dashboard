@@ -151,6 +151,7 @@ const getColumnFilterKey = (col) =>
  *  - page, pageSize, total: numbers for simple paging display
  *  - onPageChange: (nextPage) => void
  *  - autoFilter: boolean (default true) — if true, TableLite filters rows internally based on header filters
+ *  - showHeaderFilters: boolean (default true) — render configured filter controls in column headers
  *  - optionsSourceRows: array — optional master dataset to derive filter option lists from
  */
 const TableLite = forwardRef(function TableLite(
@@ -170,6 +171,7 @@ const TableLite = forwardRef(function TableLite(
     filterValues = {},
     onFilterChange,
     autoFilter = true,
+    showHeaderFilters = true,
     optionsSourceRows = null,
     defaultStringTransform = 'capitalizeFirst',
   },
@@ -695,7 +697,7 @@ const TableLite = forwardRef(function TableLite(
                     }}
                   >
                     {(() => {
-                      const hasFilter = enableFilters && col.filter;
+                      const hasFilter = enableFilters && showHeaderFilters && col.filter;
                       if (!hasFilter) {
                         return <Box component="span">{col.header}</Box>;
                       }
@@ -1317,6 +1319,7 @@ TableLite.propTypes = {
   filterValues: PropTypes.object,
   onFilterChange: PropTypes.func,
   autoFilter: PropTypes.bool,
+  showHeaderFilters: PropTypes.bool,
   // Optional master dataset used to derive filter option lists globally (so options don't shrink after filtering)
   optionsSourceRows: PropTypes.array,
   defaultStringTransform: PropTypes.oneOfType([PropTypes.string, PropTypes.func]),

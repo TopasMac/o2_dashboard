@@ -8,26 +8,27 @@
 ## Role
 
 The Table Toolbar is the controls area immediately above `TableLite`. It
-standardizes page actions, external filters, search, and filter reset.
+standardizes page identity, page actions, external filters, search, and filter
+reset.
 
 New or redesigned table pages should use this pattern instead of independently
 arranging controls.
 
 ## Structure
 
-The toolbar may contain two logical groups:
+The standard toolbar has two logical rows:
 
-1. Actions
-2. Filters and search
+1. Title and page actions
+2. Filters and search, when present
 
-Actions appear first. Filters and search appear below actions when enough
-controls exist to justify a separate row. Do not force an empty or unnecessary
-second row on simple pages.
+The title appears on the left. Page-level actions are grouped and right-aligned
+on the same row. Filters and search appear below that row. Do not force an
+empty filters row when a page has no filters.
 
 Complex page:
 
 ```text
-[+ New Booking] [+ Block]                         [Export]
+Bookings                                  [+ New Booking] [Export]
 
 [Check-in] [Check-out] [Status] [Unit] [Search...] [Clear Filters]
 ```
@@ -35,8 +36,37 @@ Complex page:
 Simple page:
 
 ```text
-[+ New Client]                         [Search...] [Clear Filters]
+Clients                                            [+ New Client]
+
+[Search clients...] [Clear Filters]
 ```
+
+For simple pages, a compact one-row arrangement is acceptable only when it
+retains a clear title/actions/filters hierarchy. Do not sacrifice that
+hierarchy merely to force all controls onto one row.
+
+## Component API
+
+`TableToolbar` accepts these page-owned slots:
+
+```jsx
+<TableToolbar
+  title="Page title"
+  actions={...}
+  filters={...}
+  layout="stacked"
+/>
+```
+
+- `title` provides the content-card page identity.
+- `actions` contains page-level operational actions.
+- `filters` contains page-level filters, search, and filter-reset controls.
+- `layout` expresses the intended density: `stacked` keeps filters on their
+  own row, `inline` keeps logical groups on one row when that is appropriate,
+  and `auto` selects a compact wrapping arrangement.
+
+The page owns each slot's business logic and control types; the toolbar owns
+their logical grouping, order, and layout.
 
 ## Actions
 
@@ -48,6 +78,8 @@ Simple page:
 - Destructive actions must not use the primary-action treatment.
 - Keep action order consistent: primary operational actions first, secondary
   actions next, and utility actions last where practical.
+- Keep actions in the title/actions row. Do not put page-level actions in the
+  filters row.
 
 ## Filters
 
@@ -71,7 +103,7 @@ Simple page:
 
 - Clear or Reset Filters is a secondary utility action, never the primary
   button.
-- It should appear at or near the end of the filter group.
+- It should appear immediately after, or at the end of, the filter group.
 - Pages may hide or disable it when no filters are active if appropriate.
 - Terminology should eventually be standardized across pages; avoid mixing
   `Clear Filters`, `Reset Filters`, and equivalent labels arbitrarily.
@@ -81,10 +113,10 @@ Simple page:
 - Preserve vertical space because HausIn is an operational desktop application.
 - Do not add large decorative headings or excessive whitespace inside the
   content card.
-- If actions and filters comfortably fit on one row without reducing clarity,
-  a single-row toolbar is acceptable.
-- Use two rows when combining everything would make controls cramped or
-  difficult to scan.
+- Use the title/actions row plus a filters row when filters are present unless
+  a simpler layout remains clearly structured.
+- Do not combine rows when doing so would make controls cramped or difficult
+  to scan.
 
 ## Sticky behavior
 
@@ -117,6 +149,9 @@ Simple page:
 - Do not remove existing filtering behavior until equivalent external controls
   are verified.
 - Preserve operational behavior during visual migration.
+- `frontend/src/pages/Owners2UnitTransactions.jsx` is the first visually
+  validated reference implementation. Its broader `TableLite` visual treatment
+  is still in progress, so do not migrate other pages blindly.
 
 ## Existing Application Boundary
 
