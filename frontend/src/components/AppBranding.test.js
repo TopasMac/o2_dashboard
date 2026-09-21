@@ -10,7 +10,7 @@ describe('application branding', () => {
     expect(usesHausInBrand('dashboard.owners2.com', '/m/login')).toBe(true);
   });
 
-  test('preserves Owners2 branding on desktop routes', () => {
-    expect(usesHausInBrand('dashboard.owners2.com', '/bookings')).toBe(false);
+  test('uses HausIn branding on desktop routes', () => {
+    expect(usesHausInBrand('dashboard.owners2.com', '/bookings')).toBe(true);
   });
 });

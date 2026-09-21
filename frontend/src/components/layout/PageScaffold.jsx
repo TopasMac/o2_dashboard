@@ -13,7 +13,7 @@ import AppShell from './AppShell';
  *  - stickyFooter: ReactNode (e.g., pager)
  *  - children: page content
  *  - withCard: boolean (whether to render the inner white card, default true)
- *  - maxCardHeight: string (max height of the card container)
+ *  - maxCardHeight: string (height of the card container; defaults to the available shell height)
  *  - layout: 'standard' | 'table' (table defaults move sticky header inside scroll)
  *  - stickyHeaderPlacement: 'inside' | 'outside' (override default per layout)
  *  - contentPadding: number | string (padding inside the scroll area)
@@ -31,7 +31,7 @@ const PageScaffold = ({
   stickyFooter,
   children,
   withCard = true,
-  maxCardHeight = 'calc(100vh - 160px)',
+  maxCardHeight = '100%',
   layout = 'standard',
   stickyHeaderPlacement = undefined,
   contentPadding = 16,
@@ -152,9 +152,11 @@ const PageScaffold = ({
         ref={rootRef}
         style={{
           background: 'transparent',
-          minHeight: '100%',
+          height: '100%',
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
+          flex: 1,
         }}
       >
 
@@ -164,7 +166,7 @@ const PageScaffold = ({
           <div
             style={{
               width: '100%',
-              margin: '16px 0 0',
+              margin: 0,
               padding: 0, // outer padding handled by inner scroll area via contentPadding
               boxSizing: 'border-box',
               background: '#fff',
@@ -173,7 +175,9 @@ const PageScaffold = ({
               border: '1px solid #e6e6e6',
               display: 'flex',
               flexDirection: 'column',
-              height: maxCardHeight, // fixed card height across pages (independent of AppShell outer height var)
+              height: maxCardHeight,
+              flex: 1,
+              minHeight: 0,
               overflow: 'hidden', // clip to card; inner content area is the scroll owner
             }}
           >
