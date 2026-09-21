@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import PropTypes from 'prop-types';
 import './AppShell.css';
 import { ArrowLeftOnRectangleIcon } from '@heroicons/react/24/solid';
 import TopBar from './TopBar';
 import navConfig, { NAV_GROUPS } from './navConfig';
 import { Link, useLocation } from 'react-router-dom';
-import SectionHeader from './SectionHeader';
 
 export const containerWidths = {
   narrow: 1120,
@@ -18,7 +17,7 @@ export const containerWidths = {
 /**
  * AppShell
  * A simple, reusable app frame with:
- * - Top bar (title on the left, optional right actions)
+ * - Top bar with product branding, navigation context, and utility placeholders
  * - Left icon rail (compact vertical navbar)
  * - Centered content area with max width and gutters
  *
@@ -38,20 +37,18 @@ export const containerWidths = {
 export default function AppShell({
   title,
   rightActions,
-  sectionHeader = null,
   children,
   railItems = navConfig,
-  maxWidth = 'clamp(1280px, 96vw, 1680px)',
-  topBarHeight = 56,
+  maxWidth = 'calc(100% - 24px)',
+  topBarHeight = 64,
   railWidth = 64,
-  gutterX = 30,
-  gutterY = 16,
+  gutterX = 12,
+  gutterY = 12,
   background = '#f7f7f7',
   fluid = false,
   withCard = true,
   cardScrollable = false,
   contentBg = '#ffffff',
-  hideSectionHeader = false,
 }) {
   // Role-based filtering for rail items (top-level and submenus)
   const roles = (() => {
@@ -70,8 +67,6 @@ export default function AppShell({
       submenu: Array.isArray(it.submenu) ? it.submenu.filter(allowByRole) : it.submenu,
     }));
 
-  const rootRef = useRef(null);
-  const sectionRef = useRef(null);
   const location = useLocation();
 
   const activeGroup = React.useMemo(() => {
@@ -81,35 +76,8 @@ export default function AppShell({
     return match || null;
   }, [location?.pathname]);
 
-  useLayoutEffect(() => {
-    if (rootRef.current) rootRef.current.style.setProperty('--page-sticky-offset', '0px');
-  }, []);
-
-  useEffect(() => {
-    const rootEl = rootRef.current;
-    const hdr = sectionRef.current;
-    if (!rootEl) return;
-    const update = () => {
-      const h = hdr ? Math.round(hdr.getBoundingClientRect().height) : 0;
-      rootEl.style.setProperty('--page-sticky-offset', `${h}px`);
-    };
-    update();
-    let ro;
-    if (window.ResizeObserver) {
-      ro = new ResizeObserver(update);
-      if (hdr) ro.observe(hdr);
-    } else {
-      window.addEventListener('resize', update);
-    }
-    return () => {
-      if (ro && hdr) ro.unobserve(hdr);
-      window.removeEventListener('resize', update);
-    };
-  }, [sectionHeader]);
-
-
   return (
-    <div ref={rootRef} style={{
+    <div style={{
       display: 'grid',
       gridTemplateRows: `${topBarHeight}px 1fr`,
       gridTemplateColumns: `${railWidth}px 1fr`,
@@ -127,9 +95,9 @@ export default function AppShell({
       <div style={{ gridRow: 1, gridColumn: '1 / 3', position: 'sticky', top: 0, zIndex: 50 }}>
         <TopBar
           title={activeGroup?.label || title}
+          links={(activeGroup?.links || []).filter(allowByRole)}
           rightActions={rightActions}
           height={topBarHeight}
-          railWidth={railWidth}
           gutterX={gutterX}
         />
       </div>
@@ -142,27 +110,17 @@ export default function AppShell({
         <div
           style={{
             '--app-shell-max-width': fluid ? '100%' : (typeof maxWidth === 'number' ? `${maxWidth}px` : maxWidth),
-            '--app-shell-max-height': `calc(100vh - ${topBarHeight + gutterY * 2 + 56}px)`, // more bottom breathing room
+            '--app-shell-max-height': `calc(100vh - ${topBarHeight + gutterY * 2}px)`,
             boxSizing: 'border-box',
             width: '100%',
             maxWidth: fluid ? '100%' : 'var(--app-shell-max-width)',
             margin: fluid ? '0' : '0 auto',
-            padding: `${gutterY}px ${gutterX}px ${gutterY + 24}px`, // more bottom padding
+            padding: `${gutterY}px ${gutterX}px`,
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
-          {!hideSectionHeader && (
-            <div ref={sectionRef} style={{ margin: '0 0 12px 0' }}>
-              {sectionHeader ?? (
-                <SectionHeader
-                  title={activeGroup?.label || title}
-                  links={activeGroup?.links || []}
-                />
-              )}
-            </div>
-          )}
           {withCard ? (
             <div
               style={{
@@ -193,7 +151,6 @@ export default function AppShell({
 AppShell.propTypes = {
   title: PropTypes.node,
   rightActions: PropTypes.node,
-  sectionHeader: PropTypes.node,
   children: PropTypes.node,
   railItems: PropTypes.arrayOf(
     PropTypes.shape({
@@ -215,7 +172,6 @@ AppShell.propTypes = {
   withCard: PropTypes.bool,
   cardScrollable: PropTypes.bool,
   contentBg: PropTypes.string,
-  hideSectionHeader: PropTypes.bool,
 };
 
 /**
@@ -235,17 +191,17 @@ function NavRail({ width, items, paddingTop = 24, showSignOut = true }) {
     closeRef.current = setTimeout(() => setOpenKey(null), 120);
   };
   const renderIcon = (IconOrNode) => {
-    if (!IconOrNode) return <ArrowLeftOnRectangleIcon style={{ width: 18, height: 18 }} />;
+    if (!IconOrNode) return <ArrowLeftOnRectangleIcon style={{ width: 24, height: 24 }} />;
     // If an element was provided, normalize its size
     if (React.isValidElement(IconOrNode)) {
       const prev = IconOrNode.props?.style || {};
-      return React.cloneElement(IconOrNode, { style: { width: 18, height: 18, ...prev } });
+      return React.cloneElement(IconOrNode, { style: { width: 24, height: 24, ...prev } });
     }
     // If a component (e.g., heroicon) was provided, instantiate it
     try {
-      return React.createElement(IconOrNode, { style: { width: 18, height: 18 } });
+      return React.createElement(IconOrNode, { style: { width: 24, height: 24 } });
     } catch {
-      return <ArrowLeftOnRectangleIcon style={{ width: 18, height: 18 }} />;
+      return <ArrowLeftOnRectangleIcon style={{ width: 24, height: 24 }} />;
     }
   };
   const settingsItem = items?.find?.((it) => it.key === 'settings');
@@ -254,23 +210,28 @@ function NavRail({ width, items, paddingTop = 24, showSignOut = true }) {
   const renderItem = (it) => {
     const path = location?.pathname || '';
     const target = it.to || it.href || '';
-    const routeActive = target && typeof target === 'string' ? path.startsWith(target) : false;
+    const routeActive = target && typeof target === 'string'
+      ? path.startsWith(target)
+      : Array.isArray(it.submenu) && it.submenu.some((sub) => {
+        const subTarget = sub.to || sub.href || '';
+        return typeof subTarget === 'string' && path.startsWith(subTarget);
+      });
     const isActive = typeof it.active === 'boolean' ? it.active : routeActive;
 
     const content = (
       <>
         <div
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            background: isActive ? '#0d9488' : 'transparent',
-            color: isActive ? '#fff' : '#444',
+            width: 40,
+            height: 40,
+            borderRadius: 12,
+            background: isActive ? '#1e8b87' : 'transparent',
+            color: isActive ? '#ffffff' : '#667085',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'background 120ms ease',
-            border: isActive ? 'none' : '1px solid #e6e6e6',
+            border: 'none',
           }}
         >
           {renderIcon(it.icon)}
@@ -465,17 +426,16 @@ function NavRail({ width, items, paddingTop = 24, showSignOut = true }) {
         >
           <div
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              border: '1px solid #e6e6e6',
+              width: 40,
+              height: 40,
+              borderRadius: 12,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#444',
+              color: '#667085',
             }}
           >
-            <ArrowLeftOnRectangleIcon style={{ width: 18, height: 18 }} />
+            <ArrowLeftOnRectangleIcon style={{ width: 24, height: 24 }} />
           </div>
         </button>
       )}

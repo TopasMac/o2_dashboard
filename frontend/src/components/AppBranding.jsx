@@ -43,10 +43,8 @@ export default function AppBranding() {
 
   useEffect(() => {
     const isHausIn = usesHausInBrand(window.location.hostname, location.pathname);
-    const title = isHausIn ? 'HausIn App' : 'Owners2 Dashboard';
-    const description = isHausIn
-      ? 'HausIn property operations app'
-      : 'Owners2 Dashboard - Manage your rentals easily';
+    const title = 'HausIn Dashboard';
+    const description = 'HausIn Dashboard';
 
     document.title = title;
     setMetaContent('meta[name="description"]', description);
