@@ -11,7 +11,6 @@ import DashboardAlertCenterCard from '../components/cards/DashboardAlertCenterCa
 import MonthSummaryCard from '../components/cards/MonthSummaryCard';
 
 import AppShell from '../components/layout/AppShell';
-import SectionHeader from '../components/layout/SectionHeader';
 import PageScaffold from '../components/layout/PageScaffold';
 
 
@@ -692,7 +691,7 @@ const Dashboard = () => {
 
 
   return (
-    <AppShell sectionHeader={<SectionHeader title="Dashboard" subtitle="Overview" /> }>
+    <AppShell title="Dashboard">
       <PageScaffold>
         <MonthSummaryCard />
 

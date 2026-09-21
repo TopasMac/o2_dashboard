@@ -70,12 +70,12 @@ import {
       icon: BanknotesIcon,
       roles: ['ROLE_ADMIN','ROLE_MANAGER'],
       submenu: [
-        { label: 'Employee Transactions', icon: BanknotesIcon, to: '/employee-cash-admin', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
-        { label: 'Owners2 Transactions', icon: BanknotesIcon, to: '/o2-transactions' },
-        { label: 'Unit Transactions', icon: HomeModernIcon, to: '/unit-transactions' },
-        { label: 'HK Transactions', icon: ReceiptPercentIcon, to: '/hk-transactions', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
+        { label: 'Employee', icon: BanknotesIcon, to: '/employee-cash-admin', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
+        { label: 'Owners2', icon: BanknotesIcon, to: '/o2-transactions' },
+        { label: 'Unit', icon: HomeModernIcon, to: '/unit-transactions' },
+        { label: 'HK', icon: ReceiptPercentIcon, to: '/hk-transactions', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
         { label: 'Services Payments', icon: BanknotesIcon, to: '/services-payments' },
-        { label: 'HR Transactions', icon: BanknotesIcon, to: '/hr-transactions', roles: ['ROLE_ADMIN'] },
+        { label: 'HR', icon: BanknotesIcon, to: '/hr-transactions', roles: ['ROLE_ADMIN'] },
       ],
     },
   
@@ -156,4 +156,5 @@ export const NAV_GROUPS = {
   housekeepers: buildLinksFromGroup('housekeepers'),
   transactions: buildLinksFromGroup('transactions'),
   reports: buildLinksFromGroup('reports'),
+  marketing: buildLinksFromGroup('marketing'),
 };
