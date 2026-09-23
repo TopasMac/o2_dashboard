@@ -32,9 +32,12 @@ class BookingProcessingService
         $emails = $repository->findAll();
 
         foreach ($emails as $email) {
-            // Check if already processed
+            // Preserve the existing duplicate guard except for a strict iCalendar placeholder.
             $existing = $this->em->getRepository(\App\Entity\AllBookings::class)->findOneBy(['confirmationCode' => $email->getConfirmationCode()]);
             if ($existing) {
+                if ($this->isIcalPlaceholder($existing)) {
+                    $this->hydrateIcalPlaceholder($existing, $email);
+                }
                 continue;
             }
 
@@ -167,6 +170,68 @@ class BookingProcessingService
         $this->em->flush();
 
         return null;
+    }
+
+    private function hydrateIcalPlaceholder(\App\Entity\AllBookings $booking, AirbnbEmailImport $email): void
+    {
+        $bookingDate = $email->getBookingDate();
+        $checkIn = $this->guessDateFromText($bookingDate, $email->getCheckIn());
+        $checkOut = $this->guessDateFromText($bookingDate, $email->getCheckOut());
+        if (!$checkIn || !$checkOut || $checkOut <= $checkIn) {
+            return;
+        }
+
+        $days = $checkIn->diff($checkOut)->days;
+        if ($days <= 0) {
+            return;
+        }
+
+        // Hydrate the managed placeholder without replacing its ID, unit,
+        // iCalendar association, reservation code, or reconciliation metadata.
+        if ($booking->getUnitId() !== null) {
+            $email->setUnitId($booking->getUnitId());
+        }
+        $booking->setBookingDate($bookingDate);
+        $booking->setSource('Airbnb');
+        $booking->setPaymentMethod('platform');
+        $booking->setGuestType('Airbnb_guest');
+        $booking->setConfirmationCode($email->getConfirmationCode());
+        $booking->setGuestName($email->getGuestName());
+        $booking->setGuests($email->getGuests());
+        $booking->setCheckIn($checkIn);
+        $booking->setCheckOut($checkOut);
+        $booking->setDays($days);
+        $booking->setPayout($email->getPayout());
+        $booking->setCleaningFee($email->getCleaningFee());
+        $booking->setRoomFee($email->getRoomFee());
+        $booking->setIsPaid(true);
+
+        $this->aggregator->recalculateAllBookingFields($booking);
+        $booking->setLastUpdatedAt(new \DateTimeImmutable());
+        $booking->setLastUpdatedVia('email');
+
+        $this->em->persist($booking);
+        // The existing AllBookingsHKCleaningsListener handles checkout-cleaning sync.
+        $this->em->flush();
+
+        try {
+            $in = $booking->getCheckIn();
+            $out = $booking->getCheckOut();
+            if ($booking->getId() && $in instanceof \DateTimeInterface && $out instanceof \DateTimeInterface) {
+                $this->refresher->refreshForBooking((int) $booking->getId(), $in, $out);
+            }
+        } catch (\Throwable $e) {
+            @error_log('[BookingProcessingService] month-slice refresh failed for hydrated bookingId='.(int)$booking->getId().': '.$e->getMessage());
+        }
+    }
+
+    private function isIcalPlaceholder(\App\Entity\AllBookings $booking): bool
+    {
+        return strcasecmp(trim((string) $booking->getSource()), 'Airbnb') === 0
+            && $booking->getIcalEvent() !== null
+            && strcasecmp(trim((string) $booking->getLastUpdatedVia()), 'ical-create') === 0
+            && strcasecmp(trim((string) $booking->getGuestName()), 'Missing email') === 0
+            && abs((float) ($booking->getPayout() ?? 0.0)) < 0.00001;
     }
 
     private function guessDateFromText(?\DateTimeInterface $baseDate, ?string $text): ?\DateTimeInterface
