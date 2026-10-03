@@ -72,6 +72,15 @@ Completed and visually validated:
   dataset
 - Multiple filters retain AND semantics
 - MUI floating-label spacing and notch behavior were corrected
+- First `TableLite` visual-treatment pass completed through the opt-in HausIn
+  variant: compact typography, neutral separators, subtle teal hover, and teal
+  selected-row treatment
+- Table now fills the remaining white-card height without changing shared
+  default sizing
+- Description column reduced to `260px`; Documents header and actions are
+  centered
+- Document preview actions use compact MUI icon buttons with tooltip, hover,
+  and keyboard-focus treatment
 - Existing transaction business logic, drawers, document preview, navigation,
   deep links, highlighting, scrolling, and column resizing were preserved
 
@@ -89,6 +98,8 @@ Completed and visually validated:
   - Supports `showHeaderFilters`.
   - Defaults to `true` for backward compatibility.
   - Unit Transactions opts out while retaining controlled filtering.
+  - Supports `visualVariant="hausin"` as an opt-in table presentation; legacy
+    consumers retain their existing appearance.
 
 ## Important Backward-Compatibility Strategy
 
@@ -100,10 +111,11 @@ intentionally migrated and tested.
 
 ## What Is Not Finished
 
-- The broader visual redesign of `TableLite` itself is **not yet complete**.
-- Table row, header, separator, hover, and density treatment still need review.
-- The Unit Transactions toolbar is approved, but the complete table-page
-  prototype is not finished.
+- The first Unit Transactions `TableLite` visual-treatment pass is complete,
+  but broader table visual work is not yet complete.
+- Loading, empty, error, and footer/pagination states still need design review.
+- The Unit Transactions toolbar and first table-treatment pass are approved,
+  but the complete table-page prototype is not finished.
 - Reservations, Units, Clients, Owners2 Transactions, and HK Transactions have
   not been migrated.
 - Do not blindly migrate other pages until Unit Transactions is completed and
@@ -111,7 +123,8 @@ intentionally migrated and tested.
 
 ## Recommended Next Step
 
-**Review and refine the TableLite visual treatment on Unit Transactions only.**
+**Define and prototype a server-side filtering, sorting, and pagination
+strategy before migrating other large operational tables.**
 
 Preserve:
 
@@ -124,20 +137,26 @@ Preserve:
 - Column resizing
 - Row highlight and focus behavior
 
-Make shared `TableLite` visual changes opt-in where there is meaningful risk to
-unmigrated pages. Visually review the page after each meaningful change rather
-than implementing the remaining redesign in one large step.
+The intended future standard is server-side filtering and sorting with a
+bounded page size, a footer such as `Showing 1-50 of 677`, and Previous/Next
+navigation rather than unbounded client-side datasets or numbered pagination.
+Keep the current Unit Transactions implementation unchanged until this is
+designed and tested as a separate platform task.
+
+Make shared `TableLite` changes opt-in where there is meaningful risk to
+unmigrated pages. Visually review each meaningful change rather than
+implementing a broad redesign in one large step.
 
 ## Git Checkpoint
 
 - Branch: `feature/ui-design-system`
 - Latest implementation checkpoint:
-  - `03ac8d04a78ae1f0f678cd111a5f104873098dc3`
-  - `feat(ui): add table toolbar prototype`
+  - `d40c8dcc71225540349fef9232fdb5d1cc9e5ba2`
+  - `feat(ui): refine Unit Transactions table treatment`
 
 Earlier commits on this branch establish the table-page documentation,
-toolbar/table standards, button/filter standards, and color foundation. The
-branch has not been merged or deployed.
+toolbar/table standards, button/filter standards, color foundation, and
+toolbar prototype. The branch has not been merged or deployed.
 
 ## Validation Status
 
@@ -148,7 +167,8 @@ During implementation:
 - `npm --prefix frontend run build` completed successfully with existing
   repository warnings.
 
-No automated functional or browser tests are claimed here.
+The Unit Transactions toolbar and first table-treatment pass were visually
+reviewed locally. No automated functional tests are claimed here.
 
 ## Working Method
 
