@@ -13,11 +13,13 @@ import {
   Autocomplete,
   Button,
   FormControl,
+  IconButton,
   InputAdornment,
   InputLabel,
   MenuItem,
   Select,
   TextField,
+  Tooltip,
 } from '@mui/material';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -421,8 +423,8 @@ const Owners2UnitTransactions = () => {
       header: 'Description',
       accessor: 'description',
       filterable: true,
-      width: '300px',
-      minWidth: '300px',
+      width: '260px',
+      minWidth: '260px',
     },
     {
       header: 'Amount',
@@ -438,6 +440,8 @@ const Owners2UnitTransactions = () => {
     {
       header: 'Documents',
       accessor: 'documents',
+      align: 'center',
+      headerAlign: 'center',
       cell: (row) => {
         const docs = Array.isArray(row?.documents) ? row.documents : [];
         if (docs.length === 0) return '';
@@ -457,28 +461,33 @@ const Owners2UnitTransactions = () => {
               const link = rawUrl && rawUrl.startsWith('/') ? `${base}${rawUrl}` : rawUrl;
               if (!link) return null;
               return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setPreviewUrl(link);
-                    setPreviewTitle(`Document ${idx + 1}`);
-                    setPreviewOpen(true);
-                  }}
-                  style={{
-                    marginRight: '0.35rem',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center'
-                  }}
-                  title={`Preview document ${idx + 1}`}
-                  aria-label={`Preview document ${idx + 1}`}
-                >
-                  <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: '#1e6f68' }} />
-                </button>
+                <Tooltip key={idx} title={`Preview document ${idx + 1}`} placement="top">
+                  <IconButton
+                    type="button"
+                    size="small"
+                    aria-label={`Preview document ${idx + 1}`}
+                    onClick={() => {
+                      setPreviewUrl(link);
+                      setPreviewTitle(`Document ${idx + 1}`);
+                      setPreviewOpen(true);
+                    }}
+                    sx={{
+                      width: tokens.controls.compactHeight,
+                      height: tokens.controls.compactHeight,
+                      color: tokens.colors.primaryTeal,
+                      borderRadius: `${tokens.controls.borderRadius}px`,
+                      '&:hover': {
+                        backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+                      },
+                      '&.Mui-focusVisible': {
+                        outline: `2px solid ${tokens.colors.primaryTeal}`,
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <InsertDriveFileOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               );
             })}
           </span>
@@ -582,15 +591,17 @@ const Owners2UnitTransactions = () => {
       stickyHeader={toolbar}
       tableToolbar
     >
-      <div className="table-container">
+      <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
         <TableLite
           columns={columns}
           rows={transactions}
+          height="100%"
           enableFilters
           filterValues={filterValues}
           onFilterChange={handleFilterChange}
           optionsSourceRows={transactions}
           showHeaderFilters={false}
+          visualVariant="hausin"
           rowProps={(row) => ({
             id: `row-${row.id}`
           })}

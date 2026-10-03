@@ -22,6 +22,7 @@ import IconButton from '@mui/material/IconButton';
 import { PaperClipIcon } from '@heroicons/react/24/outline';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import { alpha } from '@mui/material/styles';
 
 import { formatDateDMY, formatMoney, capitalizeFirst } from '../../utils/formatters';
 import DocumentPreview from '../common/DocumentPreview';
@@ -152,6 +153,7 @@ const getColumnFilterKey = (col) =>
  *  - onPageChange: (nextPage) => void
  *  - autoFilter: boolean (default true) — if true, TableLite filters rows internally based on header filters
  *  - showHeaderFilters: boolean (default true) — render configured filter controls in column headers
+ *  - visualVariant: 'legacy' | 'hausin' (default 'legacy') — opt-in table presentation
  *  - optionsSourceRows: array — optional master dataset to derive filter option lists from
  */
 const TableLite = forwardRef(function TableLite(
@@ -172,12 +174,14 @@ const TableLite = forwardRef(function TableLite(
     onFilterChange,
     autoFilter = true,
     showHeaderFilters = true,
+    visualVariant = 'legacy',
     optionsSourceRows = null,
     defaultStringTransform = 'capitalizeFirst',
   },
   ref
 )
 {
+  const isHausinVariant = visualVariant === 'hausin';
   // If parent does not control filters, keep a local copy
   const [localFilterValues, setLocalFilterValues] = useState({});
   const effectiveFilterValues = onFilterChange ? (filterValues || {}) : localFilterValues;
@@ -680,9 +684,10 @@ const TableLite = forwardRef(function TableLite(
                     {...restHeaderProps}
                     sx={{
                       fontWeight: 600,
-                      fontSize: 14.5,
+                      fontSize: isHausinVariant ? (theme) => theme.hausin.controls.fontSize : 14.5,
                       lineHeight: 1.4,
                       borderBottom: '1px solid #1E6F68',
+                      color: isHausinVariant ? (theme) => theme.hausin.colors.textPrimary : undefined,
                       // If a maxWidth is provided, treat it as the effective width cap
                       width: widthValue || maxWidthValue || minWidthValue,
                       minWidth: minWidthValue || maxWidthValue || widthValue,
@@ -978,9 +983,21 @@ const TableLite = forwardRef(function TableLite(
                     ref={isHighlighted ? highlightRowRef : null}
                     sx={{
                       minWidth: 'auto',
+                      ...(isHausinVariant && !isHighlighted
+                        ? {
+                            '&.MuiTableRow-hover:hover': {
+                              backgroundColor: (theme) => alpha(theme.hausin.colors.primaryTeal, 0.04),
+                            },
+                          }
+                        : {}),
                       ...(isHighlighted
                         ? {
-                            backgroundColor: 'rgba(245, 124, 0, 0.12)', // soft orange highlight
+                            backgroundColor: isHausinVariant
+                              ? (theme) => alpha(theme.hausin.colors.primaryTeal, 0.10)
+                              : 'rgba(245, 124, 0, 0.12)',
+                            boxShadow: isHausinVariant
+                              ? (theme) => `inset 3px 0 0 ${theme.hausin.colors.primaryTeal}`
+                              : undefined,
                             transition: 'background-color 0.25s ease-in-out',
                           }
                         : {}),
@@ -1027,6 +1044,13 @@ const TableLite = forwardRef(function TableLite(
                           minWidth: minWidthValue || maxWidthValue || widthValue,
                           maxWidth: maxWidthValue || widthValue || minWidthValue,
                           fontSize: 14.5,
+                          ...(isHausinVariant
+                            ? {
+                                fontSize: (theme) => theme.hausin.controls.fontSize,
+                                color: (theme) => theme.hausin.colors.textPrimary,
+                                borderBottomColor: (theme) => theme.hausin.colors.border,
+                              }
+                            : {}),
                           lineHeight: 1.5,
                           py: basePy,
                           px: 2,
@@ -1320,6 +1344,7 @@ TableLite.propTypes = {
   onFilterChange: PropTypes.func,
   autoFilter: PropTypes.bool,
   showHeaderFilters: PropTypes.bool,
+  visualVariant: PropTypes.oneOf(['legacy', 'hausin']),
   // Optional master dataset used to derive filter option lists globally (so options don't shrink after filtering)
   optionsSourceRows: PropTypes.array,
   defaultStringTransform: PropTypes.oneOfType([PropTypes.string, PropTypes.func]),
