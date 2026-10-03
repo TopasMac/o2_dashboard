@@ -61,5 +61,12 @@ final class AirbnbEmailPayoutCorrectorTest extends TestCase
             800.00,
             527.60,
         ];
+
+        yield '16% long stay without a displayed nightly rate' => [
+            'confirmation_16_percent_long_stay.txt',
+            16862.78,
+            800.00,
+            599.87,
+        ];
     }
 }

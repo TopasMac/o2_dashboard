@@ -19,16 +19,19 @@ final class AirbnbEmailPayoutCorrector
         $guestPaidSection = $this->extractSection($body, 'GUEST PAID', 'HOST PAYOUT');
         $hostPayoutSection = $this->extractSection($body, 'HOST PAYOUT', 'YOU EARN');
 
-        $roomFee = $this->extractRequiredAmount(
-            $guestPaidSection,
-            '/\$([0-9][0-9,.]*)\s*x\s*\d+\s*nights?/i',
-            'displayed nightly room rate',
-        );
         $hostRoomFeeTotal = $this->extractRequiredAmount(
             $hostPayoutSection,
-            '/\d+\s*-\s*nights?\s+room fee\s+\$([0-9][0-9,.]*)/i',
+            '/(?:\d+\s*-\s*nights?\s+room fee|Total Stay Price)\s+\$([0-9][0-9,.]*)/i',
             'host room-fee total',
         );
+        $roomFee = $this->extractOptionalAmount(
+            $guestPaidSection,
+            '/\$([0-9][0-9,.]*)\s*x\s*\d+\s*nights?/i',
+        );
+        if ($roomFee === null) {
+            $nights = $this->extractStayNights($body);
+            $roomFee = round($hostRoomFeeTotal / $nights, 2, PHP_ROUND_HALF_UP);
+        }
         $cleaningFee = $this->extractRequiredAmount(
             $hostPayoutSection,
             '/Cleaning fee\s+\$([0-9][0-9,.]*)/i',
@@ -86,6 +89,15 @@ final class AirbnbEmailPayoutCorrector
         return $this->normalizeAmount($matches[1]);
     }
 
+    private function extractOptionalAmount(string $text, string $pattern): ?float
+    {
+        if (!preg_match($pattern, $text, $matches)) {
+            return null;
+        }
+
+        return $this->normalizeAmount($matches[1]);
+    }
+
     private function extractOptionalSignedAmount(string $text, string $pattern): float
     {
         if (!preg_match($pattern, $text, $matches)) {
@@ -100,5 +112,51 @@ final class AirbnbEmailPayoutCorrector
     private function normalizeAmount(string $amount): float
     {
         return (float) str_replace(',', '', $amount);
+    }
+
+    private function extractStayNights(string $body): int
+    {
+        $checkIn = $this->extractStayDate($body, 'Check-in');
+        $checkOut = $this->extractStayDate($body, 'Checkout');
+
+        if ($checkOut <= $checkIn) {
+            $checkOut = $checkOut->modify('+1 year');
+        }
+
+        $nights = (int) $checkIn->diff($checkOut)->days;
+        if ($nights <= 0) {
+            throw new \InvalidArgumentException('Could not determine a valid night count from the Airbnb confirmation email.');
+        }
+
+        return $nights;
+    }
+
+    private function extractStayDate(string $body, string $label): \DateTimeImmutable
+    {
+        $pattern = sprintf(
+            '/%s\s+(?:[A-Za-z]{3,9},?\s+)?(\d{1,2})\s+([A-Za-z]{3,9})(?:\s+(\d{4}))?/i',
+            preg_quote($label, '/'),
+        );
+
+        if (!preg_match($pattern, $body, $matches)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Could not extract the %s date needed to calculate the average nightly room rate.',
+                strtolower($label),
+            ));
+        }
+
+        $year = isset($matches[3]) && $matches[3] !== '' ? (int) $matches[3] : 2000;
+        $dateText = sprintf('%d %s %d', (int) $matches[1], $matches[2], $year);
+        $date = \DateTimeImmutable::createFromFormat('!j M Y', $dateText)
+            ?: \DateTimeImmutable::createFromFormat('!j F Y', $dateText);
+
+        if (!$date instanceof \DateTimeImmutable) {
+            throw new \InvalidArgumentException(sprintf(
+                'Could not parse the %s date needed to calculate the average nightly room rate.',
+                strtolower($label),
+            ));
+        }
+
+        return $date;
     }
 }
