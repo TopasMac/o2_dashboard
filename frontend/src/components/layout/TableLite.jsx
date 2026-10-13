@@ -646,7 +646,9 @@ const TableLite = forwardRef(function TableLite(
               position: 'sticky',
               top: useParentScroll ? 'var(--page-sticky-offset, 0px)' : 0,
               zIndex: 3,
-              backgroundColor: (theme) => theme.palette.background.paper,
+              backgroundColor: (theme) => (
+                isHausinVariant ? theme.hausin.colors.subtle : theme.palette.background.paper
+              ),
             }}
           >
             <TableRow sx={{ minWidth: 'auto' }}>
@@ -686,8 +688,13 @@ const TableLite = forwardRef(function TableLite(
                       fontWeight: 600,
                       fontSize: isHausinVariant ? (theme) => theme.hausin.controls.fontSize : 14.5,
                       lineHeight: 1.4,
-                      borderBottom: '1px solid #1E6F68',
-                      color: isHausinVariant ? (theme) => theme.hausin.colors.textPrimary : undefined,
+                      borderBottom: isHausinVariant
+                        ? (theme) => `1px solid ${theme.hausin.colors.border}`
+                        : '1px solid #1E6F68',
+                      backgroundColor: isHausinVariant
+                        ? (theme) => theme.hausin.colors.subtle
+                        : undefined,
+                      color: isHausinVariant ? (theme) => theme.hausin.colors.textSecondary : undefined,
                       // If a maxWidth is provided, treat it as the effective width cap
                       width: widthValue || maxWidthValue || minWidthValue,
                       minWidth: minWidthValue || maxWidthValue || widthValue,
@@ -1127,9 +1134,10 @@ const TableLite = forwardRef(function TableLite(
                             const meta = rendered.meta ?? rendered.bottom ?? '';
 
                             const variantClass = col.twoLineClassName ? ` ${col.twoLineClassName}` : '';
+                            const hausinVariantClass = isHausinVariant ? ' o2-cell-two-line--hausin' : '';
 
                             const twoLineEl = (
-                              <div className={`o2-cell-two-line${variantClass}`}>
+                              <div className={`o2-cell-two-line${hausinVariantClass}${variantClass}`}>
                                 {primary ? <div className="o2-cell-primary">{primary}</div> : null}
                                 {meta ? <div className="o2-cell-meta">{meta}</div> : null}
                               </div>

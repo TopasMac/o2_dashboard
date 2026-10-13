@@ -10,10 +10,12 @@ import DocumentPreview from '../components/common/DocumentPreview';
 import { HiOutlineDocumentText } from 'react-icons/hi';
 import {
   Autocomplete,
+  Box,
   Button,
   IconButton,
   InputAdornment,
   TextField,
+  Typography,
   Tooltip,
 } from '@mui/material';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
@@ -33,18 +35,18 @@ const formatDateDisplay = (value) => {
     // Handle date-only strings: YYYY-MM-DD
     const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (m) {
-      return `${m[3]}/${m[2]}/${m[1]}`; // dd/mm/yyyy
+      return `${m[3]}-${m[2]}-${m[1]}`; // dd-mm-yyyy
     }
     // Handle ISO datetime strings: YYYY-MM-DDThh:mm... (take the date part only)
     const m2 = value.match(/^(\d{4})-(\d{2})-(\d{2})T/);
     if (m2) {
-      return `${m2[3]}/${m2[2]}/${m2[1]}`; // dd/mm/yyyy
+      return `${m2[3]}-${m2[2]}-${m2[1]}`; // dd-mm-yyyy
     }
   }
   // Fallback to Date parsing if needed
   const d = new Date(value);
   if (isNaN(d)) return String(value);
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
 };
 
 const Owners2UnitTransactions = () => {
@@ -264,13 +266,6 @@ const Owners2UnitTransactions = () => {
     setFilterValues({ ...INITIAL_FILTER_VALUES });
   };
   const controlSx = {
-    '& .MuiInputLabel-root': {
-      color: tokens.colors.textSecondary,
-      fontSize: tokens.controls.fontSize,
-    },
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: tokens.colors.primaryTeal,
-    },
     '& .MuiOutlinedInput-root': {
       height: tokens.controls.height,
       borderRadius: `${tokens.controls.borderRadius}px`,
@@ -292,12 +287,20 @@ const Owners2UnitTransactions = () => {
         borderColor: tokens.colors.primaryTeal,
         borderWidth: 1,
       },
-      '& .MuiInputLabel-root.MuiInputLabel-shrink ~ .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend': {
-        maxWidth: '100%',
-        width: 'auto',
-        padding: 0,
-      },
     },
+  };
+  const filterFieldSx = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0.5,
+    flex: '0 0 auto',
+  };
+  const filterLabelSx = {
+    color: tokens.colors.textSecondary,
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    lineHeight: 1.25,
+    pl: '1px',
   };
   const primaryButtonSx = {
     height: tokens.controls.height,
@@ -389,6 +392,7 @@ const Owners2UnitTransactions = () => {
                 cursor: 'pointer',
                 color: '#1e6f68',
                 textDecoration: 'none',
+                fontWeight: 600,
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = '#f57c00';
@@ -512,7 +516,6 @@ const Owners2UnitTransactions = () => {
     <TableToolbar
       title="Unit Transactions"
       layout="stacked"
-      actionPlacement="adjacent"
       actions={(
         <>
           <Button variant="contained" sx={primaryButtonSx} onClick={() => setNewDrawerOpen(true)}>
@@ -522,73 +525,79 @@ const Owners2UnitTransactions = () => {
       )}
       filters={(
         <>
-          <Autocomplete
-            size="small"
-            options={unitOptions}
-            value={unitOptions.includes(filterValues.unitName) ? filterValues.unitName : null}
-            inputValue={filterValues.unitName}
-            onChange={(_, value) => handleFilterChange('unitName', value)}
-            onInputChange={(_, value, reason) => {
-              if (reason !== 'reset') {
-                handleFilterChange('unitName', value);
-              }
-            }}
-            sx={{ width: 200, ...controlSx }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Unit"
-                placeholder="All units"
-                inputProps={{
-                  ...params.inputProps,
-                  'aria-label': 'Filter by unit',
-                }}
-              />
-            )}
-          />
-          <Autocomplete
-            size="small"
-            options={categoryOptions}
-            value={categoryOptions.includes(filterValues.category) ? filterValues.category : null}
-            inputValue={filterValues.category}
-            onChange={(_, value) => handleFilterChange('category', value)}
-            onInputChange={(_, value, reason) => {
-              if (reason !== 'reset') {
-                handleFilterChange('category', value);
-              }
-            }}
-            sx={{ width: 220, ...controlSx }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Type"
-                placeholder="All types"
-                inputProps={{
-                  ...params.inputProps,
-                  'aria-label': 'Filter by type',
-                }}
-              />
-            )}
-          />
-          <TextField
-            size="small"
-            label="Description"
-            placeholder="Search description..."
-            value={filterValues.description}
-            onChange={(event) => handleFilterChange('description', event.target.value)}
-            inputProps={{ 'aria-label': 'Search description' }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-            sx={{ width: 360, minWidth: 320, flex: '0 1 360px', ...controlSx }}
-          />
+          <Box sx={{ ...filterFieldSx, width: 200 }}>
+            <Typography component="span" sx={filterLabelSx}>Unit</Typography>
+            <Autocomplete
+              size="small"
+              options={unitOptions}
+              value={unitOptions.includes(filterValues.unitName) ? filterValues.unitName : null}
+              inputValue={filterValues.unitName}
+              onChange={(_, value) => handleFilterChange('unitName', value)}
+              onInputChange={(_, value, reason) => {
+                if (reason !== 'reset') {
+                  handleFilterChange('unitName', value);
+                }
+              }}
+              sx={controlSx}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="All units"
+                  inputProps={{
+                    ...params.inputProps,
+                    'aria-label': 'Filter by unit',
+                  }}
+                />
+              )}
+            />
+          </Box>
+          <Box sx={{ ...filterFieldSx, width: 220 }}>
+            <Typography component="span" sx={filterLabelSx}>Type</Typography>
+            <Autocomplete
+              size="small"
+              options={categoryOptions}
+              value={categoryOptions.includes(filterValues.category) ? filterValues.category : null}
+              inputValue={filterValues.category}
+              onChange={(_, value) => handleFilterChange('category', value)}
+              onInputChange={(_, value, reason) => {
+                if (reason !== 'reset') {
+                  handleFilterChange('category', value);
+                }
+              }}
+              sx={controlSx}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="All types"
+                  inputProps={{
+                    ...params.inputProps,
+                    'aria-label': 'Filter by type',
+                  }}
+                />
+              )}
+            />
+          </Box>
+          <Box sx={{ ...filterFieldSx, width: 360, minWidth: 320, flex: '0 1 360px' }}>
+            <Typography component="span" sx={filterLabelSx}>Description</Typography>
+            <TextField
+              size="small"
+              placeholder="Search description..."
+              value={filterValues.description}
+              onChange={(event) => handleFilterChange('description', event.target.value)}
+              inputProps={{ 'aria-label': 'Search description' }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={controlSx}
+            />
+          </Box>
           <Button
             variant="outlined"
-            sx={clearFiltersButtonSx}
+            sx={{ ...clearFiltersButtonSx, alignSelf: 'flex-end' }}
             disabled={!hasActiveFilters}
             onClick={clearFilters}
           >
