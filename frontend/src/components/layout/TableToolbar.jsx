@@ -44,7 +44,8 @@ export default function TableToolbar({
         alignItems: 'center',
         columnGap: 1.5,
         rowGap: 1,
-        py: 0.5,
+        pt: 0,
+        pb: 0.5,
         color: tokens.colors.textPrimary,
         fontSize: tokens.controls.fontSize,
         fontWeight: tokens.controls.fontWeight,
@@ -58,9 +59,9 @@ export default function TableToolbar({
             minWidth: 0,
             flex: hasAdjacentActions ? '0 1 auto' : '1 1 auto',
             color: tokens.colors.textPrimary,
-            fontSize: '1.25rem',
+            fontSize: '1.5rem',
             fontWeight: 600,
-            lineHeight: 1.3,
+            lineHeight: 1.25,
           }}
         >
           {title}

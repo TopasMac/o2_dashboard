@@ -251,7 +251,7 @@ const PageScaffold = ({
                       top: 0,
                       zIndex: 10,
                       background: '#fff',
-                      paddingTop: contentPaddingValue,
+                      paddingTop: usesTableToolbar ? 8 : contentPaddingValue,
                       paddingLeft: usesTableToolbar ? 0 : contentPaddingValue,
                       paddingRight: usesTableToolbar ? 0 : contentPaddingValue,
                       marginBottom: stickyGap,
