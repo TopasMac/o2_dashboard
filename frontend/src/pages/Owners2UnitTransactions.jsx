@@ -11,12 +11,8 @@ import { HiOutlineDocumentText } from 'react-icons/hi';
 import {
   Autocomplete,
   Button,
-  FormControl,
   IconButton,
   InputAdornment,
-  InputLabel,
-  MenuItem,
-  Select,
   TextField,
   Tooltip,
 } from '@mui/material';
@@ -27,7 +23,7 @@ import PageScaffold from '../components/layout/PageScaffold';
 
 const INITIAL_FILTER_VALUES = {
   unitName: '',
-  type: '',
+  category: '',
   description: '',
 };
 
@@ -241,12 +237,12 @@ const Owners2UnitTransactions = () => {
     [transactions]
   );
 
-  const typeOptions = useMemo(
+  const categoryOptions = useMemo(
     () => Array.from(
       new Set(
         transactions
-          .map((transaction) => transaction.type)
-          .filter((value) => value !== undefined && value !== null)
+          .map((transaction) => transaction.category)
+          .filter((value) => value !== undefined && value !== null && value !== 'N/A')
           .map((value) => String(value))
       )
     ).sort(),
@@ -264,6 +260,9 @@ const Owners2UnitTransactions = () => {
   };
 
   const hasActiveFilters = Object.values(filterValues).some((value) => value !== '');
+  const clearFilters = () => {
+    setFilterValues({ ...INITIAL_FILTER_VALUES });
+  };
   const controlSx = {
     '& .MuiInputLabel-root': {
       color: tokens.colors.textSecondary,
@@ -291,9 +290,12 @@ const Owners2UnitTransactions = () => {
       },
       '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
         borderColor: tokens.colors.primaryTeal,
+        borderWidth: 1,
       },
-      '&.Mui-focused .MuiOutlinedInput-notchedOutline legend': {
+      '& .MuiInputLabel-root.MuiInputLabel-shrink ~ .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline legend': {
         maxWidth: '100%',
+        width: 'auto',
+        padding: 0,
       },
     },
   };
@@ -348,6 +350,18 @@ const Owners2UnitTransactions = () => {
       color: tokens.colors.textPrimary,
     },
   };
+  const clearFiltersButtonSx = {
+    ...utilityButtonSx,
+    ...(hasActiveFilters && {
+      color: tokens.colors.primaryTeal,
+      borderColor: tokens.colors.primaryTeal,
+      '&:hover': {
+        borderColor: tokens.colors.primaryTeal,
+        backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+        color: tokens.colors.primaryTeal,
+      },
+    }),
+  };
 
   const columns = [
     {
@@ -401,9 +415,9 @@ const Owners2UnitTransactions = () => {
     },
     {
       header: 'Type',
-      accessor: 'type',
+      accessor: 'category',
       filterable: true,
-      filterType: 'select',
+      filterType: 'autocomplete',
       width: '170px',
       minWidth: '170px',
       render: (value, row) => {
@@ -532,23 +546,30 @@ const Owners2UnitTransactions = () => {
               />
             )}
           />
-          <FormControl size="small" sx={{ width: 160, ...controlSx }}>
-            <InputLabel id="unit-transactions-type-filter-label">Type</InputLabel>
-            <Select
-              labelId="unit-transactions-type-filter-label"
-              id="unit-transactions-type-filter"
-              value={filterValues.type}
-              label="Type"
-              onChange={(event) => handleFilterChange('type', event.target.value)}
-            >
-              <MenuItem value="">All types</MenuItem>
-              {typeOptions.map((type) => (
-                <MenuItem key={type} value={type}>
-                  {type}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            size="small"
+            options={categoryOptions}
+            value={categoryOptions.includes(filterValues.category) ? filterValues.category : null}
+            inputValue={filterValues.category}
+            onChange={(_, value) => handleFilterChange('category', value)}
+            onInputChange={(_, value, reason) => {
+              if (reason !== 'reset') {
+                handleFilterChange('category', value);
+              }
+            }}
+            sx={{ width: 220, ...controlSx }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Type"
+                placeholder="All types"
+                inputProps={{
+                  ...params.inputProps,
+                  'aria-label': 'Filter by type',
+                }}
+              />
+            )}
+          />
           <TextField
             size="small"
             label="Description"
@@ -567,9 +588,9 @@ const Owners2UnitTransactions = () => {
           />
           <Button
             variant="outlined"
-            sx={utilityButtonSx}
+            sx={clearFiltersButtonSx}
             disabled={!hasActiveFilters}
-            onClick={() => setFilterValues({ ...INITIAL_FILTER_VALUES })}
+            onClick={clearFilters}
           >
             Clear Filters
           </Button>
