@@ -1,24 +1,94 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api';
 import { ArrowDownCircleIcon, ArrowUpCircleIcon, ArrowPathIcon, SparklesIcon } from '@heroicons/react/24/solid';
-import { CheckCircleIcon, ClockIcon, XCircleIcon } from '@heroicons/react/24/solid';
+import { CheckCircleIcon, ClipboardDocumentCheckIcon, ClockIcon, ExclamationCircleIcon, XCircleIcon } from '@heroicons/react/24/solid';
 import AppShell from '../components/layout/AppShell';
 import Page from '../components/layout/Page';
 import AppDrawer from '../components/common/AppDrawer';
 import { getCleaningTypeLabel } from '../mobile/cleaningsModel';
-import { Alert, Box, TextField, Typography } from '@mui/material';
+import { Alert, Box, Menu, MenuItem, TextField, Typography } from '@mui/material';
 
-function CleaningStatusIcon({ row }) {
+function CleaningStatusIcon({ row, onChanged }) {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [busy, setBusy] = useState(false);
+
   if (!row?.event_check_out && !row?.event_cleaning_only) return null;
 
-  const status = String(row?.hk_status ?? row?.hk?.status ?? 'pending').toLowerCase();
+  const rawStatus = String(row?.hk_status ?? row?.hk?.status ?? 'pending').toLowerCase();
+  const reportStatus = String(row?.hk_report_status ?? '').toLowerCase();
+  let status = rawStatus;
+  if (rawStatus !== 'cancelled' && (reportStatus === 'reported' || reportStatus === 'needs_review')) {
+    status = reportStatus;
+  }
+  const hkId = row?.hk_cleaning_id ?? row?.hk?.id ?? null;
+  const reservationCode = row?.reservation_code ?? row?.reservationCode ?? null;
+
+  const iconStyle = { width: 18, height: 18 };
+  let icon;
   if (status === 'cancelled') {
-    return <XCircleIcon title="Cancelled" style={{ width: 18, height: 18, color: '#d32f2f' }} />;
+    icon = <XCircleIcon title="Cancelled" style={{ ...iconStyle, color: '#d32f2f' }} />;
+  } else if (status === 'reported') {
+    icon = <ClipboardDocumentCheckIcon title="Reported" style={{ ...iconStyle, color: '#1976d2' }} />;
+  } else if (status === 'needs_review') {
+    icon = <ExclamationCircleIcon title="Needs review" style={{ ...iconStyle, color: '#f97316' }} />;
+  } else if (status === 'done') {
+    icon = <CheckCircleIcon title="Done" style={{ ...iconStyle, color: '#2e7d32' }} />;
+  } else {
+    icon = <ClockIcon title="Pending" style={{ ...iconStyle, color: '#ed9b00' }} />;
   }
-  if (status === 'done') {
-    return <CheckCircleIcon title="Done" style={{ width: 18, height: 18, color: '#2e7d32' }} />;
+
+  const locked = status === 'reported' || status === 'needs_review';
+  const close = () => setAnchorEl(null);
+
+  const apply = async (next) => {
+    close();
+    if (next === 'cancelled' && !window.confirm('Mark this cleaning as cancelled?')) return;
+    setBusy(true);
+    try {
+      if (hkId) {
+        await api.put(`/api/hk-cleanings/${hkId}`, { status: next });
+      } else if (next === 'done' && reservationCode) {
+        await api.post('/api/hk-cleanings/mark-done-by', {
+          unitId: row.unit_id,
+          checkoutDate: row.check_out,
+          reservationCode,
+          createIfMissing: true,
+        }, { headers: { Accept: 'application/json' } });
+      } else {
+        throw new Error('This checkout has no cleaning yet.');
+      }
+      if (onChanged) await onChanged();
+    } catch (e) {
+      alert(`Could not update the cleaning: ${e?.response?.data?.error || e?.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canDone = rawStatus !== 'done';
+  const canCancel = Boolean(hkId) && rawStatus !== 'cancelled';
+
+  if (locked) {
+    return <span style={{ display: 'flex' }}>{icon}</span>;
   }
-  return <ClockIcon title="Pending" style={{ width: 18, height: 18, color: '#ed9b00' }} />;
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={busy}
+        aria-label="Change cleaning status"
+        onClick={(e) => { e.stopPropagation(); setAnchorEl(e.currentTarget); }}
+        style={{ display: 'flex', padding: 0, border: 0, background: 'none', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}
+      >
+        {icon}
+      </button>
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={close} onClick={(e) => e.stopPropagation()}>
+        <MenuItem disabled={!canDone} onClick={() => apply('done')}>Mark as done</MenuItem>
+        <MenuItem disabled={!canCancel} onClick={() => apply('cancelled')}>Mark as cancelled</MenuItem>
+      </Menu>
+    </>
+  );
 }
 
 function ActivityDetailsPanel({ activity, open, onClose, onSaved }) {
@@ -123,6 +193,8 @@ function ActivityDetailsPanel({ activity, open, onClose, onSaved }) {
               label="Status"
               value={values.status}
               onChange={updateValue('status')}
+              disabled={['reported', 'needs_review'].includes(String(activity.hk_report_status ?? '').toLowerCase())
+                && String(activity.hk_status ?? '').toLowerCase() !== 'cancelled'}
               size="small"
               fullWidth
               SelectProps={{ native: true }}
@@ -559,7 +631,7 @@ const CheckInOutView = () => {
                                   {turnoverIds.has(r.unit_id)
                                     ? <ArrowPathIcon style={{ display: 'block', width: 16, height: 16, color: '#e53935' }} />
                                     : <ArrowUpCircleIcon style={{ display: 'block', width: 16, height: 16, color: '#e53935' }} />}
-                                  <CleaningStatusIcon row={r} />
+                                  <CleaningStatusIcon row={r} onChanged={fetchData} />
                                 </span>
                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                                   <span style={{ fontSize: 16, whiteSpace: 'nowrap' }}>
@@ -617,7 +689,7 @@ const CheckInOutView = () => {
                               <div key={`c-${i}`} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 0' }}>
                                 <span style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 3, flex: '0 0 auto', marginTop: 1 }}>
                                   <SparklesIcon style={{ display: 'block', width: 16, height: 16, color: '#7e57c2' }} />
-                                  <CleaningStatusIcon row={r} />
+                                  <CleaningStatusIcon row={r} onChanged={fetchData} />
                                 </span>
                                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                                   <span style={{ fontSize: 16, whiteSpace: 'nowrap' }}>
@@ -705,7 +777,7 @@ const CheckInOutView = () => {
                         )}
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', alignSelf: 'flex-start', marginTop: 1 }}>
-                        <CleaningStatusIcon row={r} />
+                        <CleaningStatusIcon row={r} onChanged={fetchData} />
                       </span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 13 }}>
                         <span>
