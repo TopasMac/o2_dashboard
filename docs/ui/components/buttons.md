@@ -102,8 +102,9 @@ per page or toolbar group.
 ## Table toolbar usage
 
 On standard desktop table pages, put the primary page action in the
-title/actions row. Group it with secondary page actions and right-align that
-group opposite the page title.
+title/actions row. When it is the only page action, it may sit immediately
+after the page title. Group secondary and utility actions on the right,
+opposite the title.
 
 Order actions logically:
 

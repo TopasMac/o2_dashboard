@@ -21,14 +21,15 @@ The standard toolbar has two logical rows:
 1. Title and page actions
 2. Filters and search, when present
 
-The title appears on the left. Page-level actions are grouped and right-aligned
-on the same row. Filters and search appear below that row. Do not force an
-empty filters row when a page has no filters.
+The title appears on the left. A single primary action may appear immediately
+after the title. Secondary and utility actions are grouped and right-aligned on
+the same row. Filters and search appear below that row. Do not force an empty
+filters row when a page has no filters.
 
 Complex page:
 
 ```text
-Bookings                                  [+ New Booking] [Export]
+Bookings   [+ New Booking]                                  [Export]
 
 [Check-in] [Check-out] [Status] [Unit] [Search...] [Clear Filters]
 ```
@@ -36,7 +37,7 @@ Bookings                                  [+ New Booking] [Export]
 Simple page:
 
 ```text
-Clients                                            [+ New Client]
+Clients   [+ New Client]
 
 [Search clients...] [Clear Filters]
 ```
@@ -55,6 +56,7 @@ hierarchy merely to force all controls onto one row.
   actions={...}
   filters={...}
   layout="stacked"
+  actionPlacement="adjacent"
 />
 ```
 
@@ -64,6 +66,8 @@ hierarchy merely to force all controls onto one row.
 - `layout` expresses the intended density: `stacked` keeps filters on their
   own row, `inline` keeps logical groups on one row when that is appropriate,
   and `auto` selects a compact wrapping arrangement.
+- `actionPlacement` defaults to `right`; use `adjacent` when the page has one
+  primary action that should sit beside its title.
 
 The page owns each slot's business logic and control types; the toolbar owns
 their logical grouping, order, and layout.

@@ -5,8 +5,7 @@ import TableToolbar from '../components/layout/TableToolbar';
 import AppDrawer from '../components/common/AppDrawer';
 import UnitTransactionEditFormRHF from '../components/forms/UnitTransactionEditFormRHF';
 import UnitTransactionNewFormRHF from '../components/forms/UnitTransactionNewFormRHF';
-import NewClientUnitNote from '../components/forms/NewClientUnitNote';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DocumentPreview from '../components/common/DocumentPreview';
 import { HiOutlineDocumentText } from 'react-icons/hi';
 import {
@@ -60,7 +59,6 @@ const Owners2UnitTransactions = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [newDrawerOpen, setNewDrawerOpen] = useState(false);
-  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewTitle, setPreviewTitle] = useState('Document Preview');
@@ -500,13 +498,11 @@ const Owners2UnitTransactions = () => {
     <TableToolbar
       title="Unit Transactions"
       layout="stacked"
+      actionPlacement="adjacent"
       actions={(
         <>
           <Button variant="contained" sx={primaryButtonSx} onClick={() => setNewDrawerOpen(true)}>
             + New Transaction
-          </Button>
-          <Button component={Link} to="/report-comments" variant="outlined" sx={secondaryButtonSx}>
-            View Comments
           </Button>
         </>
       )}
@@ -671,31 +667,6 @@ const Owners2UnitTransactions = () => {
                 }),
               );
             }
-          }}
-        />
-      </AppDrawer>
-      <AppDrawer
-        anchor="right"
-        open={commentDrawerOpen}
-        size="default"
-        onClose={() => {
-          setCommentDrawerOpen(false);
-          fetchTransactions(); // refresh table on close
-        }}
-      >
-        <NewClientUnitNote
-          unitId={null}
-          onClose={() => {
-            setCommentDrawerOpen(false);
-            fetchTransactions(); // refresh table on close
-          }}
-          onCancel={() => {
-            setCommentDrawerOpen(false);
-            fetchTransactions(); // refresh table on cancel
-          }}
-          onSave={() => {
-            setCommentDrawerOpen(false);
-            fetchTransactions(); // refresh table on save
           }}
         />
       </AppDrawer>

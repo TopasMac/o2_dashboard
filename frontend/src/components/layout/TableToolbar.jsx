@@ -15,6 +15,7 @@ export default function TableToolbar({
   actions,
   filters,
   layout = 'auto',
+  actionPlacement = 'right',
   'aria-label': ariaLabel = 'Table controls',
 }) {
   const theme = useTheme();
@@ -29,6 +30,7 @@ export default function TableToolbar({
 
   const isStacked = layout === 'stacked';
   const isInline = layout === 'inline';
+  const hasAdjacentActions = hasActions && actionPlacement === 'adjacent';
 
   return (
     <Box
@@ -54,7 +56,7 @@ export default function TableToolbar({
           sx={{
             m: 0,
             minWidth: 0,
-            flex: '1 1 auto',
+            flex: hasAdjacentActions ? '0 1 auto' : '1 1 auto',
             color: tokens.colors.textPrimary,
             fontSize: '1.25rem',
             fontWeight: 600,
@@ -75,7 +77,9 @@ export default function TableToolbar({
             gap: 1,
             minWidth: 0,
             flex: hasTitle || isInline ? '0 0 auto' : '0 1 auto',
-            marginLeft: hasTitle ? 'auto' : 0,
+            marginLeft: hasTitle
+              ? (hasAdjacentActions ? 4 : 'auto')
+              : 0,
             whiteSpace: 'nowrap',
           }}
         >
@@ -112,5 +116,6 @@ TableToolbar.propTypes = {
   actions: PropTypes.node,
   filters: PropTypes.node,
   layout: PropTypes.oneOf(['auto', 'inline', 'stacked']),
+  actionPlacement: PropTypes.oneOf(['right', 'adjacent']),
   'aria-label': PropTypes.string,
 };

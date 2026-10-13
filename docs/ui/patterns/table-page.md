@@ -31,7 +31,7 @@ card:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ TITLE                                      PAGE ACTIONS      │
+│ TITLE   PRIMARY ACTION                                      │
 │ FILTERS / SEARCH / CLEAR FILTERS                             │
 ├──────────────────────────────────────────────────────────────┤
 │ TABLE COLUMN HEADERS                                         │
@@ -45,9 +45,10 @@ card:
 └──────────────────────────────────────────────────────────────┘
 ```
 
-The page title sits on the left and page-level actions are grouped on the
-right of the same top row. Do not treat the global TopBar or navigation title
-as sufficient page identity inside the content card.
+The page title sits on the left. When a page has one primary action, place it
+next to the title. When a page has secondary or utility actions, group those
+on the right of the same top row. Do not treat the global TopBar or navigation
+title as sufficient page identity inside the content card.
 
 Do not add a subtitle or description by default. Add one only when a page
 genuinely needs explanatory context that the title and controls cannot provide.

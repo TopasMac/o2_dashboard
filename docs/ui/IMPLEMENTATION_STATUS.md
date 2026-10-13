@@ -57,8 +57,7 @@ Table rows
 Completed and visually validated:
 
 - `Unit Transactions` title inside the white card
-- `+ New Transaction` primary teal action
-- `View Comments` secondary outlined action
+- `+ New Transaction` primary teal action adjacent to the page title
 - Unit autocomplete moved from the table header to the toolbar
 - Type select moved from the table header to the toolbar
 - Description search moved from the table header to the toolbar
