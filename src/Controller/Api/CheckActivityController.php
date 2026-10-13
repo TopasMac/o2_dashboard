@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\AllBookings;
 use App\Entity\Employee;
 use App\Service\CleaningCityScopeService;
+use App\Service\HKCleaningDisplayStatus;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\DBAL\Types\Types;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -259,6 +260,7 @@ class CheckActivityController extends AbstractController
         $hkSql[] = '       h.reservation_code AS reservationCode,';
         $hkSql[] = '       h.assign_notes AS cleaningNotes,';
         $hkSql[] = '       h.status,';
+        $hkSql[] = '       h.report_status AS reportStatus,';
         $hkSql[] = '       h.o2_collected_fee AS collectedFee,';
         $hkSql[] = '       h.assigned_to_id AS assignedToId,';
         $hkSql[] = '       e.short_name AS assignedToShortName,';
@@ -301,6 +303,12 @@ class CheckActivityController extends AbstractController
                 'reservationCode' => $h['reservationCode'] ?? null,
                 'cleaningNotes' => $h['cleaningNotes'] ?? null,
                 'status' => (string)($h['status'] ?? ''),
+                'reportStatus' => isset($h['reportStatus']) ? (string)$h['reportStatus'] : null,
+                'displayStatus' => HKCleaningDisplayStatus::derive(
+                    (string)($h['unitCity'] ?? ''),
+                    (string)($h['status'] ?? ''),
+                    isset($h['reportStatus']) ? (string)$h['reportStatus'] : null,
+                ),
                 'collectedFee' => number_format((float)($h['collectedFee'] ?? 0), 2, '.', ''),
                 'assignedToId' => isset($h['assignedToId']) ? (int)$h['assignedToId'] : null,
                 'assignedToShortName' => isset($h['assignedToShortName']) ? (string)$h['assignedToShortName'] : null,
@@ -327,6 +335,8 @@ class CheckActivityController extends AbstractController
             $row['hk_assigned_to_short_name'] = null;
             $row['hk_cleaning_type'] = null;
             $row['hk_status'] = null;
+            $row['hk_report_status'] = null;
+            $row['hk_display_status'] = null;
             $row['cleaning_notes'] = null;
             $row['cleaner_notes'] = null;
 
@@ -368,6 +378,8 @@ class CheckActivityController extends AbstractController
                     $row['hk_done'] = $isDone;
                     $row['hk_cleaning_type'] = $h['cleaningType'];
                     $row['hk_status'] = $h['status'];
+                    $row['hk_report_status'] = $h['reportStatus'];
+                    $row['hk_display_status'] = $h['displayStatus'];
                     $row['hk_assigned_to_id'] = $h['assignedToId'] ?? null;
                     $row['hk_assigned_to_short_name'] = $h['assignedToShortName'] ?? null;
                     $row['cleaning_notes'] = $h['cleaningNotes'] ?? null;
@@ -411,6 +423,8 @@ class CheckActivityController extends AbstractController
                 'hk_done' => $isDone,
                 'hk_cleaning_type' => $h['cleaningType'],
                 'hk_status' => $h['status'],
+                'hk_report_status' => $h['reportStatus'],
+                'hk_display_status' => $h['displayStatus'],
                 'hk_assigned_to_id' => $h['assignedToId'],
                 'hk_assigned_to_short_name' => $h['assignedToShortName'],
                 'cleaning_notes' => $h['cleaningNotes'],

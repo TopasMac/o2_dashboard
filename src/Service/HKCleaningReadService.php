@@ -153,6 +153,11 @@ class HKCleaningReadService
             $r['bill_to'] = array_key_exists('bill_to', $r) && $r['bill_to'] !== null ? (string)$r['bill_to'] : null;
             $r['source'] = array_key_exists('source', $r) && $r['source'] !== null ? (string)$r['source'] : null;
             $r['report_status'] = array_key_exists('report_status', $r) && $r['report_status'] !== null ? (string)$r['report_status'] : null;
+            $r['display_status'] = HKCleaningDisplayStatus::derive(
+                ($r['unit_city'] ?? null) ?: ($r['city'] ?? null),
+                $r['status'] ?? null,
+                $r['report_status'],
+            );
             $r['real_cleaning_cost'] = array_key_exists('real_cleaning_cost', $r) && $r['real_cleaning_cost'] !== null
                 ? (float)$r['real_cleaning_cost']
                 : null;
