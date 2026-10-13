@@ -9,6 +9,7 @@ import HKCleaningsNewFormRHF from '../components/forms/HKCleaningsNewFormRHF';
 import HKCleaningsRateForm from '../components/forms/HKCleaningsTablePage/HKCleaningsRateForm';
 import HKCleaningsEditFormRHF from '../components/forms/HKCleaningsEditFormRHF';
 import PageScaffold from '../components/layout/PageScaffold';
+import { HK_STATUS_COLORS, HK_STATUS_LABELS, resolveHkStatus } from '../utils/hkStatus';
 import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 
 const formatCurrency = (value) => {
@@ -465,22 +466,13 @@ const HKCleaningsView = () => {
       width: 110,
       cellStyle: { py: 1, px: 1.5, maxWidth: 110 },
       render: (value, row) => {
-        const reportStatus = String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim();
-        if (reportStatus === 'reported') {
-          return <Box component="span" sx={{ color: 'primary.main' }}>Reported</Box>;
-        }
-        if (!value) return '';
-        const v = String(value).toLowerCase();
-        if (v === 'pending') {
-          return <span style={{ color: 'orange' }}>Pending</span>;
-        }
-        if (v === 'done') {
-          return <span style={{ color: '#1E6F68' }}>Done</span>; // teal
-        }
-        if (v === 'cancelled') {
-          return <span style={{ color: '#e57373' }}>Cancelled</span>; // light red
-        }
-        return value;
+        const resolved = row?.display_status ? resolveHkStatus(row) : null;
+        const key = resolved
+          || (String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim() === 'reported'
+            ? 'reported'
+            : String(value ?? '').toLowerCase());
+        if (!HK_STATUS_LABELS[key]) return value || '';
+        return <span style={{ color: HK_STATUS_COLORS[key] }}>{HK_STATUS_LABELS[key]}</span>;
       },
       filter: {
         type: 'select',
@@ -490,9 +482,11 @@ const HKCleaningsView = () => {
           { label: 'Pending', value: 'pending' },
           { label: 'Done', value: 'done' },
           { label: 'Reported', value: 'reported' },
+          { label: 'Needs review', value: 'needs_review' },
           { label: 'Cancelled', value: 'cancelled' },
         ],
         valueAccessor: (row) => {
+          if (row?.display_status) return resolveHkStatus(row);
           const reportStatus = String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim();
           return reportStatus === 'reported' ? 'reported' : row?.status;
         },

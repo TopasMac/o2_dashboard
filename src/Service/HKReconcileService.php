@@ -54,7 +54,8 @@ class HKReconcileService
             );
         }
 
-        // Load DONE hk_cleanings rows for this month + city.
+        // Load hk_cleanings rows for this month + city: all non-cancelled for Playa del Carmen,
+        // DONE only for the other cities.
         // NOTE: Reconciliation is now a view/editor over hk_cleanings (single source of truth).
         $start = $asOf->format('Y-m-01');
         $end   = $asOf->format('Y-m-t');
@@ -76,7 +77,11 @@ class HKReconcileService
             // city may be stored on hk_cleanings or unit; prefer unit when present
             ->andWhere('COALESCE(u.city, hc.city) IN (:cities)')
             ->andWhere('hc.checkoutDate BETWEEN :d1 AND :d2')
-            ->andWhere('LOWER(COALESCE(hc.status, \'\')) = \'done\'')
+            ->andWhere(
+                '(COALESCE(u.city, hc.city) = :playa AND LOWER(COALESCE(hc.status, \'\')) <> \'cancelled\')'
+                . ' OR (COALESCE(u.city, hc.city) <> :playa AND LOWER(COALESCE(hc.status, \'\')) = \'done\')'
+            )
+            ->setParameter('playa', 'Playa del Carmen')
             ->setParameter('cities', $cities)
             ->setParameter('d1', new \DateTimeImmutable($start))
             ->setParameter('d2', new \DateTimeImmutable($end))
@@ -116,8 +121,13 @@ class HKReconcileService
 
             $diff = $chargedF - $totalCostF;
 
-            $sumCharged += $chargedF;
-            $sumCost += $totalCostF;
+            $displayStatus = HKCleaningDisplayStatus::derive($rowCity, $hc->getStatus(), $hc->getReportStatus());
+
+            // Playa totals only include cleanings marked as reported.
+            if ($displayStatus === null || $displayStatus === HKCleaningDisplayStatus::REPORTED) {
+                $sumCharged += $chargedF;
+                $sumCost += $totalCostF;
+            }
 
             $serviceDate = $hc->getCheckoutDate();
 
@@ -143,6 +153,8 @@ class HKReconcileService
                 'bill_to'       => method_exists($hc, 'getBillTo') ? $hc->getBillTo() : null,
                 'source'        => method_exists($hc, 'getSource') ? $hc->getSource() : null,
                 'report_status' => method_exists($hc, 'getReportStatus') ? $hc->getReportStatus() : null,
+                'status'         => $hc->getStatus(),
+                'display_status' => $displayStatus,
 
                 'notes'         => method_exists($hc, 'getNotes') ? $hc->getNotes() : null,
 
