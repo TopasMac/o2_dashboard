@@ -65,8 +65,8 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `c99a921` — `release: deploy Mobile V2 home and operational improvements (#29)`
-- **GitHub `main`:** `c99a921` — `release: deploy Mobile V2 home and operational improvements (#29)`
+- **Production server checkout last verified:** `0e278ec` — `Merge pull request #57 from TopasMac/develop` (deployed 2026-10-13; rollback point `4c3e275`; no migrations in this release)
+- **GitHub `main`:** `0e278ec` — `Merge pull request #57 from TopasMac/develop`
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
@@ -133,6 +133,8 @@ short-lived branch
 ```
 
 Merging into `main` does not deploy automatically. Before deployment, inspect the production working tree. If it is dirty, stop, archive the changes, reconcile intended behavior into Git, and only then clean the checkout. Confirm the backup, exact target commit, migration plan, rollback plan, and explicit authorization before running `bash deploy.sh`.
+
+Before each pull request from `develop` into `main`, update `FEATURE_INVENTORY.md` for any feature that was kept, retired, or materially redesigned, and update the production commit in this file after the deployment is verified.
 
 After deployment, verify the Git revision, Nginx state, migration status, login, Bookings, and Housekeeping/Cleanings. Retain safety artifacts until the release is confirmed stable.
 
