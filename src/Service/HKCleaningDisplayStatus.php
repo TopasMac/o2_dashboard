@@ -24,6 +24,22 @@ final class HKCleaningDisplayStatus
         return strtolower(trim((string) $city)) === 'playa del carmen';
     }
 
+    /**
+     * Reporting a Playa del Carmen cleaning means it was performed, so a cleaning
+     * that is not yet done (and not cancelled) must be completed.
+     */
+    public static function shouldCompleteWhenReported(?string $city, ?string $status, ?string $reportStatus): bool
+    {
+        if (!self::appliesToCity($city)) {
+            return false;
+        }
+        if (strtolower(trim((string) $reportStatus)) !== HKCleanings::REPORT_STATUS_REPORTED) {
+            return false;
+        }
+
+        return !in_array(strtolower(trim((string) $status)), [HKCleanings::STATUS_DONE, HKCleanings::STATUS_CANCELLED], true);
+    }
+
     public static function derive(?string $city, ?string $status, ?string $reportStatus): ?string
     {
         if (!self::appliesToCity($city)) {
