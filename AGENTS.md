@@ -49,6 +49,20 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 6. Report what changed, what was verified, known limitations, and any manual checks still needed.
 7. Do not commit, push, open or merge a pull request, or deploy unless the user explicitly asks for that step.
 
+## Starting a feature
+
+Before any edits:
+
+1. Run `git fetch origin --prune` and report the current branch and worktree.
+2. If HEAD is detached, or `git log origin/develop..HEAD` or `git status --short` is non-empty, stop and tell the user. Otherwise run `git reset --hard origin/develop`.
+3. Name the branch `feature/<name>` using the name the user provides. Do not choose the name. In an app-managed worktree, rename the app-created branch with the app's rename tool, never raw `git branch -m`. Outside an app worktree, create it with `git switch -c feature/<name> origin/develop`.
+4. Verify and report: branch name, `HEAD == origin/develop`, clean tree.
+5. Never branch from or reuse another feature branch. If the main checkout is on unfinished work, use a separate `git worktree add` from `origin/develop`.
+
+## Finishing a feature
+
+Squash-merged branches are not recognized by `git branch -d`; use `git branch -D feature/<name>` only after confirming the PR is merged. Never delete `develop` or `main`. Remove any worktree first (`git worktree remove <path>`), then delete the branch. GitHub deletes the remote branch on merge; confirm with `git fetch --prune`.
+
 ## Database changes
 
 - Add a focused Doctrine migration for every intended schema change.
