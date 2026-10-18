@@ -112,6 +112,7 @@ Housekeeping completion policy:
 - Overdue cleanings remain pending and should be highlighted by the client rather than silently completed.
 - Cleaning statuses are unified through a single display-status service (`HKCleaningDisplayStatus`) shared by the cleanings view, check-in/out view, and reconciliation (#56).
 - HK reconciliation autosaves edits instead of requiring a manual save (#56).
+- Marking a Playa del Carmen cleaning `reported` in HK reconciliation completes it (`done`, with `done_at`) unless it is already done or cancelled, so reported cleanings reach the unit month report's gastos. Existing `reported` + `pending` rows need a separate, backed-up data fix.
 
 The local production-derived snapshot contains 40 post-2026-06-01 `done` cleanings with neither `done_at` nor an employee and no submitted checklist. These are strong candidates for historical automatic completion, but any correction must be a separate backed-up, reviewed data operation because older manual bulk actions may be indistinguishable.
 

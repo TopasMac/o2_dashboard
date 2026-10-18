@@ -33,6 +33,28 @@ final class HKCleaningDisplayStatusTest extends TestCase
         yield 'case insensitive' => ['DONE', 'Pending', 'done'];
     }
 
+    #[DataProvider('completeWhenReportedCases')]
+    public function testShouldCompleteWhenReported(?string $city, string $status, ?string $reportStatus, bool $expected): void
+    {
+        self::assertSame($expected, HKCleaningDisplayStatus::shouldCompleteWhenReported($city, $status, $reportStatus));
+    }
+
+    /**
+     * @return iterable<string, array{?string, string, ?string, bool}>
+     */
+    public static function completeWhenReportedCases(): iterable
+    {
+        yield 'pending reported' => [self::PLAYA, 'pending', 'reported', true];
+        yield 'scheduled reported' => [self::PLAYA, 'scheduled', 'Reported', true];
+        yield 'already done' => [self::PLAYA, 'done', 'reported', false];
+        yield 'cancelled stays cancelled' => [self::PLAYA, 'cancelled', 'reported', false];
+        yield 'pending not reported' => [self::PLAYA, 'pending', 'pending', false];
+        yield 'needs review stays pending' => [self::PLAYA, 'pending', 'needs_review', false];
+        yield 'null report' => [self::PLAYA, 'pending', null, false];
+        yield 'other city unaffected' => ['Tulum', 'pending', 'reported', false];
+        yield 'no city' => [null, 'pending', 'reported', false];
+    }
+
     public function testOtherCitiesKeepLegacyBehavior(): void
     {
         self::assertNull(HKCleaningDisplayStatus::derive('Tulum', 'done', 'pending'));

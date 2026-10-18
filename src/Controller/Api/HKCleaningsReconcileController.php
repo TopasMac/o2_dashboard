@@ -4,6 +4,7 @@ namespace App\Controller\Api;
 
 use App\Entity\HKCleanings;
 use App\Service\HKCleaningDisplayStatus;
+use App\Service\HKCleaningManager;
 use App\Service\HKReconcileService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -66,7 +67,7 @@ class HKCleaningsReconcileController extends AbstractController
     }
 
     #[Route('/{id<\d+>}', name: 'api_hk_reconcile_update', methods: ['PUT'])]
-    public function update(int $id, Request $request, EntityManagerInterface $em): JsonResponse
+    public function update(int $id, Request $request, EntityManagerInterface $em, HKCleaningManager $cleaningManager): JsonResponse
     {
         $payload = [];
         try {
@@ -357,6 +358,11 @@ class HKCleaningsReconcileController extends AbstractController
                 // ignore rollback errors
             }
             throw $e;
+        }
+
+        // Reporting a cleaning means it was performed: complete it explicitly (Admin/Manager action).
+        if (HKCleaningDisplayStatus::shouldCompleteWhenReported($hk->getCity(), $hk->getStatus(), $hk->getReportStatus())) {
+            $cleaningManager->completeCleaning($hk);
         }
 
         return $this->json([
