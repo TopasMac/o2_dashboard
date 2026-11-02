@@ -19,6 +19,7 @@ import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import CleaningServicesRoundedIcon from '@mui/icons-material/CleaningServicesRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined';
 import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import PersonOutlineRoundedIcon from '@mui/icons-material/PersonOutlineRounded';
@@ -127,7 +128,16 @@ function CleaningTypeLine({ cleaningType }) {
   );
 }
 
-function AccessDetail({ label, value, copyable = false, copied = false, onCopy }) {
+function getSafeMapsUrl(value) {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+function AccessDetail({ label, value, copyable = false, copied = false, onCopy, mapsUrl = '' }) {
   const displayValue = String(value || '').trim() || '–';
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', gap: 1, py: 0.9 }}>
@@ -147,6 +157,19 @@ function AccessDetail({ label, value, copyable = false, copied = false, onCopy }
           sx={{ color: copied ? '#2f8f62' : '#1E6F68' }}
         >
           {copied ? <CheckRoundedIcon fontSize="small" /> : <ContentCopyRoundedIcon fontSize="small" />}
+        </IconButton>
+      ) : null}
+      {mapsUrl ? (
+        <IconButton
+          size="small"
+          component="a"
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Abrir en Google Maps"
+          sx={{ color: '#1E6F68' }}
+        >
+          <PlaceOutlinedIcon />
         </IconButton>
       ) : null}
     </Box>
@@ -201,7 +224,7 @@ function AccessPanel({ card, open, onClose }) {
       </Box>
 
       <Typography sx={{ color: '#1E6F68', fontSize: 12, fontWeight: 850 }}>UBICACIÓN</Typography>
-      <AccessDetail label="Condominio" value={access.condoName} />
+      <AccessDetail label="Condominio" value={access.condoName} mapsUrl={getSafeMapsUrl(access.condoGoogleMaps)} />
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 2 }}>
         <AccessDetail label="Número de unidad" value={access.unitNumber} />
         <AccessDetail label="Piso" value={access.unitFloor} />

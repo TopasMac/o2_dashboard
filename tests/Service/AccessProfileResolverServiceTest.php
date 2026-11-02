@@ -21,6 +21,7 @@ final class AccessProfileResolverServiceTest extends TestCase
         );
 
         self::assertContains('mobile.cleanings.view', $permissions);
+        self::assertContains('mobile.units.view', $permissions);
         self::assertContains('city.playa', $permissions);
         self::assertNotContains('mobile.calendar.view', $permissions);
         self::assertNotContains('access.all', $permissions);
