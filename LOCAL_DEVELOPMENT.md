@@ -118,7 +118,7 @@ feature branch -> develop -> main -> explicit production deployment
 
 Merging into `main` does not deploy automatically. Database changes require a focused, reviewed Doctrine migration and a production backup before deployment.
 
-The production deployment script builds the React application in `frontend/build/` and then publishes that build into Symfony's `public/` directory without deleting backend entry points or uploaded files. Generated frontend files in `public/` are ignored by Git; Symfony's `public/index.php`, `public/router.php`, and `public/.htaccess` remain versioned. The separate mobile S3 upload and CloudFront invalidation are still required after releases that change the frontend.
+The production deployment script builds the React application in `frontend/build/` and then publishes that build into Symfony's `public/` directory without deleting backend entry points or uploaded files. Generated frontend files in `public/` are ignored by Git; Symfony's `public/index.php`, `public/router.php`, and `public/.htaccess` remain versioned. The separate mobile S3 upload and CloudFront invalidation are still required after releases that change the frontend. The `deploy.sh` completion message covers the server deployment only. See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete production procedure.
 
 ## Stop local services
 
