@@ -28,19 +28,20 @@ describe('Mobile V2 feature access', () => {
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.dashboard)).toBe(false);
   });
 
-  test('allows a cleaner to access only the cleanings feature during the pilot', () => {
+  test('allows a cleaner to access only the cleanings and units features during the pilot', () => {
     const access = {
       isAdmin: false,
       isCleaner: true,
       isEnabled: true,
       isLoading: false,
-      permissions: ['mobile.cleanings.view'],
+      permissions: ['mobile.cleanings.view', 'mobile.units.view'],
     };
 
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.dashboard)).toBe(false);
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(true);
-    expect(getAccessibleMobileFeatures(access).map((feature) => feature.id)).toEqual(['cleanings']);
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.units)).toBe(true);
+    expect(getAccessibleMobileFeatures(access).map((feature) => feature.id)).toEqual(['cleanings', 'units']);
     expect(getMobileV2EntryPath(access)).toBe('/m/v2/cleanings');
   });
 
@@ -55,6 +56,7 @@ describe('Mobile V2 feature access', () => {
 
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.calendar)).toBe(false);
     expect(canAccessMobileFeature(access, MOBILE_FEATURES.cleanings)).toBe(false);
+    expect(canAccessMobileFeature(access, MOBILE_FEATURES.units)).toBe(false);
   });
 
   test('only returns implemented features for navigation', () => {
@@ -69,6 +71,7 @@ describe('Mobile V2 feature access', () => {
       'dashboard',
       'calendar',
       'cleanings',
+      'units',
     ]);
     expect(getMobileV2EntryPath(access)).toBe('/m/v2');
   });
