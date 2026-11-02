@@ -208,7 +208,8 @@ class CheckActivityController extends AbstractController
             $accessSql[] = '       u.wifi_name AS wifiName,';
             $accessSql[] = '       u.wifi_password AS wifiPassword,';
             $accessSql[] = '       c.condo_name AS condoName,';
-            $accessSql[] = '       c.door_code AS condoDoorCode';
+            $accessSql[] = '       c.door_code AS condoDoorCode,';
+            $accessSql[] = '       c.google_maps AS condoGoogleMaps';
             $accessSql[] = 'FROM unit u';
             $accessSql[] = 'LEFT JOIN condo c ON c.id = u.condo_id';
             $accessSql[] = 'WHERE u.id IN (' . implode(',', array_map('intval', array_keys($unitIds))) . ')';
@@ -228,6 +229,7 @@ class CheckActivityController extends AbstractController
                     'wifi_password' => $accessRow['wifiPassword'] ?? null,
                     'condo_name' => $accessRow['condoName'] ?? null,
                     'condo_door_code' => $accessRow['condoDoorCode'] ?? null,
+                    'condo_google_maps' => $accessRow['condoGoogleMaps'] ?? null,
                 ];
             }
         }
@@ -243,6 +245,7 @@ class CheckActivityController extends AbstractController
             $row['wifi_password'] = $access['wifi_password'] ?? null;
             $row['condo_name'] = $access['condo_name'] ?? null;
             $row['condo_door_code'] = $access['condo_door_code'] ?? null;
+            $row['condo_google_maps'] = $access['condo_google_maps'] ?? null;
         }
         unset($row);
 
@@ -271,7 +274,8 @@ class CheckActivityController extends AbstractController
         $hkSql[] = '       u.wifi_name AS wifiName,';
         $hkSql[] = '       u.wifi_password AS wifiPassword,';
         $hkSql[] = '       c.condo_name AS condoName,';
-        $hkSql[] = '       c.door_code AS condoDoorCode';
+        $hkSql[] = '       c.door_code AS condoDoorCode,';
+            $hkSql[] = '       c.google_maps AS condoGoogleMaps';
         $hkSql[] = 'FROM hk_cleanings h';
         $hkSql[] = 'LEFT JOIN unit u ON u.id = h.unit_id';
         $hkSql[] = 'LEFT JOIN condo c ON c.id = u.condo_id';
@@ -320,6 +324,7 @@ class CheckActivityController extends AbstractController
                 'wifiPassword' => $h['wifiPassword'] ?? null,
                 'condoName' => $h['condoName'] ?? null,
                 'condoDoorCode' => $h['condoDoorCode'] ?? null,
+                'condoGoogleMaps' => $h['condoGoogleMaps'] ?? null,
             ];
             $hkRows[] = $normalized;
             $hkIndex[$normalized['unitId']][$normalized['checkoutDate']][] = $normalized;
@@ -445,6 +450,7 @@ class CheckActivityController extends AbstractController
                 'wifi_password' => $canViewUnitAccess ? $h['wifiPassword'] : null,
                 'condo_name' => $canViewUnitAccess ? $h['condoName'] : null,
                 'condo_door_code' => $canViewUnitAccess ? $h['condoDoorCode'] : null,
+                'condo_google_maps' => $canViewUnitAccess ? $h['condoGoogleMaps'] : null,
             ];
         }
 

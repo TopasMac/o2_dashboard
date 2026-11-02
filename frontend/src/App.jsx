@@ -68,6 +68,7 @@ import MobileV2Shell from './mobile/MobileV2Shell';
 import MobileV2Home from './mobile/MobileV2Home';
 import MobileV2Calendar from './mobile/MobileV2Calendar';
 import MobileV2Cleanings from './mobile/MobileV2Cleanings';
+import MobileV2Units from './mobile/MobileV2Units';
 import MobileV2EntryRedirect from './mobile/MobileV2EntryRedirect';
 import { MOBILE_FEATURES } from './mobile/mobileFeatures';
 
@@ -386,6 +387,20 @@ function App() {
                 {(access) => (
                   <MobileV2Shell access={access}>
                     <MobileV2Cleanings access={access} />
+                  </MobileV2Shell>
+                )}
+              </MobileV2AccessGate>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/m/v2/units"
+          element={
+            <PrivateRoute>
+              <MobileV2AccessGate feature={MOBILE_FEATURES.units}>
+                {(access) => (
+                  <MobileV2Shell access={access}>
+                    <MobileV2Units />
                   </MobileV2Shell>
                 )}
               </MobileV2AccessGate>

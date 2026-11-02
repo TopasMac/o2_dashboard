@@ -13,14 +13,31 @@ import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { getAccessibleMobileFeatures } from './mobileFeatures';
 
 const NAV_ICONS = {
-  dashboard: HomeRoundedIcon,
+  units: HomeRoundedIcon,
   calendar: CalendarMonthRoundedIcon,
+  dashboard: null,
   cleanings: CleaningServicesRoundedIcon,
 };
 
+// Left to right: Unidades, Calendario, Inicio (HausIn logo), Limpiezas.
+const NAV_ORDER = ['units', 'calendar', 'dashboard', 'cleanings'];
+
+function HausInLogo() {
+  return (
+    <Box
+      component="img"
+      src="/branding/hausin/hausin-mark.png"
+      alt=""
+      sx={{ width: 48, height: 48, bgcolor: '#fff', borderRadius: '50%', p: '5px', boxSizing: 'border-box', display: 'block' }}
+    />
+  );
+}
+
 export default function MobileV2Shell({ access, children, disableScroll = false }) {
   const navigate = useNavigate();
-  const navigation = getAccessibleMobileFeatures(access);
+  const navigation = getAccessibleMobileFeatures(access).sort(
+    (a, b) => NAV_ORDER.indexOf(a.id) - NAV_ORDER.indexOf(b.id)
+  );
 
   React.useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -129,32 +146,46 @@ export default function MobileV2Shell({ access, children, disableScroll = false 
         }}
       >
         <Toolbar sx={{ minHeight: 60, px: 1.5, justifyContent: 'space-between' }}>
-          <Box sx={{ minWidth: 72 }}>
+          <Box sx={{ width: 72, flexShrink: 0 }}>
             <Typography noWrap sx={{ fontWeight: 800, fontSize: 14, lineHeight: 1.1 }}>
               HausIn
             </Typography>
           </Box>
 
-          <Box component="nav" aria-label="Navegación móvil" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {navigation.map((feature) => {
-              const NavigationIcon = NAV_ICONS[feature.id];
-              if (!NavigationIcon) return null;
-              return (
-                <IconButton
-                  key={feature.id}
-                  component={NavLink}
-                  to={feature.path}
-                  aria-label={feature.label}
-                  title={feature.label}
-                  style={({ isActive }) => ({
-                    color: isActive ? '#ffffff' : 'rgba(255,255,255,.58)',
-                    background: isActive ? 'rgba(255,255,255,.15)' : 'transparent',
-                  })}
-                >
-                  <NavigationIcon />
-                </IconButton>
-              );
-            })}
+          <Box
+            component="nav"
+            aria-label="Navegación móvil"
+            sx={{ flex: 1, minWidth: 0, display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', columnGap: 1 }}
+          >
+            {[
+              { key: 'left', ids: ['units', 'calendar'], justify: 'flex-end' },
+              { key: 'center', ids: ['dashboard'], justify: 'center' },
+              { key: 'right', ids: ['cleanings'], justify: 'flex-start' },
+            ].map((group) => (
+              <Box key={group.key} sx={{ display: 'flex', alignItems: 'center', justifyContent: group.justify, gap: 1 }}>
+                {navigation.filter((feature) => group.ids.includes(feature.id)).map((feature) => {
+                  const NavigationIcon = NAV_ICONS[feature.id];
+                  const isLogo = !NavigationIcon;
+                  return (
+                    <IconButton
+                      key={feature.id}
+                      component={NavLink}
+                      to={feature.path}
+                      aria-label={feature.label}
+                      title={feature.label}
+                      sx={isLogo ? { p: 0.25 } : undefined}
+                      style={({ isActive }) => ({
+                        color: isActive ? '#ffffff' : 'rgba(255,255,255,.58)',
+                        background: isActive && !isLogo ? 'rgba(255,255,255,.15)' : 'transparent',
+                        opacity: isLogo && !isActive ? 0.8 : 1,
+                      })}
+                    >
+                      {isLogo ? <HausInLogo /> : <NavigationIcon />}
+                    </IconButton>
+                  );
+                })}
+              </Box>
+            ))}
           </Box>
 
           <IconButton color="inherit" onClick={handleLogout} aria-label="Salir" title="Salir">

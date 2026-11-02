@@ -23,6 +23,14 @@ export const MOBILE_FEATURES = Object.freeze({
     permission: 'mobile.cleanings.view',
     available: true,
   }),
+  units: Object.freeze({
+    id: 'units',
+    label: 'Unidades',
+    description: 'Información de acceso de todas las unidades',
+    path: '/m/v2/units',
+    permission: 'mobile.units.view',
+    available: true,
+  }),
   unitTransactions: Object.freeze({
     id: 'unitTransactions',
     label: 'Transacciones de unidades',
@@ -43,8 +51,8 @@ export const MOBILE_FEATURES = Object.freeze({
 
 export const MOBILE_FEATURE_LIST = Object.freeze(Object.values(MOBILE_FEATURES));
 
-// Controlled first non-admin rollout: Cleaners may use only the cleanings
-// feature when their server-issued profile includes its permission. Managers
+// Controlled first non-admin rollout: Cleaners may use only the cleanings and
+// units features when their server-issued profile includes its permission. Managers
 // and every other non-admin profile remain outside Mobile V2 for now.
 export const MOBILE_V2_CLEANER_PILOT = true;
 
@@ -68,7 +76,7 @@ export function canAccessMobileFeature(access, feature) {
   if (
     MOBILE_V2_CLEANER_PILOT
     && access.isCleaner
-    && feature.id === 'cleanings'
+    && (feature.id === 'cleanings' || feature.id === 'units')
   ) {
     return permissions.includes(feature.permission);
   }
