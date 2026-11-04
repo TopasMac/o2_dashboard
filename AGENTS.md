@@ -85,6 +85,8 @@ feature/fix branch -> pull request into develop -> local/staging verification
 
 Merging into `main` is not itself a deployment. The current deployment script pulls `main`, installs dependencies, runs migrations, builds the frontend, and restarts Nginx. Review the change set, migration SQL, backup status, and rollback plan before invoking it.
 
+**Read `DEPLOYMENT.md` before any deployment work.** It is the single authoritative procedure, including the separate mobile S3 publishing and CloudFront invalidation that `deploy.sh` does not perform. The `deploy.sh` completion message covers the server deployment only.
+
 Before every production deployment:
 
 1. Run `git status --short --branch` and record the current production commit.

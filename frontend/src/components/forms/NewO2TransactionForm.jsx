@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import FormLayoutInline from '../layouts/FormLayoutInline';
 import '../layouts/FormLayoutInline.css';
+import SoftwareDescriptionFields from './SoftwareDescriptionFields';
 import api from '../../api';
+import { getActiveSoftwareServices, softwareServices, SOFTWARE_CATEGORY_ID } from '../../utils/recurringSoftware';
 import { useNavigate } from 'react-router-dom';
 
-export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated, onCancel, hideFileUpload = false }) {
+export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated, onCancel, hideFileUpload = false, expenseOnly = false }) {
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -13,6 +15,7 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
   const [isAdmin, setIsAdmin] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
   const EXTERNAL_SERVICE_OPTIONS = ['Alorvacations', 'Servicio Shuttle', 'Tours', 'Otro'];
+  const [softwareCustom, setSoftwareCustom] = useState(false);
   const [extDescOption, setExtDescOption] = useState('');
   const [extCustomDesc, setExtCustomDesc] = useState('');
 
@@ -20,7 +23,7 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
     costCentre: 'Owners2',
     date: '', // user must choose; prevents silent default to "today"
     category: '', // will hold id
-    type: 'Ingreso',
+    type: expenseOnly ? 'Gasto' : 'Ingreso',
     description: '',
     amount: '',
     paid: '',
@@ -167,6 +170,15 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
     [categories, formData.category]
   );
 
+  const isSoftware = Number(selectedCategory?.id) === SOFTWARE_CATEGORY_ID;
+  const softwareMonth = formData.date.slice(0, 7);
+  const softwareOptions = getActiveSoftwareServices(softwareMonth);
+  const isStandardSoftware = softwareServices.some(({ name }) => name === formData.description);
+  const showSoftwareCustom = softwareCustom || (!!formData.description && !isStandardSoftware);
+  const softwareSelection = showSoftwareCustom
+    ? 'Otro'
+    : softwareOptions.includes(formData.description) ? formData.description : '';
+
   // Sync external services description selector with current category/description
   useEffect(() => {
     const isExternal = Number(selectedCategory?.id) === 21;
@@ -251,6 +263,10 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
   const validate = () => {
     if (!formData.date) return 'Fecha es obligatoria';
     if (!formData.category) return 'Categoría es obligatoria';
+    if (isSoftware && !softwareSelection) return 'Seleccione un servicio de Software';
+    if (isSoftware && showSoftwareCustom && !formData.description.trim()) {
+      return 'Especifique la descripción del servicio';
+    }
     const catType = selectedCategory?.type || 'Both';
     if (catType === 'Both') {
       // Categories with type Both: derive amount from Charged - Paid.
@@ -281,12 +297,14 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
       if (diff === 0) {
         return 'La diferencia entre Charged y Paid debe ser distinta de cero';
       }
+      if (expenseOnly && diff > 0) return 'Paid debe ser mayor que Charged para registrar un gasto';
       // skip amount validation for this case
     } else {
       if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
         return 'Monto debe ser un número positivo';
       }
     }
+    if (expenseOnly && formData.type !== 'Gasto') return 'Seleccione una categoría de gasto';
     // Validate direction against category
     if (selectedCategory) {
       if (selectedCategory.type === 'Ingreso' && formData.type !== 'Ingreso') return 'La categoría es solo de ingreso';
@@ -419,6 +437,7 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
         comments: '',
       }));
       setUploadFile(null);
+      setSoftwareCustom(false);
 
       const handler = onSaved || onCreated;
       if (handler) {
@@ -510,12 +529,13 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
           value={formData.category}
           onChange={(e) => {
             const id = e.target.value;
+            setSoftwareCustom(false);
             setFormData((p) => ({ ...p, category: id }));
           }}
           style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
         >
           <option value="">Seleccione…</option>
-          {categories.map((c) => (
+          {categories.filter((c) => !expenseOnly || c.type !== 'Ingreso').map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
@@ -532,7 +552,19 @@ export default function NewO2TransactionForm({ defaultValues, onSaved, onCreated
       {/* Descripción */}
       <div className="form-row" style={{ minWidth: 0 }}>
         <label>Descripción</label>
-        {(Number(selectedCategory?.id) === 21) ? (
+        {isSoftware ? (
+          <SoftwareDescriptionFields
+            selection={softwareSelection}
+            options={softwareOptions}
+            showCustom={showSoftwareCustom}
+            description={formData.description}
+            onSelectionChange={(option) => {
+              setSoftwareCustom(option === 'Otro');
+              setFormData((prev) => ({ ...prev, description: option === 'Otro' ? '' : option }));
+            }}
+            onDescriptionChange={(description) => setFormData((prev) => ({ ...prev, description }))}
+          />
+        ) : (Number(selectedCategory?.id) === 21) ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
             <select
               value={extDescOption || ''}

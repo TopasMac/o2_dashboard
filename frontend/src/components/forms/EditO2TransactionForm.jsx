@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import FormLayoutInline from '../layouts/FormLayoutInline';
 import '../layouts/FormLayoutInline.css';
+import SoftwareDescriptionFields from './SoftwareDescriptionFields';
+import { getActiveSoftwareServices, softwareServices, SOFTWARE_CATEGORY_ID } from '../../utils/recurringSoftware';
 import api from '../../api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
-export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
+export default function EditO2TransactionForm({ id, onSaved, onCancel }) {
+  const { id: routeId } = useParams();
+  const txId = id ?? routeId;
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -14,6 +18,8 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
   const [uploadFile, setUploadFile] = useState(null);
   // External services description controls (Servicios Externos)
   const EXTERNAL_SERVICE_OPTIONS = ['Alorvacations', 'Servicio Shuttle', 'Tours', 'Otro'];
+  const [softwareCustom, setSoftwareCustom] = useState(false);
+  const [savedSoftwareDescription, setSavedSoftwareDescription] = useState(null);
   const [extDescOption, setExtDescOption] = useState('');
   const [extCustomDesc, setExtCustomDesc] = useState('');
   const [existingDoc, setExistingDoc] = useState({ id: null, url: '', has: false });
@@ -164,6 +170,8 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
         if (active) {
           const isBothTx = d.paid != null || d.charged != null;
           const loadedType = d.type || 'Ingreso';
+          setSoftwareCustom(false);
+          setSavedSoftwareDescription(Number(catId) === SOFTWARE_CATEGORY_ID ? (d.description || '') : null);
           setFormData({
             costCentre: d.costCentre || 'Owners2',
             date: d.date || '',
@@ -197,6 +205,18 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
     () => categories.find((c) => String(c.id) === String(formData.category)) || null,
     [categories, formData.category]
   );
+
+  const isSoftware = Number(formData.category) === SOFTWARE_CATEGORY_ID;
+  const softwareOptions = getActiveSoftwareServices(formData.date.slice(0, 7));
+  const isStandardSoftware = softwareServices.some(({ name }) => name === formData.description);
+  const keepsSavedSoftwareDescription = formData.description === savedSoftwareDescription;
+  if (keepsSavedSoftwareDescription && isStandardSoftware && !softwareOptions.includes(formData.description)) {
+    softwareOptions.push(formData.description);
+  }
+  const showSoftwareCustom = softwareCustom || (!!formData.description && !isStandardSoftware);
+  const softwareSelection = showSoftwareCustom
+    ? 'Otro'
+    : softwareOptions.includes(formData.description) ? formData.description : '';
 
   // Sync external services description selector with current category/description
   useEffect(() => {
@@ -264,6 +284,10 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
   const validate = () => {
     if (!formData.date) return 'Fecha es obligatoria';
     if (!formData.category) return 'Categoría es obligatoria';
+    if (isSoftware && !keepsSavedSoftwareDescription) {
+      if (!softwareSelection) return 'Seleccione un servicio de Software';
+      if (showSoftwareCustom && !formData.description.trim()) return 'Especifique la descripción del servicio';
+    }
 
     const catType = selectedCategory?.type || 'Both';
 
@@ -480,6 +504,7 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
           value={formData.category}
           onChange={(e) => {
             const id = e.target.value;
+            setSoftwareCustom(false);
             setFormData((p) => ({ ...p, category: id }));
           }}
           style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
@@ -502,7 +527,19 @@ export default function EditO2TransactionForm({ id: txId, onSaved, onCancel }) {
       {/* Descripción */}
       <div className="form-row" style={{ minWidth: 0 }}>
         <label>Descripción</label>
-        {(Number(selectedCategory?.id) === 21) ? (
+        {isSoftware ? (
+          <SoftwareDescriptionFields
+            selection={softwareSelection}
+            options={softwareOptions}
+            showCustom={showSoftwareCustom}
+            description={formData.description}
+            onSelectionChange={(option) => {
+              setSoftwareCustom(option === 'Otro');
+              setFormData((prev) => ({ ...prev, description: option === 'Otro' ? '' : option }));
+            }}
+            onDescriptionChange={(description) => setFormData((prev) => ({ ...prev, description }))}
+          />
+        ) : (Number(selectedCategory?.id) === 21) ? (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
             <select
               value={extDescOption || ''}
