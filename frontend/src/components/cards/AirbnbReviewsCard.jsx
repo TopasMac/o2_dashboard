@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Button } from '@mui/material';
 import api from '../../api';
 
 // --- Date helpers (unchanged from original) ---
@@ -44,7 +45,28 @@ function buildReviewText(guestName) {
   const parts = formatted.split(' ').filter(Boolean);
   const firstName = parts.length ? parts[0] : 'the guest';
 
-  return `It was a pleasure to welcome ${firstName}. Communication was smooth and the apartment was left in impeccable condition. We would happily host ${firstName} again.`;
+  return `It was a pleasure to welcome ${firstName}. Communication was always easy, and the apartment was left in great condition. We would happily host again!`;
+}
+
+function buildGuestMessage(guestName, reviewText) {
+  const firstName = formatGuestName(guestName).split(' ')[0];
+  const greeting = firstName ? `Hello ${firstName}!` : 'Hello!';
+
+  return `${greeting}
+
+Thank you again for choosing to stay with us! We hope you had a wonderful time.
+
+I've just left you the following review:
+
+"${reviewText}"
+
+In case you haven't left us a review yet, we'd really appreciate it if you could take a moment to share your experience. Your feedback means a lot to us and helps future guests feel confident when booking.
+
+Thank you again, and we hope to welcome you back someday!
+
+Best regards,
+Antonio Pedro
+HausIn`;
 }
 
 // --- Backend review queue helper ---
@@ -114,11 +136,21 @@ async function patchReviewAction(id, payload) {
 // ===================================================================
 // 📌 MAIN COMPONENT: AirbnbReviewsCard
 // ===================================================================
-export default function AirbnbReviewsCard() {
+export default function AirbnbReviewsCard({ embedded = false, onPendingCountChange }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [items, setItems] = useState([]);
   const [monthStats, setMonthStats] = useState(null);
+  const [copiedDrafts, setCopiedDrafts] = useState({});
+
+  async function copyDraft(key, text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedDrafts((previous) => ({ ...previous, [key]: true }));
+    } catch {
+      alert('No se pudo copiar el texto al portapapeles.');
+    }
+  }
 
   // Only show items that are still actionable (not made/skipped/timeout)
   const visibleItems = useMemo(
@@ -131,6 +163,12 @@ export default function AirbnbReviewsCard() {
       ),
     [items]
   );
+
+  useEffect(() => {
+    if (!loading) {
+      onPendingCountChange?.(error ? null : visibleItems.length);
+    }
+  }, [error, loading, onPendingCountChange, visibleItems.length]);
 
   // We keep "today" only for local fallback/formatting where needed.
   const today = toDateOnly(new Date());
@@ -220,7 +258,7 @@ export default function AirbnbReviewsCard() {
 
   return (
     <div
-      style={{
+      style={embedded ? undefined : {
         minWidth: 360,
         maxWidth: 720,
         height: REVIEW_CARD_HEIGHT,
@@ -232,55 +270,56 @@ export default function AirbnbReviewsCard() {
         flexDirection: 'column',
       }}
     >
-      {/* Teal Header */}
-      <div
-        style={{
-          backgroundColor: '#1E6F68',
-          color: '#fff',
-          padding: '10px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderTopLeftRadius: 8,
-          borderTopRightRadius: 8,
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 16 }}>Reseñas Airbnb</h2>
-        <div style={{ display: 'flex', gap: 10, fontSize: 12, opacity: 0.9 }}>
-          <span>
-            Total Mes: {monthStats?.total ?? todayStats.total}
-          </span>
-          <span>
-            <span style={{ color: '#b2f5ea', fontWeight: 600 }}>✔</span>
-            <span style={{ color: '#b2f5ea', opacity: 0.7, marginLeft: 3 }}>
-              {monthStats?.made ?? todayStats.made}
+      {!embedded && (
+        <div
+          style={{
+            backgroundColor: '#1E6F68',
+            color: '#fff',
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            borderTopLeftRadius: 8,
+            borderTopRightRadius: 8,
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: 16 }}>Reseñas Airbnb</h2>
+          <div style={{ display: 'flex', gap: 10, fontSize: 12, opacity: 0.9 }}>
+            <span>
+              Total Mes: {monthStats?.total ?? todayStats.total}
             </span>
-          </span>
-          <span>
-            <span style={{ color: '#ffdddd', fontWeight: 600 }}>✖</span>
-            <span style={{ color: '#ffdddd', opacity: 0.7, marginLeft: 3 }}>
-              {monthStats?.skipped ?? todayStats.skipped}
+            <span>
+              <span style={{ color: '#b2f5ea', fontWeight: 600 }}>✔</span>
+              <span style={{ color: '#b2f5ea', opacity: 0.7, marginLeft: 3 }}>
+                {monthStats?.made ?? todayStats.made}
+              </span>
             </span>
-          </span>
-          <span>
-            <span style={{ color: '#ffb347', fontWeight: 600 }}>⏱</span>
-            <span style={{ color: '#ffb347', opacity: 0.7, marginLeft: 3 }}>
-              {monthStats?.timeout ?? todayStats.timeout}
+            <span>
+              <span style={{ color: '#ffdddd', fontWeight: 600 }}>✖</span>
+              <span style={{ color: '#ffdddd', opacity: 0.7, marginLeft: 3 }}>
+                {monthStats?.skipped ?? todayStats.skipped}
+              </span>
             </span>
-          </span>
-          <span>
-            Pendientes: {todayStats.pending}
-          </span>
+            <span>
+              <span style={{ color: '#ffb347', fontWeight: 600 }}>⏱</span>
+              <span style={{ color: '#ffb347', opacity: 0.7, marginLeft: 3 }}>
+                {monthStats?.timeout ?? todayStats.timeout}
+              </span>
+            </span>
+            <span>
+              Pendientes: {todayStats.pending}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Body */}
-      <div style={{ padding: '12px', flexGrow: 1 }}>
+      <div style={{ padding: embedded ? '4px 0 0' : '12px', flexGrow: 1 }}>
         {loading && <p>Cargando…</p>}
         {error && <p style={{ color: 'crimson' }}>{error}</p>}
 
         {!loading && !error && (
-          <div style={{ maxHeight: ROW_HEIGHT * VISIBLE_ROWS, overflowY: 'auto' }}>
+          <div style={embedded ? undefined : { maxHeight: ROW_HEIGHT * VISIBLE_ROWS, overflowY: 'auto' }}>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {visibleItems.map((row) => {
                 const co = parseYmd(row.checkoutDate);
@@ -288,12 +327,14 @@ export default function AirbnbReviewsCard() {
                   ? parseYmd(row.reviewDeadline)
                   : addDays(co, 12);
 
+                const reviewText = embedded ? buildReviewText(row.guestName) : null;
+
                 return (
                   <li
                     key={`${row.bookingId}-${row.reviewActionId ?? 'new'}`}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 120px',
+                      gridTemplateColumns: embedded ? 'minmax(0, 1fr)' : '1fr 120px',
                       columnGap: 12,
                       alignItems: 'center',
                       padding: '6px 0',
@@ -303,7 +344,7 @@ export default function AirbnbReviewsCard() {
                   >
                     <div style={{ fontSize: 14 }}>
                       {/* Guest name → clickable if reservationUrl */}
-                      {row.reservationUrl ? (
+                      {!embedded && row.reservationUrl ? (
                         <a
                           href={row.reservationUrl}
                           target="_blank"
@@ -383,38 +424,93 @@ export default function AirbnbReviewsCard() {
                           );
                         })()}
                       </span>
+                      {embedded && !row.reservationUrl && (
+                        <span style={{ marginLeft: 8, color: '#925400', fontSize: 12, fontWeight: 600 }}>
+                          Sin enlace de Airbnb
+                        </span>
+                      )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => markMade(row)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#1E6F68',
-                          fontSize: 20,
-                          opacity: 1,
-                        }}
-                        title="Marcar hecha"
-                      >
-                        ✔
-                      </button>
-                      <button
-                        onClick={() => markSkipped(row)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#cc0000',
-                          fontSize: 20,
-                          opacity: 1,
-                        }}
-                        title="Omitir"
-                      >
-                        ✖
-                      </button>
-                    </div>
+                    {embedded ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                        {[
+                          {
+                            type: 'review',
+                            label: row.reservationUrl ? 'Escribir reseña' : 'Copiar reseña',
+                            text: reviewText,
+                          },
+                          {
+                            type: 'message',
+                            label: row.reservationUrl ? 'Enviar mensaje' : 'Copiar mensaje',
+                            text: buildGuestMessage(row.guestName, reviewText),
+                          },
+                        ].map(({ type, label, text }) => {
+                          const key = `${row.bookingId}-${type}`;
+                          const copied = copiedDrafts[key];
+
+                          return (
+                            <Button
+                              key={type}
+                              size="small"
+                              href={row.reservationUrl || undefined}
+                              target={row.reservationUrl ? '_blank' : undefined}
+                              rel={row.reservationUrl ? 'noopener noreferrer' : undefined}
+                              title={copied ? 'Texto copiado. Puedes copiarlo de nuevo.' : undefined}
+                              onClick={() => copyDraft(key, text)}
+                              sx={{ textTransform: 'none', color: copied ? '#65717b' : '#087f80' }}
+                            >
+                              {label}
+                            </Button>
+                          );
+                        })}
+                        <Button
+                          size="small"
+                          onClick={() => markMade(row)}
+                          sx={{ textTransform: 'none', color: '#087f80', ml: 'auto' }}
+                        >
+                          Marcar completada
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => markSkipped(row)}
+                          sx={{ textTransform: 'none' }}
+                        >
+                          Omitir
+                        </Button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => markMade(row)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#1E6F68',
+                            fontSize: 20,
+                            opacity: 1,
+                          }}
+                          title="Marcar hecha"
+                        >
+                          ✔
+                        </button>
+                        <button
+                          onClick={() => markSkipped(row)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#cc0000',
+                            fontSize: 20,
+                            opacity: 1,
+                          }}
+                          title="Omitir"
+                        >
+                          ✖
+                        </button>
+                      </div>
+                    )}
                   </li>
                 );
               })}

@@ -36,7 +36,7 @@ const formatMonthName = (ym) => {
 const yymm = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 
-const Dashboard = () => {
+const Dashboard = ({ showAirbnbReviews }) => {
   const navigate = useNavigate();
   const OW_CARD_HEIGHT = 600;
   const ALERTS_HEIGHT = 230;            // fixed height for Alerts card
@@ -701,13 +701,14 @@ const Dashboard = () => {
               display: 'flex',
               gap: '1rem',
               alignItems: 'flex-start',
+              flexWrap: 'wrap',
             }}
           >
-            <div style={{ flex: '0 0 440px', maxWidth: 440 }}>
-              <DashboardAlertCenterCard />
+            <div style={{ flex: '1 1 560px', minWidth: 0, maxWidth: 640 }}>
+              <DashboardAlertCenterCard showAirbnbReviews={showAirbnbReviews} />
             </div>
 
-            <div style={{ flex: '0 0 500px', maxWidth: 500 }}>
+            <div style={{ flex: '0 1 500px', minWidth: 0, maxWidth: 500 }}>
               <ActivityCard activity={activity} />
             </div>
           </div>
