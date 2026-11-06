@@ -205,7 +205,7 @@ function App() {
             path="/dashboard"
             element={
               <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
-                <Dashboard />
+                <Dashboard showAirbnbReviews={hasAnyRole(getUserRolesFromToken(getToken()), ['ROLE_ADMIN'])} />
               </RoleRoute>
             }
           />

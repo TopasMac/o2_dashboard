@@ -137,6 +137,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Bookings table and calendar | Protect | Central system of record with 1,242 rows and multiple downstream consumers. |
 | Airbnb email ingestion | Protect | External entry point and 1,000 historical import rows. Upstream sender is not contained in this repository. |
 | Airbnb iCal sync and reconciliation | Protect | Frequent production job, 1,000 events, booking fallback and conflict detection. |
+| Airbnb guest reviews | Keep | Desktop Admins can work the review queue under Alertas → Reseñas Airbnb. The Manager dashboard also has the queue. Reviews are submitted manually in Airbnb, and Owners2 records completed, skipped, and timed-out outcomes for reporting. |
 | Holds and soft reservations | Protect | Affects availability and automatic expiry. Test before consolidation. |
 | Housekeeping cleanings and reconciliation | Keep | High-volume operational data and automatic booking side effects. |
 | Housekeeping laundry | Review | 19 laundry records and 3 rate rows. Confirm whether this workflow is still used. |
