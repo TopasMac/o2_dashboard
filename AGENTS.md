@@ -54,8 +54,8 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 Before any edits:
 
 1. Run `git fetch origin --prune` and report the current branch and worktree.
-2. If HEAD is detached, or `git log origin/develop..HEAD` or `git status --short` is non-empty, stop and tell the user. Otherwise run `git reset --hard origin/develop`.
-3. Name the branch `feature/<name>` using the name the user provides. Do not choose the name. In an app-managed worktree, rename the app-created branch with the app's rename tool, never raw `git branch -m`. Outside an app worktree, create it with `git switch -c feature/<name> origin/develop`.
+2. If `git log origin/develop..HEAD` or `git status --short` is non-empty, stop and tell the user. If HEAD is detached, stop unless this is a linked worktree (not the main checkout) with a clean tree and no commits ahead of `origin/develop`; a detached HEAD there is expected (for example, Codex worktrees). Otherwise run `git reset --hard origin/develop`.
+3. Name the branch `feature/<name>` using the name the user provides. Do not choose the name. In an app-managed worktree, rename the app-created branch with the app's rename tool, never raw `git branch -m`. Outside an app worktree, or from a detached HEAD in a linked worktree, create it with `git switch -c feature/<name> --no-track origin/develop`.
 4. Verify and report: branch name, `HEAD == origin/develop`, clean tree.
 5. Never branch from or reuse another feature branch. If the main checkout is on unfinished work, use a separate `git worktree add` from `origin/develop`.
 
