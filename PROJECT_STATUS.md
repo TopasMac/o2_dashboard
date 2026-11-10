@@ -65,8 +65,8 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `bbf2b9a` — `Merge pull request #73 from TopasMac/develop` (deployed 2026-11-06; rollback point `5eb07ef`; no migrations; Admin Airbnb review queue, desktop only, mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
-- **GitHub `main`:** `bbf2b9a` — `Merge pull request #73 from TopasMac/develop`
+- **Production server checkout last verified:** `a66cd20` — `Merge pull request #76 from TopasMac/develop` (deployed 2026-11-10; rollback point `bbf2b9a`; no migrations; HK reconciliation charge fix, backend only, mobile S3/CloudFront publishing not required and not performed; the server checkout has an uncommitted production-only edit to `frontend/src/constants/banks.js` removing "Arcus", pending a branch; see `DEPLOYMENT.md`)
+- **GitHub `main`:** `a66cd20` — `Merge pull request #76 from TopasMac/develop`
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
