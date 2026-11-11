@@ -145,6 +145,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Employee cash and financial ledgers | Keep | 204 cash rows and 92 financial-ledger rows, with approval and allocation workflows. |
 | Unit ledger and balances | Keep, then consolidate | `unit_balance_ledger` has 588 rows and `unit_transactions` has 677 exact rows. The separate `unit_balance` table is empty and may be a derived/cache design; investigate before removal. |
 | O2 and HK transactions | Keep | Active financial data and report dependencies. |
+| Service payments | Keep | Month Payments lists active units with expected service payments. The HOA Report Preview and PDF include only active units without a recorded HOA payment for the selected month. Users can exclude individual unpaid units from the report for the current period. |
 | Accounting/Santander import | Review | 106 Santander entries plus accountant imports and entries. Confirm current bank-import workflow. |
 | Airbnb payout reconciliation | Keep pending workflow review | 80 payouts and 212 payout items. Older payout tables also contain data, indicating parallel generations that must be reconciled rather than dropped blindly. |
 | Monthly owner reports | Keep | Month slices, report cycles, PDF generation, email, payment workflows, and historical financial output. Consolidate duplicate controllers only after contract tests. |
