@@ -65,8 +65,8 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `c9f5e47` — `Merge pull request #82 from TopasMac/develop` (deployed 2026-11-10; rollback point `c1dbb38`; no migrations; duplicate Arcus bank entry removed, frontend only, mobile S3/CloudFront publishing not required and not performed; the production-only `banks.js` edit is now in Git and the server checkout is clean; see `DEPLOYMENT.md`)
-- **GitHub `main`:** `c9f5e47` — `Merge pull request #82 from TopasMac/develop`
+- **Production server checkout last verified:** `0164fc1` — `Merge pull request #85 from TopasMac/develop` (deployed 2026-11-10; rollback point `c9f5e47`; no migrations; service payment references and HOA report filtering, desktop only, mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
+- **GitHub `main`:** `0164fc1` — `Merge pull request #85 from TopasMac/develop`
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
