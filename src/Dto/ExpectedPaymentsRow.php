@@ -69,6 +69,7 @@ class ExpectedPaymentsRow
         ?string $fechaPagoIso = null,
         ?string $fechaPago = null,
         ?int $sortTs = null,
+        public ?string $paymentReference = null,
     ) {
         $this->unitId = $unitId;
         $this->unitName = $unitName;
