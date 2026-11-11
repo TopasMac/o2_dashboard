@@ -85,8 +85,10 @@ The historical migration chain cannot currently build the schema from zero. Do n
 Backend terminal:
 
 ```bash
-php -d memory_limit=512M -S 127.0.0.1:8001 -t public public/router.php
+PHP_CLI_SERVER_WORKERS=4 php -d memory_limit=512M -d display_errors=0 -S 127.0.0.1:8001 -t public public/router.php
 ```
+
+The HOA Report Preview makes a second request to the backend while generating the PDF. Multiple PHP workers let it serve both requests. PHP diagnostics go to the server log so they don't corrupt binary responses. Install wkhtmltopdf for PDF previews and set `WKHTMLTOPDF_BINARY` in `.env.local` if the binary is outside `/usr/local/bin/wkhtmltopdf`. For the logo in local PDFs, copy `frontend/public/img/company-logo.png` to `public/img/company-logo.png`.
 
 Frontend terminal:
 
