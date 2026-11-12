@@ -9,6 +9,11 @@ class ApiExceptionListener
     public function onKernelException(ExceptionEvent $event): void
     {
         $req = $event->getRequest();
+        // Let Symfony preserve HTTP error statuses for the provider directory.
+        if (str_starts_with((string)$req->attributes->get('_route'), 'api_service_providers_')) {
+            return;
+        }
+
         if (str_starts_with($req->getPathInfo(), '/api/')) {
             $e = $event->getThrowable();
             $event->setResponse(new JsonResponse([

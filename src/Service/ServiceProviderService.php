@@ -30,22 +30,53 @@ class ServiceProviderService
      */
     public function create(array $data): ServiceProvider
     {
-        $name = trim((string)($data['name'] ?? ''));
-        $occupation = trim((string)($data['occupation'] ?? ''));
-        $area = (string)($data['area'] ?? ServiceProvider::AREA_BOTH);
-
-        if ($name === '') {
-            throw new \InvalidArgumentException('ServiceProvider.name is required');
-        }
-        if ($occupation === '') {
-            throw new \InvalidArgumentException('ServiceProvider.occupation is required');
-        }
-
-        // Normalize / soft-validate area using entity setter
         $provider = new ServiceProvider();
-        $provider->setName($name);
-        $provider->setOccupation($occupation);
-        $provider->setArea($area);
+        $this->apply($provider, $data + ['name' => null, 'occupation' => null]);
+
+        // Generate providerId in a transaction to avoid duplicates
+        $this->db->beginTransaction();
+        try {
+            $providerId = $this->generateProviderIdLocked();
+            $provider->setProviderId($providerId);
+
+            $this->em->persist($provider);
+            $this->em->flush();
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        return $provider;
+    }
+
+    public function update(ServiceProvider $provider, array $data): ServiceProvider
+    {
+        $this->apply($provider, $data);
+        $this->em->flush();
+
+        return $provider;
+    }
+
+    private function apply(ServiceProvider $provider, array $data): void
+    {
+        if (array_key_exists('bankType', $data)) {
+            $data = $this->applyBankType($data);
+        }
+
+        $name = $this->requiredText($data, 'name');
+        $occupation = $this->requiredText($data, 'occupation');
+
+        if ($name !== null) {
+            $provider->setName($name);
+        }
+        if ($occupation !== null) {
+            $provider->setOccupation($occupation);
+        }
+        if (isset($data['area'])) {
+            $provider->setArea((string)$data['area']);
+        }
 
         if (array_key_exists('phone', $data)) {
             $provider->setPhone($this->nullIfEmpty($data['phone']));
@@ -77,23 +108,28 @@ class ServiceProviderService
         if (array_key_exists('isActive', $data) && $data['isActive'] !== null) {
             $provider->setIsActive((bool)$data['isActive']);
         }
+    }
 
-        // Generate providerId in a transaction to avoid duplicates
-        $this->db->beginTransaction();
-        try {
-            $providerId = $this->generateProviderIdLocked();
-            $provider->setProviderId($providerId);
-
-            $this->em->persist($provider);
-            $this->em->flush();
-
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            $this->db->rollBack();
-            throw $e;
+    private function applyBankType(array $data): array
+    {
+        $type = $data['bankType'];
+        if (!in_array($type, ['Card', 'CLABE'], true)) {
+            throw new \InvalidArgumentException('Bank type must be Card or CLABE.');
         }
 
-        return $provider;
+        $bank = $this->nullIfEmpty($data['bankName'] ?? null);
+        $holder = $this->nullIfEmpty($data['accountHolder'] ?? null);
+        $number = $this->nullIfEmpty($data['bankNumber'] ?? null);
+        $maxLength = $type === 'Card' ? 30 : 25;
+        if ($bank === null || $holder === null || $number === null || !ctype_digit($number)
+            || strlen($number) > $maxLength || mb_strlen($bank) > 80 || mb_strlen($holder) > 120) {
+            throw new \InvalidArgumentException('Enter a valid account holder, bank, and number.');
+        }
+
+        $data['accountNumber'] = $type === 'Card' ? $number : null;
+        $data['clabe'] = $type === 'CLABE' ? $number : null;
+
+        return $data;
     }
 
     /**
@@ -118,13 +154,31 @@ class ServiceProviderService
         return sprintf('SP%06d', $nextNumber);
     }
 
+    private function requiredText(array $data, string $key): ?string
+    {
+        if (!array_key_exists($key, $data)) {
+            return null;
+        }
+
+        $value = $this->nullIfEmpty($data[$key]);
+        if ($value === null) {
+            throw new \InvalidArgumentException("ServiceProvider.$key is required");
+        }
+
+        return $value;
+    }
+
     private function nullIfEmpty(mixed $value): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        $s = trim((string)$value);
+        if (!is_string($value)) {
+            throw new \InvalidArgumentException('Provider text fields must be strings');
+        }
+
+        $s = trim($value);
 
         return $s === '' ? null : $s;
     }
