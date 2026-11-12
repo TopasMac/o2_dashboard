@@ -159,6 +159,7 @@ const TableLite = forwardRef(function TableLite(
     rows = [],
     loading = false,
     error = null,
+    emptyText = 'No data',
     height = 'calc(100vh - 280px)',
     useParentScroll = false,
     dense = false,
@@ -955,7 +956,7 @@ const TableLite = forwardRef(function TableLite(
             {!loading && !error && displayRows.length === 0 && (
               <TableRow sx={{ minWidth: 'auto' }}>
                 <TableCell colSpan={normalizedColumns.length} sx={{ py: 3, color: 'text.secondary', minWidth: 'auto' }}>
-                  No data
+                  {emptyText}
                 </TableCell>
               </TableRow>
             )}
@@ -1304,6 +1305,7 @@ TableLite.propTypes = {
     })
   ).isRequired,
   rows: PropTypes.array,
+  emptyText: PropTypes.node,
   loading: PropTypes.bool,
   error: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
   height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),

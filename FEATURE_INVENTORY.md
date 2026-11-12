@@ -154,7 +154,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Unit media | Review | 3 exact media records plus S3 rename/delete logic. Confirm whether this separate feature is still needed alongside unit documents. |
 | Unit onboarding inventory | Review | Exact data exists: 1 session, 12 items, and 16 photos, with desktop and mobile workflows. |
 | Unit purchase lists/catalog | Review | 24 catalog entries, 1 list, and 10 lines. Confirm whether onboarding purchases remain part of operations. |
-| Service providers | Review | One exact provider record and a visible navigation item. Confirm whether this feature is in active use. |
+| Service providers | Keep | Admins can list, add, edit and deactivate providers. The directory can include inactive records, and the table shows the account holder, bank, and masked last four digits of the saved Card or CLABE. Saving one type through the bank details form clears the other. |
 | Contracts | Review | Three draft records and public preview routes. Confirm whether contracts are generated from Owners2 today. |
 | Public share links | Review | No current share-token rows, but frontend and backend public exchange routes exist. Confirm whether report sharing is planned or obsolete. |
 | Social posts/calendar | Removal candidate | Visible admin navigation and full API/entity implementation, but both social tables contain zero rows. Strong candidate if marketing is managed elsewhere. |
@@ -242,7 +242,7 @@ For each feature selected for removal:
 1. **Verify production-critical operations**: email sender, cron command mismatch, iCal freshness, duplicate status schedule, backups and deployment.
 2. **Build the safety net**: tests for email ingestion, iCal, booking overlap/dates, status transitions, holds, and housekeeping side effects.
 3. **Remove obvious UI scaffolding**: Settings placeholder, dev route exposure, redundant route aliases, and duplicated layout wrappers.
-4. **Owner feature decisions**: marketing, service providers, laundry, contracts, occupancy, inventory/purchases, share links, and mobile role usage.
+4. **Owner feature decisions**: marketing, laundry, contracts, occupancy, inventory/purchases, share links, and mobile role usage.
 5. **Consolidate duplicate generations**: navigation/layout, private reservations, reports, payout reconciliation, and transaction models.
 6. **Retire data last**: archive and remove confirmed obsolete tables only after code and scheduled writers are gone.
 
@@ -252,7 +252,6 @@ For the next review, answer **keep**, **remove**, or **unsure** for each:
 
 - Social Posts and Social Calendar
 - Settings placeholder
-- Service Providers
 - Housekeeping Laundry
 - Unit onboarding Inventory
 - Unit Purchase Lists and Catalog
