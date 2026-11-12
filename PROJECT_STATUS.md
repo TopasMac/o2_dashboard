@@ -144,7 +144,6 @@ The owner should mark each as **keep**, **remove**, or **unsure** before cleanup
 
 - Social Posts and Social Calendar
 - Settings placeholder
-- Service Providers
 - Housekeeping Laundry
 - Unit onboarding inventory
 - Unit Purchase Lists and Catalog

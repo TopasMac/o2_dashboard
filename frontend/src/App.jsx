@@ -227,7 +227,14 @@ function App() {
           />
           <Route path="/bookings/search" element={<Navigate to="/bookings" replace />} />
           <Route path="/clients" element={<Clients />} />
-          <Route path="/service-providers" element={<ServiceProviders />} />
+          <Route
+            path="/service-providers"
+            element={
+              <RoleRoute roles={['ROLE_ADMIN']} fallback="/">
+                <ServiceProviders />
+              </RoleRoute>
+            }
+          />
           <Route path="/clients/new" element={<ClientForm />} />
           <Route path="/clients/edit/:id" element={<EditClientForm />} />
           <Route path="/units" element={<Units />} />
