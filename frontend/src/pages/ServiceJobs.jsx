@@ -8,13 +8,17 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   MenuItem,
   Select,
   Stack,
   TextField,
+  Tooltip,
 } from '@mui/material';
+import { CubeIcon, WrenchIcon } from '@heroicons/react/24/outline';
 
 import api from '../api';
+import HKTransactionNewFormRHF from '../components/forms/HKTransactionNewFormRHF';
 import PageScaffoldTable from '../components/layout/PageScaffoldTable';
 import TableLite from '../components/layout/TableLite';
 import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
@@ -26,7 +30,13 @@ const monthFormatter = new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'America/Cancun', year: 'numeric', month: '2-digit',
 });
 const STATUSES = { pending: 'Pending', done: 'Done', cancelled: 'Cancelled' };
-const STATUS_COLORS = { pending: '#D4A017', done: '#1E6F68', cancelled: '#C62828' };
+const FILTER_STATUSES = { ...STATUSES, allocated: 'Allocated' };
+
+function displayStatus(job) {
+  return job.allocations?.length ? 'allocated' : job.status;
+}
+
+const STATUS_COLORS = { pending: '#D4A017', done: '#1E6F68', cancelled: '#C62828', allocated: '#1565C0' };
 const BILL_TO = { CLIENT: 'Client', OWNERS2: 'Owners2' };
 const EMPTY_FORM = {
   scheduledDate: '',
@@ -49,6 +59,12 @@ export default function ServiceJobs() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
+  const [allocation, setAllocation] = useState(null);
+  const [allocationError, setAllocationError] = useState('');
+  const [attachmentWarning, setAttachmentWarning] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [savingAllocation, setSavingAllocation] = useState(false);
   const [statusError, setStatusError] = useState('');
 
   useEffect(() => {
@@ -59,12 +75,12 @@ export default function ServiceJobs() {
       api.get('/api/service-providers'),
     ]).then(([list, options, directory]) => {
       const { jobs } = list.data;
-      const { units, categories } = options.data;
+      const { units, categories, allocationCategories = [] } = options.data;
       const { providers } = directory.data;
-      if (![jobs, units, categories, providers].every(Array.isArray)) {
+      if (![jobs, units, categories, providers, allocationCategories].every(Array.isArray)) {
         throw new Error('Unexpected service jobs response.');
       }
-      if (current) setData({ jobs, units, categories, providers });
+      if (current) setData({ jobs, units, categories, providers, allocationCategories });
     }).catch(() => {
       if (current) setLoadError('Could not load service jobs.');
     });
@@ -132,6 +148,58 @@ export default function ServiceJobs() {
     }
   }
 
+  function openAllocation(job, line) {
+    setAllocationError('');
+    setAllocation({ job, line, editing: Boolean(line), attachmentSlots: 2 - (line?.attachmentCount ?? 0), requestKey: line ? undefined : crypto.randomUUID() });
+  }
+
+  async function saveAllocation(values) {
+    if (savingAllocation) return;
+    const { job, line, requestKey } = allocation;
+    setSavingAllocation(true);
+    setAllocationError('');
+    try {
+      const response = await api.put(`${ENDPOINT}/${job.id}/allocations`, { ...values, allocationId: line?.id, requestKey });
+      const saved = response.data?.allocation;
+      if (!saved?.id) throw new Error('Unexpected allocation response.');
+      setData((previous) => ({
+        ...previous,
+        jobs: previous.jobs.map((row) => row.id === job.id ? {
+          ...row,
+          allocations: [...(row.allocations ?? []).filter((line) => line.id !== saved.id), saved].sort((a, b) => a.id - b.id),
+        } : row),
+      }));
+      setAllocation((current) => ({ ...current, line: saved }));
+      return saved;
+    } catch (error) {
+      setSavingAllocation(false);
+      setAllocationError(error.response?.data?.error || 'Could not save the allocation.');
+    }
+  }
+
+  async function deleteAllocation() {
+    if (savingAllocation) return;
+    const { job, line } = allocation;
+    setSavingAllocation(true);
+    setDeleteError('');
+    try {
+      await api.delete(`${ENDPOINT}/${job.id}/allocations/${line.id}`);
+      setData((previous) => ({
+        ...previous,
+        jobs: previous.jobs.map((row) => row.id === job.id ? {
+          ...row,
+          allocations: row.allocations.filter((item) => item.id !== line.id),
+        } : row),
+      }));
+      setConfirmDelete(false);
+      setAllocation(null);
+    } catch (error) {
+      setDeleteError(error.response?.data?.error || 'Could not delete the allocation.');
+    } finally {
+      setSavingAllocation(false);
+    }
+  }
+
   const columns = [
     {
       accessor: 'scheduledDate', header: 'Date', width: 140,
@@ -170,7 +238,9 @@ export default function ServiceJobs() {
     },
     {
       accessor: 'status', header: 'Status', width: 140,
-      render: (status, job) => (
+      render: (status, job) => displayStatus(job) === 'allocated' ? (
+        <Box component="span" sx={{ color: STATUS_COLORS.allocated }}>Allocated</Box>
+      ) : (
         <Select
           variant="standard"
           size="small"
@@ -188,10 +258,49 @@ export default function ServiceJobs() {
         </Select>
       ),
     },
+    {
+      accessor: 'allocations', header: 'Allocation', width: 235,
+      render: (allocations = [], job) => {
+        const done = job.status === 'done';
+        return (
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            {done && (
+              <Button size="small" sx={{ flexShrink: 0 }} onClick={() => openAllocation(job)}>
+                Add
+              </Button>
+            )}
+            {allocations.length > 0 && (
+              <Stack direction="row" spacing={0.25} sx={{ minWidth: 0, overflowX: 'auto' }}>
+                {allocations.map((line) => {
+                  const equipment = line.lineType === 'equipment';
+                  const Icon = equipment ? CubeIcon : WrenchIcon;
+                  const label = `${equipment ? 'Equipment' : 'Labour'} · ${line.transactionCode}`;
+                  return (
+                    <Tooltip key={line.id} title={label}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          aria-label={label}
+                          disabled={!done}
+                          onClick={() => openAllocation(job, line)}
+                          sx={{ color: equipment ? 'primary.main' : '#1E6F68' }}
+                        >
+                          <Icon width={18} height={18} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  );
+                })}
+              </Stack>
+            )}
+          </Stack>
+        );
+      },
+    },
   ];
 
   const visibleJobs = (data?.jobs ?? []).filter((job) =>
-    (!month || job.scheduledDate.startsWith(month)) && (!status || job.status === status)
+    (!month || job.scheduledDate.startsWith(month)) && (!status || displayStatus(job) === status)
   );
   const selectedJob = data?.jobs.find((job) => job.id === form?.id);
   const activeUnits = data?.units ?? [];
@@ -228,7 +337,7 @@ export default function ServiceJobs() {
             slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
           >
             <MenuItem value="">All</MenuItem>
-            {Object.entries(STATUSES).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+            {Object.entries(FILTER_STATUSES).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
           </TextField>
           <Button variant="contained" disabled={!data} onClick={() => open()}>
             + Add Service
@@ -242,6 +351,9 @@ export default function ServiceJobs() {
         </Stack>
       }
     >
+      {attachmentWarning && (
+        <Alert severity="warning" onClose={() => setAttachmentWarning('')}>{attachmentWarning}</Alert>
+      )}
       {statusError && <Alert severity="error" onClose={() => setStatusError('')}>{statusError}</Alert>}
       <Box sx={{ flex: 1, minHeight: 0, mt: 2 }}>
         <TableLite
@@ -255,6 +367,83 @@ export default function ServiceJobs() {
           emptyText={data?.jobs.length ? "No service jobs match the filters." : "No service jobs scheduled."}
         />
       </Box>
+
+      <Dialog open={Boolean(allocation)} onClose={savingAllocation ? undefined : () => setAllocation(null)} fullWidth maxWidth="sm">
+        {allocation && (
+          <>
+            <DialogTitle sx={{ overflowWrap: 'anywhere' }}>
+              {allocation.editing ? 'Edit' : 'Allocate'} - {allocation.job.unit.name} * {allocation.job.description}
+            </DialogTitle>
+            <DialogContent sx={{ pt: '12px !important' }}>
+              {allocationError && <Alert severity="error" sx={{ mb: 2 }}>{allocationError}</Alert>}
+              <HKTransactionNewFormRHF
+                formId="service-job-allocation"
+                serviceJobAllocation
+                attachmentSlots={allocation.attachmentSlots}
+                showInlineActions={!allocation.editing}
+                unitOptions={[{ ...allocation.job.unit, unitName: allocation.job.unit.name }]}
+                categoryOptions={data.allocationCategories}
+                initialValues={{
+                  date: allocation.job.scheduledDate,
+                  unitId: allocation.job.unit.id,
+                  city: allocation.job.unit.city,
+                  description: allocation.job.description,
+                  allocationTarget: BILL_TO[allocation.job.bill_to],
+                  categoryId: allocation.job.allocations?.length ? undefined : allocation.job.category.id,
+                  ...allocation.line,
+                  comments: allocation.line?.notes,
+                }}
+                onSubmit={saveAllocation}
+                onSubmitComplete={() => {
+                  setSavingAllocation(false);
+                  setAllocation(null);
+                }}
+                onAttachmentUploaded={(transactionId) => {
+                  setData((previous) => ({
+                    ...previous,
+                    jobs: previous.jobs.map((job) => job.id === allocation.job.id ? {
+                      ...job,
+                      allocations: job.allocations.map((line) => line.id === transactionId ? {
+                        ...line, attachmentCount: (line.attachmentCount ?? 0) + 1,
+                      } : line),
+                    } : job),
+                  }));
+                }}
+                onUploadError={() => {
+                  setSavingAllocation(false);
+                  setAllocation(null);
+                  setAttachmentWarning('Allocation saved. An attachment could not be uploaded. Reopen the allocation to try again.');
+                }}
+                onCancel={() => { if (!savingAllocation) setAllocation(null); }}
+              />
+            </DialogContent>
+            {allocation.editing && (
+              <DialogActions sx={{ justifyContent: 'flex-start', px: 3, '& > .delete-allocation': { ml: 'auto' } }}>
+                <Button type="submit" form="service-job-allocation" variant="outlined" disabled={savingAllocation}
+                  sx={{ color: '#1E6F68', borderColor: '#1E6F68' }}>Save</Button>
+                <Button variant="outlined" disabled={savingAllocation} onClick={() => setAllocation(null)}
+                  sx={{ color: '#C24125', borderColor: '#F0907D' }}>Cancel</Button>
+                <Button variant="contained" color="error" disabled={savingAllocation}
+                  className="delete-allocation"
+                  onClick={() => { setDeleteError(''); setConfirmDelete(true); }}>Delete</Button>
+              </DialogActions>
+            )}
+          </>
+        )}
+      </Dialog>
+
+      <Dialog open={confirmDelete} onClose={savingAllocation ? undefined : () => setConfirmDelete(false)}
+        aria-labelledby="delete-allocation-title">
+        <DialogTitle id="delete-allocation-title">Delete allocation?</DialogTitle>
+        <DialogContent>
+          Delete transaction {allocation?.line?.transactionCode} and its attachments?
+          {deleteError && <Alert severity="error" sx={{ mt: 1 }}>{deleteError}</Alert>}
+        </DialogContent>
+        <DialogActions>
+          <Button autoFocus disabled={savingAllocation} onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button variant="contained" color="error" disabled={savingAllocation} onClick={deleteAllocation}>Delete</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={Boolean(form)} onClose={saving ? undefined : () => setForm(null)} fullWidth maxWidth="sm">
         {form && (

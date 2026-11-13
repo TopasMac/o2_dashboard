@@ -120,6 +120,150 @@ final class ServiceJobsTest extends KernelTestCase
             self::assertSame('CLIENT', $jobs[$second['id']]['bill_to']);
             self::assertSame('cancelled', $jobs[$second['id']]['status']);
             self::assertSame($before, $connection->fetchOne('SELECT COUNT(*) FROM hktransactions'));
+
+            $allocationPath = $path.'/allocations';
+            $equipmentCategory = $categories['Equipamiento'];
+            $line = [
+                'requestKey' => '00000000-0000-4000-8000-000000000001',
+                'date' => '2026-10-31',
+                'categoryId' => $categories['Mantenimiento'],
+                'allocationTarget' => 'Client',
+                'description' => 'Service Job Labour',
+                'paid' => '100.00',
+                'charged' => '120.00',
+            ];
+            self::assertSame(403, $this->request('PUT', $allocationPath, $manager, $line)->getStatusCode());
+            self::assertSame(409, $this->request('PUT', self::JOBS.'/'.$second['id'].'/allocations', $admin, $line)->getStatusCode());
+            $pending = $this->json('POST', self::JOBS, $admin, 201, $payload)['job'];
+            self::assertSame(409, $this->request('PUT', self::JOBS.'/'.$pending['id'].'/allocations', $admin, $line)->getStatusCode());
+            self::assertSame($before, $connection->fetchOne('SELECT COUNT(*) FROM hktransactions'));
+            $labour = $this->json('PUT', $allocationPath, $admin, 200, $line)['allocation'];
+            self::assertSame('labour', $labour['lineType']);
+            $retry = $this->json('PUT', $allocationPath, $admin, 200, $line)['allocation'];
+            self::assertSame($labour['id'], $retry['id']);
+            self::assertSame($labour['transactionCode'], $retry['transactionCode']);
+            self::assertSame(1, (int) $connection->fetchOne('SELECT COUNT(*) FROM hktransactions WHERE service_job_id = ?', [$created['id']]));
+
+            $equipmentLine = array_replace($line, [
+                'requestKey' => '00000000-0000-4000-8000-000000000002',
+                'date' => '2026-11-01',
+                'categoryId' => $equipmentCategory,
+                'description' => 'Service Job Equipment',
+                'charged' => '150.00',
+            ]);
+            $equipment = $this->json('PUT', $allocationPath, $admin, 200, $equipmentLine)['allocation'];
+            self::assertSame('equipment', $equipment['lineType']);
+            self::assertNotSame($labour['id'], $equipment['id']);
+            $secondEquipmentLine = array_replace($equipmentLine, [
+                'requestKey' => '00000000-0000-4000-8000-000000000003',
+                'allocationTarget' => 'Owners2',
+            ]);
+            $secondEquipment = $this->json('PUT', $allocationPath, $admin, 200, $secondEquipmentLine)['allocation'];
+            self::assertSame('equipment', $secondEquipment['lineType']);
+            self::assertNotSame($equipment['id'], $secondEquipment['id']);
+            self::assertSame($secondEquipment['id'], $this->json('PUT', $allocationPath, $admin, 200, $secondEquipmentLine)['allocation']['id']);
+            $em->clear();
+
+            $jobs = array_column($this->json('GET', self::JOBS, $admin, 200)['jobs'], null, 'id');
+            self::assertEqualsCanonicalizing([$labour['id'], $equipment['id'], $secondEquipment['id']],
+                array_column($jobs[$created['id']]['allocations'], 'id'));
+
+            self::assertEqualsCanonicalizing(
+                [$labour['transactionCode'], $equipment['transactionCode'], $secondEquipment['transactionCode']],
+                array_column($jobs[$created['id']]['allocations'], 'transactionCode')
+            );
+
+            $report = $container->get(\App\Service\Reports\UnitMonthlyReportService::class);
+            $allocationRows = static function (string $month) use ($report, $units, $labour, $equipment, $secondEquipment): array {
+                $rows = $report->build($units['IT_001'], $month)['housekeeping']['rows'];
+
+                return array_values(array_filter($rows, static fn (array $row): bool =>
+                    $row['sourceType'] === 'HK_TRANSACTION' && in_array((int) $row['id'], [$labour['id'], $equipment['id'], $secondEquipment['id']], true)
+                ));
+            };
+            self::assertSame([$labour['id']], array_map('intval', array_column($allocationRows('2026-10'), 'id')));
+            self::assertSame([$equipment['id']], array_map('intval', array_column($allocationRows('2026-11'), 'id')));
+
+            $sameMonth = array_replace($equipmentLine, ['date' => '2026-10-31', 'allocationId' => $equipment['id']]);
+            $this->json('PUT', $allocationPath, $admin, 200, $sameMonth);
+            self::assertEqualsCanonicalizing([$labour['id'], $equipment['id']], array_map('intval', array_column($allocationRows('2026-10'), 'id')));
+            $octoberCharges = array_column($allocationRows('2026-10'), 'charged', 'id');
+            self::assertSame(120.0, $octoberCharges[$labour['id']]);
+            self::assertSame(150.0, $octoberCharges[$equipment['id']]);
+            self::assertSame([], $allocationRows('2026-11'));
+
+            $edited = $this->json('PUT', $allocationPath, $admin, 200, array_replace($equipmentLine, [
+                'allocationTarget' => 'Owners2',
+                'allocationId' => $equipment['id'],
+                'charged' => '160.00',
+            ]))['allocation'];
+            self::assertSame($equipment['id'], $edited['id']);
+            self::assertSame($equipment['transactionCode'], $edited['transactionCode']);
+            self::assertSame('160.00', $edited['charged']);
+            self::assertSame([], $allocationRows('2026-11'));
+            self::assertSame([$labour['id']], array_map('intval', array_column($allocationRows('2026-10'), 'id')));
+            self::assertSame(3, (int) $connection->fetchOne('SELECT COUNT(*) FROM hktransactions WHERE service_job_id = ?', [$created['id']]));
+            self::assertSame(403, $this->request('DELETE', '/api/hk-transactions/'.$equipment['id'], $manager, [])->getStatusCode());
+
+            $unit = $em->find(\App\Entity\Unit::class, $units['IT_001']);
+            $cleaning = (new \App\Entity\HKCleanings())
+                ->setUnit($unit)
+                ->setCity('Playa del Carmen')
+                ->setCheckoutDate(new \DateTime('2026-11-03'))
+                ->setCleaningType('checkout')
+                ->setBillTo('CLIENT')
+                ->setO2CollectedFee('300.00');
+            $em->persist($cleaning);
+            $em->flush();
+            $container->get(\App\Service\HKCleaningManager::class)->completeCleaning($cleaning);
+            $november = $report->build($unit->getId(), '2026-11')['housekeeping']['rows'];
+            self::assertCount(1, array_filter($november, static fn (array $row): bool =>
+                $row['sourceType'] === 'HK_CLEANING' && (int) $row['id'] === $cleaning->getId()
+            ));
+
+            $employee = (new \App\Entity\Employee())
+                ->setEmployeeCode('SJ'.bin2hex(random_bytes(4)))
+                ->setName('Synthetic cash employee')
+                ->setDivision('Housekeepers')
+                ->setArea('Housekeepers')
+                ->setCity('Playa del Carmen')
+                ->setDateStarted(new \DateTime('2026-01-01'))
+                ->setInitialSalary('0.00')
+                ->setCurrentSalary('0.00');
+            $cash = (new \App\Entity\EmployeeCashLedger())
+                ->setCode('SJ'.bin2hex(random_bytes(4)))
+                ->setEmployee($employee)
+                ->setType('Expense')
+                ->setAmount('100.00')
+                ->setStatus('Approved');
+            $em->persist($employee);
+            $em->persist($cash);
+            $em->flush();
+
+            $cashTransaction = $this->request('POST', '/api/hk-transactions', $admin, $line + [
+                'unitId' => $unit->getId(),
+                'sourceType' => 'employeeCash',
+                'sourceId' => $cash->getId(),
+            ]);
+            self::assertSame(201, $cashTransaction->getStatusCode(), $cashTransaction->getContent());
+            $transaction = json_decode($cashTransaction->getContent(), true, flags: JSON_THROW_ON_ERROR);
+            $cashAllocation = $this->request('POST', '/api/employee-cash-ledger/'.$cash->getId().'/allocate', $admin, [
+                'allocationType' => 'hk',
+                'allocationId' => $transaction['id'],
+                'allocationCode' => $transaction['transactionCode'],
+            ]);
+            self::assertSame(200, $cashAllocation->getStatusCode(), $cashAllocation->getContent());
+            $cash = $em->find(\App\Entity\EmployeeCashLedger::class, $cash->getId());
+            self::assertSame('Allocated', $cash->getStatus());
+            self::assertSame($transaction['id'], $cash->getAllocationId());
+            self::assertNull($connection->fetchOne('SELECT service_job_id FROM hktransactions WHERE id = ?', [$transaction['id']]));
+            $deletePath = $allocationPath.'/'.$equipment['id'];
+            self::assertSame(403, $this->request('DELETE', $deletePath, $manager, [])->getStatusCode());
+            self::assertSame(404, $this->request('DELETE', self::JOBS.'/'.$second['id'].'/allocations/'.$equipment['id'], $admin, [])->getStatusCode());
+            $this->json('DELETE', $deletePath, $admin, 200);
+            self::assertEqualsCanonicalizing([$labour['id'], $secondEquipment['id']], array_map('intval', $connection->fetchFirstColumn(
+                'SELECT id FROM hktransactions WHERE service_job_id = ?', [$created['id']]
+            )));
         } finally {
             $connection->rollBack();
         }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
@@ -48,6 +50,15 @@ class ServiceJob
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $notes = null;
 
+    /** @var Collection<int, HKTransactions> */
+    #[ORM\OneToMany(mappedBy: 'serviceJob', targetEntity: HKTransactions::class)]
+    private Collection $allocations;
+
+    public function getAllocations(): Collection
+    {
+        return $this->allocations;
+    }
+
     public function __construct(
         Unit $unit,
         TransactionCategory $category,
@@ -56,6 +67,7 @@ class ServiceJob
         ?ServiceProvider $provider = null,
         ?string $notes = null,
     ) {
+        $this->allocations = new ArrayCollection();
         $this->schedule($unit, $category, $scheduledDate, $description, $provider, $notes);
     }
 
