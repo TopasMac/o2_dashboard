@@ -36,6 +36,11 @@ export default function HKTransactionNewFormRHF({
   hideFileInputs = false,
   showInlineActions = false,
   onCancel,
+  serviceJobAllocation = false,
+  attachmentSlots = 2,
+  onSubmitComplete,
+  onUploadError,
+  onAttachmentUploaded,
 }) {
   // Prefer defaultValues when provided (e.g. from EmployeeCashAdmin allocation),
   // otherwise fall back to initialValues used in HKTransactions page.
@@ -81,8 +86,8 @@ export default function HKTransactionNewFormRHF({
   const [units, setUnits] = React.useState(unitOptions || []);
   const [categories, setCategories] = React.useState(categoryOptions || []);
   const [cityOptions, setCityOptions] = React.useState(['Playa del Carmen', 'Tulum', 'General']);
-  const [costCentreOptions, setCostCentreOptions] = React.useState(['HK_General']);
-  const [allocationTargetOptions] = React.useState(['Client', 'Owners2', 'Guest', 'Housekeepers']);
+  const [costCentreOptions, setCostCentreOptions] = React.useState([initCostCentre]);
+  const [allocationTargetOptions] = React.useState(serviceJobAllocation ? ['Client', 'Owners2'] : ['Client', 'Owners2', 'Guest', 'Housekeepers']);
   const [hkEmployeeOptions, setHkEmployeeOptions] = React.useState([]);
   const norm = (s) => (s ?? '').toString().trim().toLowerCase();
 
@@ -182,7 +187,7 @@ export default function HKTransactionNewFormRHF({
     [selectedUnitId, units]
   );
   const shouldDefaultToHousekeepers = (
-    norm(selectedUnit?.unitName ?? selectedUnit?.label) === 'housekeepers'
+    !serviceJobAllocation && norm(selectedUnit?.unitName ?? selectedUnit?.label) === 'housekeepers'
     && defaultsToHousekeepersCategory
   );
   const previouslyMatchedHousekeepersDefaultRef = React.useRef(false);
@@ -198,13 +203,13 @@ export default function HKTransactionNewFormRHF({
 
   const isNomina = React.useMemo(() => {
     const found = categories.find(c => String(c.id) === String(catId));
-    return norm(found?.name) === 'nomina';
-  }, [catId, categories]);
+    return !serviceJobAllocation && norm(found?.name) === 'nomina';
+  }, [catId, categories, serviceJobAllocation]);
 
   const isPersonalExterno = React.useMemo(() => {
     const found = categories.find(c => String(c.id) === String(catId));
-    return norm(found?.name).replace(/_/g, ' ') === 'personal externo';
-  }, [catId, categories]);
+    return !serviceJobAllocation && norm(found?.name).replace(/_/g, ' ') === 'personal externo';
+  }, [catId, categories, serviceJobAllocation]);
 
   React.useEffect(() => {
     if (!isPersonalExterno) return;
@@ -298,7 +303,7 @@ export default function HKTransactionNewFormRHF({
   React.useEffect(() => {
     // Guard conditions
     const cat = categories.find(c => String(c.id) === String(catId));
-    const shouldCalc = cat && inMarkupCategories(cat.name) && allocationTargetVal === 'Client';
+    const shouldCalc = !serviceJobAllocation && cat && inMarkupCategories(cat.name) && allocationTargetVal === 'Client';
     const amountNum = paidVal === '' || paidVal == null ? NaN : Number(paidVal);
     if (!shouldCalc || !isFinite(amountNum) || amountNum <= 0) return;
     if (userEditedChargedRef.current) return; // user already typed charged, don't overwrite
@@ -319,7 +324,7 @@ export default function HKTransactionNewFormRHF({
     })();
 
     return () => { cancelled = true; };
-  }, [paidVal, allocationTargetVal, catId, categories, setValue]);
+  }, [paidVal, allocationTargetVal, catId, categories, setValue, serviceJobAllocation]);
 
   const onSubmit = async (values) => {
     // Normalize allocationTarget to new model
@@ -336,6 +341,8 @@ export default function HKTransactionNewFormRHF({
     // costCentre is HK_* derived from city (also enforced by backend)
     const costCentreOut = values.costCentre || initCostCentre || 'HK_General';
 
+    const paid = values.paid === '' || values.paid == null ? null : Number(values.paid);
+    const charged = values.charged === '' || values.charged == null ? null : Number(values.charged);
     const payload = {
       date: values.date,
       allocationTarget,
@@ -346,8 +353,8 @@ export default function HKTransactionNewFormRHF({
       type: values.type,
       description: values.description,
       notes: values.comments || '', // API expects 'notes'
-      paid: values.paid === '' || values.paid == null ? null : Number(values.paid),
-      charged: isPersonalExterno ? 0 : (values.charged === '' || values.charged == null ? null : Number(values.charged)),
+      paid,
+      charged: isPersonalExterno ? 0 : (serviceJobAllocation ? charged ?? paid : charged),
       mirrorToO2: !!values.mirrorToO2,
     };
     if (isNomina && values.description) {
@@ -374,17 +381,19 @@ export default function HKTransactionNewFormRHF({
     };
 
     const files = [
-      resolveFile(values.doc1),
-      resolveFile(values.doc2),
-    ].filter(Boolean);
+      ['doc1', resolveFile(values.doc1)],
+      ['doc2', resolveFile(values.doc2)],
+    ].filter(([, file]) => file);
 
     const transactionId = result?.id;
+
+    if (serviceJobAllocation && !result) return;
 
     if (files.length > 0 && !transactionId) {
       throw new Error('HK transaction was created, but no transaction ID was returned.');
     }
 
-    for (const file of files) {
+    for (const [field, file] of files) {
       const formData = new FormData();
       formData.append('file', file, file.name);
       formData.append('category_id', String(values.categoryId || effectiveInitial.categoryId || ''));
@@ -392,107 +401,144 @@ export default function HKTransactionNewFormRHF({
       formData.append('date', values.date || '');
       formData.append('tx_type', values.type || '');
 
-      await api.post(
-        `/api/hk-transactions/${transactionId}/documents/upload`,
-        formData
-      );
+      try {
+        await api.post(`/api/hk-transactions/${transactionId}/documents/upload`, formData);
+        if (serviceJobAllocation) methods.resetField(field);
+        onAttachmentUploaded?.(transactionId);
+      } catch (error) {
+        if (!onUploadError) throw error;
+        onUploadError(error);
+        return;
+      }
     }
+
+    onSubmitComplete?.();
 
     return result;
   };
 
+  const unitField = (
+    <Controller
+      name="unitId"
+      control={control}
+      render={({ field, fieldState }) => {
+        const selectedOption = units.find((u) => String(u.id) === String(field.value)) || null;
+        return (
+          <Autocomplete
+            disabled={serviceJobAllocation}
+            options={units}
+            value={selectedOption}
+            onChange={(_, option) => field.onChange(option?.id ?? '')}
+            onBlur={field.onBlur}
+            getOptionLabel={(option) => option?.unitName ?? option?.label ?? ''}
+            isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
+            autoHighlight
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Unit"
+                error={!!fieldState.error}
+                helperText={fieldState.error?.message}
+                fullWidth
+              />
+            )}
+          />
+        );
+      }}
+    />
+  );
+  const chargeToField = (
+    <RHFSelect
+      name="allocationTarget"
+      label={serviceJobAllocation ? "Charge to" : "Allocation Target"}
+      options={allocationTargetOptions}
+      getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
+      getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
+      widthVariant="full"
+      disabled={isPersonalExterno}
+    />
+  );
+  const costCentreField = (
+    <RHFSelect
+      name="costCentre"
+      label="Cost Centre"
+      margin={serviceJobAllocation ? 'none' : 'dense'}
+      options={costCentreOptions}
+      getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
+      getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
+      widthVariant="full"
+      disabled
+    />
+  );
+  const categoryField = (
+    <RHFSelect
+      name="categoryId"
+      label="Category"
+      options={categories}
+      getOptionLabel={(o) => o?.name ?? ''}
+      getOptionValue={(o) => o?.id}
+      widthVariant="full"
+    />
+  );
+  const allocationRow = {
+    display: 'grid',
+    gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
+    gap: 1.5,
+    alignItems: 'start',
+  };
+
   return (
-    <RHFForm formId={formId} methods={methods} onSubmit={onSubmit} style={{ display: 'grid', gap: 12 }}>
+    <RHFForm formId={formId} methods={methods} onSubmit={onSubmit} noValidate={!serviceJobAllocation} style={{ display: 'grid', gap: 12 }}>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-        <RHFDatePicker name="date" label="Date" widthVariant="full" />
+        <RHFDatePicker name="date" label="Date" widthVariant="full" sx={serviceJobAllocation ? { width: '100%' } : undefined} />
       </Box>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={widthMap.twoThirds}>
-          <Controller
-            name="unitId"
-            control={control}
-            render={({ field, fieldState }) => {
-              const selectedOption = units.find((u) => String(u.id) === String(field.value)) || null;
-              return (
-                <Autocomplete
-                  options={units}
-                  value={selectedOption}
-                  onChange={(_, option) => field.onChange(option?.id ?? '')}
-                  onBlur={field.onBlur}
-                  getOptionLabel={(option) => option?.unitName ?? option?.label ?? ''}
-                  isOptionEqualToValue={(option, value) => String(option?.id) === String(value?.id)}
-                  autoHighlight
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Unit"
-                      error={!!fieldState.error}
-                      helperText={fieldState.error?.message}
-                      fullWidth
-                    />
-                  )}
-                />
-              );
-            }}
-          />
-        </div>
-        <div style={widthMap.oneThird}>
-          <RHFSelect
-            name="city"
-            label="City"
-            options={cityOptions}
-            getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
-            getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
-            widthVariant="full"
-          />
-        </div>
-      </div>
+      {serviceJobAllocation ? (
+        <>
+          <Box sx={allocationRow}>{unitField}{costCentreField}</Box>
+          <Box sx={allocationRow}>{categoryField}{chargeToField}</Box>
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={widthMap.twoThirds}>
+              {unitField}
+            </div>
+            <div style={widthMap.oneThird}>
+              <RHFSelect
+                name="city"
+                label="City"
+                options={cityOptions}
+                getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
+                getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
+                widthVariant="full"
+              />
+            </div>
+          </div>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={widthMap.twoThirds}>
-          <RHFSelect
-            name="categoryId"
-            label="Category"
-            options={categories}
-            getOptionLabel={(o) => o?.name ?? ''}
-            getOptionValue={(o) => o?.id}
-            widthVariant="full"
-          />
-        </div>
-        <div style={widthMap.oneThird}>
-          <RHFSelect
-            name="type"
-            label="Type"
-            options={categoryType === 'Both' ? ['Gasto', 'Ingreso'] : [watch('type') || 'Gasto']}
-            widthVariant="full"
-            SelectProps={{ native: false }}
-            disabled={categoryType !== 'Both'}
-          />
-        </div>
-      </div>
-      <div style={widthMap.full}>
-        <RHFSelect
-          name="allocationTarget"
-          label="Allocation Target"
-          options={allocationTargetOptions}
-          getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
-          getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
-          widthVariant="full"
-          disabled={isPersonalExterno}
-        />
-      </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={widthMap.twoThirds}>
+              {categoryField}
+            </div>
+            <div style={widthMap.oneThird}>
+              <RHFSelect
+                name="type"
+                label="Type"
+                options={categoryType === 'Both' ? ['Gasto', 'Ingreso'] : [watch('type') || 'Gasto']}
+                widthVariant="full"
+                SelectProps={{ native: false }}
+                disabled={categoryType !== 'Both'}
+              />
+            </div>
+          </div>
+          <div style={widthMap.full}>
+            {chargeToField}
+          </div>
 
-      <div style={widthMap.full}>
-        <RHFSelect
-          name="costCentre"
-          label="Cost Centre"
-          options={costCentreOptions}
-          getOptionLabel={(o) => (typeof o === 'string' ? o : (o?.label ?? ''))}
-          getOptionValue={(o) => (typeof o === 'string' ? o : (o?.value ?? o?.label ?? ''))}
-          widthVariant="full"
-          disabled
-        />
-      </div>
+          <div style={widthMap.full}>
+            {costCentreField}
+          </div>
+        </>
+      )}
       {isNomina ? (
         <RHFSelect
           name="description"
@@ -503,14 +549,15 @@ export default function HKTransactionNewFormRHF({
           widthVariant="full"
         />
       ) : (
-        <RHFTextField name="description" label="Description" widthVariant="full" />
+        <RHFTextField name="description" label="Description" widthVariant="full" sx={serviceJobAllocation ? { width: '100%' } : undefined} />
       )}
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ ...widthMap.half, minWidth: 0 }}>
+      <Box sx={serviceJobAllocation ? allocationRow : { display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+        <div style={{ ...(serviceJobAllocation ? {} : widthMap.half), minWidth: 0 }}>
           <RHFTextField
             name="paid"
             label="Paid"
+            required={serviceJobAllocation}
             isMoney
             widthVariant="full"
             fullWidth
@@ -518,7 +565,7 @@ export default function HKTransactionNewFormRHF({
             InputProps={{ sx: { width: '100%' } }}
           />
         </div>
-        <div style={{ ...widthMap.half, minWidth: 0 }}>
+        <div style={{ ...(serviceJobAllocation ? {} : widthMap.half), minWidth: 0 }}>
           <RHFTextField
             name="charged"
             label="Charged"
@@ -530,13 +577,15 @@ export default function HKTransactionNewFormRHF({
             InputProps={{ sx: { width: '100%' } }}
           />
         </div>
-      </div>
-      <RHFTextField name="comments" label="Comments" multiline rows={3} widthVariant="full" />
+      </Box>
+      <RHFTextField name="comments" label="Comments" multiline rows={3} widthVariant="full" sx={serviceJobAllocation ? { width: '100%' } : undefined} />
 
-      {!hideFileInputs && (
+      {!hideFileInputs && attachmentSlots > 0 && (
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-          <RHFFile name="doc1" label="Document 1" accept=".pdf,.jpg,.jpeg,.png" widthVariant="half" />
-          <RHFFile name="doc2" label="Document 2" accept=".pdf,.jpg,.jpeg,.png" widthVariant="half" />
+          <RHFFile name="doc1" label="Document 1" accept=".pdf,.jpg,.jpeg,.png" fileActions={serviceJobAllocation} widthVariant={serviceJobAllocation ? 'auto' : 'half'} />
+          {attachmentSlots > 1 && (
+            <RHFFile name="doc2" label="Document 2" accept=".pdf,.jpg,.jpeg,.png" fileActions={serviceJobAllocation} widthVariant={serviceJobAllocation ? 'auto' : 'half'} />
+          )}
         </Box>
       )}
 
@@ -564,6 +613,7 @@ export default function HKTransactionNewFormRHF({
           </Button>
           <Button
             type="submit"
+            disabled={serviceJobAllocation && methods.formState.isSubmitting}
             variant="contained"
           >
             Save
@@ -588,4 +638,9 @@ HKTransactionNewFormRHF.propTypes = {
   hideFileInputs: PropTypes.bool,
   showInlineActions: PropTypes.bool,
   onCancel: PropTypes.func,
+  serviceJobAllocation: PropTypes.bool,
+  attachmentSlots: PropTypes.number,
+  onSubmitComplete: PropTypes.func,
+  onUploadError: PropTypes.func,
+  onAttachmentUploaded: PropTypes.func,
 };

@@ -27,6 +27,7 @@ import O2Results from './components/reports/O2Results';
 import Condos from './pages/Condos';
 import Clients from './pages/Clients';
 import ServiceProviders from './pages/ServiceProviders';
+import ServiceJobs from './pages/ServiceJobs';
 import ClientForm from './components/forms/ClientForm';
 import NewCondoForm from './components/forms/NewCondoForm';
 import EditCondoForm from './components/forms/EditCondoForm';
@@ -262,6 +263,14 @@ function App() {
           />
           <Route path="/hk-results" element={<HKResults />} />
         <Route path="/hk-cleanings" element={<HKCleaningsView />} />
+        <Route
+          path="/service-jobs"
+          element={
+            <RoleRoute roles={['ROLE_ADMIN']} fallback="/">
+              <ServiceJobs />
+            </RoleRoute>
+          }
+        />
         <Route
           path="/hk-cleanings-reconcile"
           element={

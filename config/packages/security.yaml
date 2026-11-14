@@ -89,6 +89,7 @@ security:
         - { path: ^/api/employee-ledger/\d+/(approve|reject|post)$, roles: [ROLE_MANAGER, ROLE_ADMIN] }
         - { path: ^/api/employee-ledger, roles: [ROLE_EMPLOYEE, ROLE_MANAGER, ROLE_ADMIN] }
         - { path: ^/api/service-providers(/|$), roles: ROLE_ADMIN }
+        - { path: ^/api/service-jobs(/|$), roles: ROLE_ADMIN }
         - { path: ^/api/admin, roles: ROLE_ADMIN }
         - { path: ^/api/manager, roles: ROLE_MANAGER }
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }

@@ -19,8 +19,12 @@ use Symfony\Component\Serializer\Annotation\MaxDepth;
 )]
 #[AppAssert\HousekeepersAllocation]
 #[ORM\Entity(repositoryClass: HKTransactionsRepository::class)]
+#[ORM\UniqueConstraint(name: 'UNIQ_HK_SERVICE_JOB_REQUEST', columns: ['service_job_id', 'allocation_request_key'])]
 class HKTransactions
 {
+    public const LINE_LABOUR = 'labour';
+    public const LINE_EQUIPMENT = 'equipment';
+
     public const ALLOC_CLIENT = 'Client';
     public const ALLOC_OWNERS2 = 'Owners2';
     public const ALLOC_GUEST = 'Guest';
@@ -92,6 +96,15 @@ class HKTransactions
     #[Groups(['hktransactions:read','hktransactions:write'])]
     private ?HKCleanings $hkCleaning = null;
 
+    #[ORM\ManyToOne(inversedBy: 'allocations')]
+    private ?ServiceJob $serviceJob = null;
+
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $allocationLineType = null;
+
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $allocationRequestKey = null;
+
     #[ORM\OneToMany(mappedBy: 'hkTransaction', targetEntity: UnitDocument::class, fetch: 'LAZY')]
     #[Groups(['hktransactions:read'])]
     #[MaxDepth(1)]
@@ -100,6 +113,27 @@ class HKTransactions
     public function __construct()
     {
         $this->unitDocuments = new ArrayCollection();
+    }
+
+    public function linkServiceJob(ServiceJob $job, string $lineType): void
+    {
+        $this->serviceJob = $job;
+        $this->allocationLineType = $lineType;
+    }
+
+    public function setAllocationRequestKey(string $requestKey): void
+    {
+        $this->allocationRequestKey = $requestKey;
+    }
+
+    public function getServiceJob(): ?ServiceJob
+    {
+        return $this->serviceJob;
+    }
+
+    public function getAllocationLineType(): ?string
+    {
+        return $this->allocationLineType;
     }
 
     public function getId(): ?int
