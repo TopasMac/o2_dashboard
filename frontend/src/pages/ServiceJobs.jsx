@@ -50,7 +50,8 @@ const EMPTY_FORM = {
 };
 
 export default function ServiceJobs() {
-  const [month, setMonth] = useState(() => monthFormatter.format(new Date()));
+  const [defaultMonth] = useState(() => monthFormatter.format(new Date()));
+  const [monthFilter, setMonth] = useState(null);
   const [status, setStatus] = useState('');
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
@@ -66,6 +67,15 @@ export default function ServiceJobs() {
   const [deleteError, setDeleteError] = useState('');
   const [savingAllocation, setSavingAllocation] = useState(false);
   const [statusError, setStatusError] = useState('');
+  const linkedJobId = new URLSearchParams(window.location.search).get('job');
+  const linkedJob = data?.jobs.find((job) => String(job.id) === linkedJobId);
+  const month = monthFilter ?? linkedJob?.scheduledDate.slice(0, 7) ?? defaultMonth;
+
+  useEffect(() => {
+    if (linkedJob && monthFilter === null) {
+      window.dispatchEvent(new CustomEvent('datatable:highlight', { detail: { id: linkedJob.id } }));
+    }
+  }, [linkedJob, monthFilter]);
 
   useEffect(() => {
     let current = true;
@@ -355,6 +365,7 @@ export default function ServiceJobs() {
         <Alert severity="warning" onClose={() => setAttachmentWarning('')}>{attachmentWarning}</Alert>
       )}
       {statusError && <Alert severity="error" onClose={() => setStatusError('')}>{statusError}</Alert>}
+      {data && linkedJobId && !linkedJob && <Alert severity="info">The linked service job could not be found.</Alert>}
       <Box sx={{ flex: 1, minHeight: 0, mt: 2 }}>
         <TableLite
           columns={columns}
@@ -487,7 +498,11 @@ export default function ServiceJobs() {
                     {selectedJob && !categories.some(({ id }) => id === selectedJob.category.id) && (
                       <MenuItem value={selectedJob.category.id}>{selectedJob.category.name}</MenuItem>
                     )}
-                    {categories.map((category) => <MenuItem key={category.id} value={category.id}>{category.name}</MenuItem>)}
+                    {categories.map((category) => (
+                      <MenuItem key={category.id} value={category.id}>
+                        {category.name === 'Limpieza_extra' ? 'Limpieza Extra' : category.name}
+                      </MenuItem>
+                    ))}
                   </TextField>
                   <Autocomplete
                     options={providers}

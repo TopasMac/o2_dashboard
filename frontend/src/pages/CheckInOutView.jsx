@@ -5,6 +5,7 @@ import { CheckCircleIcon, ClipboardDocumentCheckIcon, ClockIcon, ExclamationCirc
 import AppShell from '../components/layout/AppShell';
 import Page from '../components/layout/Page';
 import AppDrawer from '../components/common/AppDrawer';
+import ServiceJobIcon from '../components/ServiceJobIcon';
 import { getCleaningTypeLabel } from '../mobile/cleaningsModel';
 import { Alert, Box, Menu, MenuItem, TextField, Typography } from '@mui/material';
 
@@ -228,7 +229,27 @@ function ActivityDetailsPanel({ activity, open, onClose, onSaved }) {
 // Data source: GET /api/bookings/check-activity?start=YYYY-MM-DD&end=YYYY-MM-DD&city=...
 // Complete (create if missing + mark done): POST /api/hk-cleanings/mark-done-by { unitId, checkoutDate, reservationCode?, createIfMissing: true }
 
-const CheckInOutView = () => {
+function ScheduledJobRow({ job }) {
+  const done = job.status === 'done';
+  const StatusIcon = done ? CheckCircleIcon : ClockIcon;
+  const status = done ? 'Done' : 'Pending';
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '2px 0', overflowWrap: 'anywhere' }}>
+      <ServiceJobIcon job={job} size={16} />
+      <a href={`/service-jobs?job=${job.id}`} aria-label={`${status} — view service job for ${job.unitName}`} style={{ display: 'flex', flexShrink: 0 }}>
+        <StatusIcon title={status} style={{ width: 18, height: 18, color: done ? '#2e7d32' : '#ed9b00' }} />
+      </a>
+      <div style={{ display: 'grid', gap: 2, minWidth: 0, fontSize: 13 }}>
+        <strong>{job.unitName}</strong>
+        <span>{job.description}</span>
+        {job.notes && <em style={{ fontSize: 11, opacity: 0.65, whiteSpace: 'pre-wrap' }}>Notas: {job.notes}</em>}
+        {job.providerName && <span style={{ fontSize: 11 }}>Proveedor: {job.providerName}</span>}
+      </div>
+    </div>
+  );
+}
+
+const CheckInOutView = ({ showServiceJobs = false }) => {
   // ===== Filters =====
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -251,6 +272,8 @@ const CheckInOutView = () => {
 
   // ===== Data & selection =====
   const [rows, setRows] = useState([]); // raw API rows
+  const [serviceJobs, setServiceJobs] = useState([]);
+  const [serviceJobsError, setServiceJobsError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState({}); // key => entry
@@ -383,9 +406,19 @@ const CheckInOutView = () => {
     if (!start || !end) return;
     setLoading(true);
     setError('');
+    setServiceJobsError(false);
     try {
-      const res = await api.get('/api/bookings/check-activity', { params: { start, end, city } });
+      const [res, jobs] = await Promise.all([
+        api.get('/api/bookings/check-activity', { params: { start, end, city } }),
+        showServiceJobs
+          ? api.get('/api/service-jobs/activity', { params: { start, end } })
+            .then(({ data }) => Array.isArray(data?.jobs) ? data.jobs : null)
+            .catch(() => null)
+          : [],
+      ]);
       setRows(Array.isArray(res.data) ? res.data : []);
+      setServiceJobsError(jobs === null);
+      setServiceJobs((jobs ?? []).filter((job) => !city || job.city === city));
       clearSelection();
     } catch (e) {
       console.error(e);
@@ -441,8 +474,13 @@ const CheckInOutView = () => {
       // If neither flag is set, do nothing (no visible event)
     });
 
+    serviceJobs.forEach((job) => {
+      const cityName = ['Playa del Carmen', 'Tulum'].includes(job.city) ? job.city : 'Other locations';
+      ensureBucket(cityName, job.scheduledDate).push({ job, unit_name: job.unitName });
+    });
+
     return out;
-  }, [rows]);
+  }, [rows, serviceJobs]);
 
   // ===== Bulk complete (create if missing) =====
   const selectedCount = Object.keys(selected).length;
@@ -546,7 +584,9 @@ const CheckInOutView = () => {
             }}
           >
             {datesToShow.map((date) => {
-              const baseRows = byDate[date] || [];
+              const baseRows = byDate[date].filter((entry) => !entry.job);
+              const jobs = byDate[date].filter((entry) => entry.job).map((entry) => entry.job);
+              const jobRows = jobs.map((job) => <ScheduledJobRow key={job.id} job={job} />);
               // Build per-day status map to know which units have both in & out (turnover)
               const statusMap = {};
               baseRows.forEach((ev) => {
@@ -703,6 +743,7 @@ const CheckInOutView = () => {
                           )}
                         </div>
                       </div>
+                      {jobRows.length > 0 && <div style={{ marginTop: 8 }}>{jobRows}</div>}
                     </div>
                   );
                 }
@@ -738,7 +779,7 @@ const CheckInOutView = () => {
                   >
                     {formatDayLabel(date)}
                   </span>
-                  {dayRows.length === 0 ? (
+                  {dayRows.length === 0 && jobs.length === 0 ? (
                     <div style={{ opacity: 0.5, fontSize: 13 }}>No activity</div>
                   ) : (
                     <div style={{ display: 'grid', gap: 6 }}>
@@ -809,6 +850,7 @@ const CheckInOutView = () => {
                           </div>
                         );
                       })}
+                      {jobRows}
                     </div>
                   )}
                 </div>
@@ -821,8 +863,8 @@ const CheckInOutView = () => {
   };
 
   return (
-    <AppShell title="Check-in & Check-out">
-      <Page title="Check-in & Check-out">
+    <AppShell title="Activity Schedule">
+      <Page title="Activity Schedule">
         <div
           ref={exportRef}
           style={
@@ -857,6 +899,7 @@ const CheckInOutView = () => {
               >
                 <input
                   type="date"
+                  aria-label="Start date"
                   value={start}
                   onChange={(e) => handleStartChange(e.target.value)}
                   style={{
@@ -899,6 +942,7 @@ const CheckInOutView = () => {
               >
                 <input
                   type="date"
+                  aria-label="End date"
                   value={end}
                   onChange={(e) => setEnd(e.target.value)}
                   style={{
@@ -1010,6 +1054,8 @@ const CheckInOutView = () => {
                     setEnd('');
                     setCity('');
                     setRows([]);
+                    setServiceJobs([]);
+                    setServiceJobsError(false);
                     clearSelection();
                   }}
                   style={{ height: 37 }}
@@ -1033,6 +1079,7 @@ const CheckInOutView = () => {
               </div>
             </div>
 
+          {serviceJobsError && <Alert severity="warning">Could not load scheduled service jobs.</Alert>}
           {(!city || city === 'Playa del Carmen') && (
             <div
               style={
@@ -1068,6 +1115,7 @@ const CheckInOutView = () => {
               {renderCityRow('Tulum')}
             </div>
           )}
+          {!city && grouped['Other locations'] && renderCityRow('Other locations')}
         </div>
         <ActivityDetailsPanel
           activity={activityDetails}

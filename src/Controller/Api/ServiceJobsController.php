@@ -19,7 +19,8 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/service-jobs', name: 'api_service_jobs_')]
 final class ServiceJobsController extends AbstractController
 {
-    private const CATEGORY_NAMES = ['Mantenimiento', 'Equipamiento', 'Servicios Externos'];
+    private const CATEGORY_NAMES = ['Mantenimiento', 'Servicios Externos'];
+    private const EXTRA_CLEANING_CATEGORY_ID = 8;
     private const ALLOCATION_CATEGORY_NAMES = ['Equipamiento', 'Limpieza_extra', 'Mantenimiento', 'Otros', 'Servicios Externos'];
 
     public function __construct(private readonly EntityManagerInterface $em)
@@ -45,6 +46,52 @@ final class ServiceJobsController extends AbstractController
         return $this->respond(['jobs' => array_map(self::row(...), $jobs)]);
     }
 
+    #[Route('/activity', name: 'activity', methods: ['GET'])]
+    public function activity(Request $request): JsonResponse
+    {
+        $dates = [];
+        foreach (['start', 'end'] as $field) {
+            $value = $request->query->get($field);
+            $date = is_string($value) ? \DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
+            if (!$date || $date->format('Y-m-d') !== $value) {
+                return $this->respond(['error' => 'Provide start and end dates in YYYY-MM-DD format.'], 400);
+            }
+            $dates[$field] = $date;
+        }
+        if ($dates['end'] < $dates['start']) {
+            return $this->respond(['error' => 'End date must be on or after start date.'], 400);
+        }
+
+        $jobs = $this->em->createQueryBuilder()
+            ->select('job', 'unit', 'provider', 'category')
+            ->from(ServiceJob::class, 'job')
+            ->join('job.unit', 'unit')
+            ->join('job.category', 'category')
+            ->leftJoin('job.provider', 'provider')
+            ->where('job.scheduledDate BETWEEN :start AND :end')
+            ->andWhere('job.status <> :cancelled')
+            ->setParameter('start', $dates['start'], 'date_immutable')
+            ->setParameter('end', $dates['end'], 'date_immutable')
+            ->setParameter('cancelled', ServiceJob::CANCELLED)
+            ->orderBy('job.scheduledDate', 'ASC')
+            ->addOrderBy('job.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        return $this->respond(['jobs' => array_map(static fn (ServiceJob $job): array => [
+            'id' => $job->getId(),
+            'scheduledDate' => $job->getScheduledDate()->format('Y-m-d'),
+            'unitName' => $job->getUnit()->getUnitName(),
+            'city' => $job->getUnit()->getCity(),
+            'description' => $job->getDescription(),
+            'notes' => $job->getNotes(),
+            'providerName' => $job->getProvider()?->getName(),
+            'status' => $job->getStatus(),
+            'categoryId' => $job->getCategory()->getId(),
+            'categoryName' => $job->getCategory()->getName(),
+        ], $jobs)]);
+    }
+
     #[Route('/options', name: 'options', methods: ['GET'])]
     public function options(): JsonResponse
     {
@@ -60,15 +107,16 @@ final class ServiceJobsController extends AbstractController
         $categories = $this->em->createQueryBuilder()
             ->select('category.id', 'category.name')
             ->from(TransactionCategory::class, 'category')
-            ->where('category.name IN (:names)')
+            ->where('category.name IN (:names) OR category.id = :extraCleaningId')
             ->setParameter('names', self::CATEGORY_NAMES)
+            ->setParameter('extraCleaningId', self::EXTRA_CLEANING_CATEGORY_ID)
             ->orderBy('category.name', 'ASC')
             ->getQuery()
             ->getArrayResult();
 
         // Apply the same exact-name policy as writes, independent of MySQL collation.
         $categories = array_values(array_filter($categories, static fn (array $category): bool =>
-            in_array($category['name'], self::CATEGORY_NAMES, true)
+            (int) $category['id'] === self::EXTRA_CLEANING_CATEGORY_ID || in_array($category['name'], self::CATEGORY_NAMES, true)
         ));
 
         $allocationCategories = $this->em->createQueryBuilder()
@@ -280,7 +328,11 @@ final class ServiceJobsController extends AbstractController
         }
 
         $category = is_int($data['categoryId']) ? $this->em->find(TransactionCategory::class, $data['categoryId']) : null;
-        if ($category === null || ($category !== $existingCategory && !in_array($category->getName(), self::CATEGORY_NAMES, true))) {
+        if ($category === null || (
+            $category !== $existingCategory
+            && $category->getId() !== self::EXTRA_CLEANING_CATEGORY_ID
+            && !in_array($category->getName(), self::CATEGORY_NAMES, true)
+        )) {
             return $this->respond(['error' => 'Choose a service category.'], 400);
         }
 

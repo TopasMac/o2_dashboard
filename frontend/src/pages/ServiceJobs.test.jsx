@@ -11,6 +11,32 @@ jest.mock('../components/layout/AppShell', () => ({ children }) => <div>{childre
 jest.mock('../components/layout/SectionHeader', () => () => null);
 jest.mock('../api', () => ({ get: jest.fn(), post: jest.fn(), patch: jest.fn(), put: jest.fn(), delete: jest.fn() }));
 
+test('opens the linked job month and scrolls to its row', async () => {
+  const job = {
+    id: 42, unit: { id: 1, name: 'Test unit' }, category: { id: 2, name: 'Mantenimiento' },
+    scheduledDate: '2020-02-01', description: 'Repair pump', status: 'pending',
+  };
+  api.get.mockImplementation(async (url) => ({ data: {
+    '/api/service-jobs': { jobs: [job] },
+    '/api/service-jobs/options': { units: [], categories: [] },
+    '/api/service-providers': { providers: [] },
+  }[url] }));
+
+  const originalUrl = window.location.href;
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  const scrollIntoView = jest.fn(function () { return this; });
+  HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  window.history.replaceState(null, '', '/service-jobs?job=42');
+  try {
+    render(<ServiceJobs />);
+    const row = await screen.findByRole('row', { name: /Repair pump/ });
+    await waitFor(() => expect(scrollIntoView).toHaveReturnedWith(row));
+  } finally {
+    window.history.replaceState(null, '', originalUrl);
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  }
+});
+
 test('schedules an unassigned job, then edits it to assign a provider and complete it', async () => {
   const unit = { id: 1, name: 'IT_001' };
   const category = { id: 2, name: 'Mantenimiento' };

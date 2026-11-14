@@ -37,10 +37,12 @@ const AREA_OPTIONS = [
 
 const OCCUPATION_OPTIONS = [
   'Handyman',
+  'Housekeeper',
   'Plumber',
   'Electrician',
   'AC Technician',
   'Painter',
+  'Pest Control',
   'Appliance Repair',
   'Carpenter',
   'Locksmith',
@@ -418,7 +420,9 @@ export default function ServiceProviders() {
                 <TextField label="Name" {...field('name')} required slotProps={{ htmlInput: { maxLength: 120 } }} />
 
                 <TextField select label="Occupation" {...field('occupation')}>
-                  {optionsWithCurrent(OCCUPATION_OPTIONS, form.occupation).map((value) => (
+                  {[...optionsWithCurrent(OCCUPATION_OPTIONS, form.occupation)]
+                    .sort((a, b) => a.localeCompare(b, 'en'))
+                    .map((value) => (
                     <MenuItem key={value} value={value}>{value}</MenuItem>
                   ))}
                 </TextField>
