@@ -1,14 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from '@mui/material/Link';
 import {
   ArrowLeftIcon,
   ArrowPathIcon,
   ArrowRightIcon,
   CheckCircleIcon,
+  ClipboardDocumentListIcon,
   ClockIcon,
-  SparklesIcon,
   XCircleIcon,
 } from '@heroicons/react/24/solid';
 import api from '../../api';
+import ServiceJobIcon from '../ServiceJobIcon';
 import { getCleaningTypeLabel } from '../../mobile/cleaningsModel';
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -109,18 +111,22 @@ function CleaningStatusIcon({ status }) {
 
 function ActivitySection({ icon, iconColor, title, items, emptyMessage, children }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#061825' }}>
-        <span style={{ width: 24, height: 24, color: iconColor, display: 'inline-flex', alignItems: 'center' }}>{icon}</span>
-        <strong style={{ fontSize: 15 }}>{title}</strong>
-        <span style={{ color: '#65717b', fontSize: 14 }}>({items.length})</span>
+    <details>
+      <summary style={{ cursor: 'pointer', color: '#061825' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginInlineStart: 6, verticalAlign: 'middle' }}>
+          <span style={{ width: 24, height: 24, color: iconColor }} aria-hidden="true">{icon}</span>
+          <strong style={{ fontSize: 15 }}>{title}</strong>
+          <span style={{ color: '#65717b', fontSize: 14 }}>({items.length})</span>
+        </span>
+      </summary>
+      <div style={{ marginTop: 8 }}>
+        {items.length > 0 ? children : (
+          <div style={{ ...ACTIVITY_ROW_STYLE, color: '#7b858d', fontSize: 13, fontStyle: 'italic', minHeight: 42, display: 'flex', alignItems: 'center' }}>
+            {emptyMessage}
+          </div>
+        )}
       </div>
-      {items.length > 0 ? children : (
-        <div style={{ ...ACTIVITY_ROW_STYLE, color: '#7b858d', fontSize: 13, fontStyle: 'italic', minHeight: 42, display: 'flex', alignItems: 'center' }}>
-          {emptyMessage}
-        </div>
-      )}
-    </section>
+    </details>
   );
 }
 
@@ -167,6 +173,52 @@ function CleaningRow({ item }) {
   );
 }
 
+function ServiceJobRow({ item }) {
+  const isDone = item.status === 'done';
+  return (
+    <div style={{ ...ACTIVITY_ROW_STYLE, display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: 8 }}>
+      <ServiceJobIcon job={item} />
+      <div style={{ color: '#071825', fontSize: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+          <strong>{item.unitName}</strong>
+          <Link href={`/service-jobs?job=${item.id}`} aria-label={`${isDone ? 'Done' : 'Pending'} — ver servicio de ${item.unitName}`} underline="none" sx={{
+            borderRadius: '10px',
+            padding: '1px 6px',
+            fontSize: 11,
+            fontWeight: 600,
+            color: isDone ? '#236047' : '#754b00',
+            background: isDone ? '#e4f3e9' : '#fff2cf',
+            '&:hover': { color: '#087f80' },
+          }}>
+            {isDone ? 'Done' : 'Pending'}
+          </Link>
+        </div>
+        <div style={{ color: '#4c5964', marginTop: 2 }}>{item.description}</div>
+        {item.notes && <div style={{ color: '#65717b', fontSize: 12, marginTop: 4, whiteSpace: 'pre-wrap' }}><strong>Notas:</strong> {item.notes}</div>}
+        {item.providerName && <div style={{ color: '#65717b', fontSize: 12, marginTop: 2 }}><strong>Proveedor:</strong> {item.providerName}</div>}
+      </div>
+    </div>
+  );
+}
+
+function ServicesSection({ services }) {
+  return (
+    <ActivitySection
+      icon={<ClipboardDocumentListIcon style={{ width: 20, height: 20 }} />}
+      iconColor="#e99b00"
+      title="Servicios"
+      items={services}
+      emptyMessage="No hay servicios para este día"
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {services.map((item) => item.kind === 'job'
+          ? <ServiceJobRow key={`job-${item.id}`} item={item} />
+          : <CleaningRow key={`cleaning-${item.id}`} item={item} />)}
+      </div>
+    </ActivitySection>
+  );
+}
+
 function CityActivityPanel({ cityName, activity }) {
   return (
     <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -193,22 +245,12 @@ function CityActivityPanel({ cityName, activity }) {
           {activity.checkOuts.map((item) => <ReservationRow key={`out-${item.id}`} item={item} type="checkOut" />)}
         </div>
       </ActivitySection>
-      <ActivitySection
-        icon={<SparklesIcon style={{ width: 24, height: 24 }} />}
-        iconColor="#e99b00"
-        title="Limpiezas"
-        items={activity.cleanings}
-        emptyMessage="No hay limpiezas manuales hoy"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {activity.cleanings.map((item) => <CleaningRow key={`cleaning-${item.id}`} item={item} />)}
-        </div>
-      </ActivitySection>
+      <ServicesSection services={activity.services} />
     </div>
   );
 }
 
-export default function ActivityCard() {
+export default function ActivityCard({ showServiceJobs = false }) {
   const today = useMemo(() => toDateOnly(new Date()), []);
   const windowFrom = useMemo(() => addDays(today, -1), [today]);
   const windowTo = useMemo(() => addDays(today, 3), [today]);
@@ -216,6 +258,7 @@ export default function ActivityCard() {
   const [day, setDay] = useState(today);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [serviceJobsError, setServiceJobsError] = useState(false);
   const [groupedDays, setGroupedDays] = useState({});
 
   const currentKey = formatYmdInCancun(day);
@@ -229,17 +272,26 @@ export default function ActivityCard() {
     async function loadActivity() {
       setLoading(true);
       setError(null);
+      setServiceJobsError(false);
       try {
-        const { data } = await api.get('/api/bookings/check-activity', {
-          params: { start: formatYmdInCancun(windowFrom), end: formatYmdInCancun(windowTo) },
-        });
+        const params = { start: formatYmdInCancun(windowFrom), end: formatYmdInCancun(windowTo) };
+        const [{ data }, jobs] = await Promise.all([
+          api.get('/api/bookings/check-activity', { params }),
+          showServiceJobs
+            ? api.get('/api/service-jobs/activity', { params }).then(({ data }) =>
+              Array.isArray(data?.jobs) ? data.jobs : null
+            ).catch(() => null)
+            : [],
+        ]);
         if (cancelled) return;
+        setServiceJobsError(jobs === null);
 
         const days = {};
         dateOptions.forEach((date) => {
           days[formatYmdInCancun(date)] = {
-            playa: { checkIns: [], checkOuts: [], cleanings: [] },
-            tulum: { checkIns: [], checkOuts: [], cleanings: [] },
+            playa: { checkIns: [], checkOuts: [], services: [] },
+            tulum: { checkIns: [], checkOuts: [], services: [] },
+            other: { services: [] },
           };
         });
 
@@ -282,7 +334,7 @@ export default function ActivityCard() {
           if (isManualCleaning(row)) {
             const key = String(row.service_date).slice(0, 10);
             if (days[key]) {
-              days[key][cityKey].cleanings.push({
+              days[key][cityKey].services.push({
                 id: row.hk_cleaning_id ?? row.hk?.id,
                 unitName: deriveUnitName(row),
                 cleaningType: getCleaningTypeLabel(row.hk_cleaning_type ?? row.hk?.cleaningType ?? ''),
@@ -292,6 +344,13 @@ export default function ActivityCard() {
               });
             }
           }
+        });
+
+        (jobs ?? []).forEach((job) => {
+          const activity = days[job.scheduledDate];
+          if (!activity) return;
+          const cityKey = normalizeCityBucket(job.city) ?? 'other';
+          activity[cityKey].services.push({ ...job, kind: 'job' });
         });
 
         Object.values(days).forEach((cityDays) => {
@@ -313,13 +372,13 @@ export default function ActivityCard() {
 
     loadActivity();
     return () => { cancelled = true; };
-  }, [dateOptions, windowFrom, windowTo]);
+  }, [dateOptions, windowFrom, windowTo, showServiceJobs]);
 
-  const emptyActivity = { checkIns: [], checkOuts: [], cleanings: [] };
-  const current = groupedDays[currentKey] || { playa: emptyActivity, tulum: emptyActivity };
+  const emptyActivity = { checkIns: [], checkOuts: [], services: [] };
+  const current = groupedDays[currentKey] || { playa: emptyActivity, tulum: emptyActivity, other: emptyActivity };
   const totalCheckIns = current.playa.checkIns.length + current.tulum.checkIns.length;
   const totalCheckOuts = current.playa.checkOuts.length + current.tulum.checkOuts.length;
-  const totalCleanings = current.playa.cleanings.length + current.tulum.cleanings.length;
+  const totalServices = current.playa.services.length + current.tulum.services.length + current.other.services.length;
   const turnoverUnits = new Set(
     ['playa', 'tulum'].flatMap((city) => {
       const checkIns = new Set(current[city].checkIns.map((item) => item.unitName));
@@ -367,8 +426,9 @@ export default function ActivityCard() {
             <ActivityTotal icon={<ArrowPathIcon />} color="#087f80" value={turnoverUnits} label="Cambios" />
             <ActivityTotal icon={<ArrowRightIcon />} color="#087f80" value={totalCheckIns} label="Entradas" />
             <ActivityTotal icon={<ArrowLeftIcon />} color="#ef5565" value={totalCheckOuts} label="Salidas" />
-            <ActivityTotal icon={<SparklesIcon />} color="#e99b00" value={totalCleanings} label="Limpiezas" />
+            <ActivityTotal icon={<ClipboardDocumentListIcon />} color="#e99b00" value={totalServices} label="Servicios" />
           </div>
+          {serviceJobsError && <p role="status" style={{ color: '#a33d21', fontSize: 13 }}>No se pudieron cargar los trabajos programados.</p>}
           <div style={{ border: '1px solid #dce6e7', borderRadius: 12, padding: 14, overflow: 'hidden' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 20 }}>
               <CityActivityPanel cityName="Playa del Carmen" activity={current.playa} />
@@ -376,6 +436,12 @@ export default function ActivityCard() {
                 <CityActivityPanel cityName="Tulum" activity={current.tulum} />
               </div>
             </div>
+            {current.other.services.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <h3 style={{ margin: '0 0 8px', color: '#087f80', fontSize: 17 }}>Otras ubicaciones</h3>
+                <ServicesSection services={current.other.services} />
+              </div>
+            )}
           </div>
         </>
       )}

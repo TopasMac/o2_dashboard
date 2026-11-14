@@ -33,7 +33,6 @@ import NewCondoForm from './components/forms/NewCondoForm';
 import EditCondoForm from './components/forms/EditCondoForm';
 import Owners2UnitTransactions from './pages/Owners2UnitTransactions';
 import HKTransactions from './pages/HKTransactions';
-import HKLaundryRecords from './pages/HKLaundryRecords';
 import HRTransactions from './pages/HRTransactions';
 import EmployeeCashAdmin from './pages/EmployeeCashAdmin';
 import Reports from './pages/Reports';
@@ -155,7 +154,13 @@ function RoleRoute({ roles = [], children, fallback = '/dashboard' }) {
 
 function DashboardRoute() {
   const userRoles = getUserRolesFromToken(getToken());
-  return <Dashboard showAirbnbReviews={hasAnyRole(userRoles, ['ROLE_ADMIN'])} />;
+  const isAdmin = hasAnyRole(userRoles, ['ROLE_ADMIN']);
+  return <Dashboard showAirbnbReviews={isAdmin} showServiceJobs={isAdmin} />;
+}
+
+function ActivityScheduleRoute() {
+  const roles = getUserRolesFromToken(getToken());
+  return <CheckInOutView showServiceJobs={hasAnyRole(roles, ['ROLE_ADMIN'])} />;
 }
 
 // Decides where to land after auth based on role
@@ -251,7 +256,6 @@ function App() {
           <Route path="/condos/edit/:id" element={<EditCondoForm />} />
           <Route path="/condos/new" element={<NewCondoForm />} />
           <Route path="/hk-transactions" element={<HKTransactions />} />
-          <Route path="/hk-laundry-records" element={<HKLaundryRecords />} />
           <Route path="/hr-transactions" element={<HRTransactions />} />
           <Route
             path="/employee-cash-admin"
@@ -279,7 +283,7 @@ function App() {
             </RoleRoute>
           }
         />
-        <Route path="/check-in-out" element={<CheckInOutView />} />
+        <Route path="/check-in-out" element={<ActivityScheduleRoute />} />
         <Route path="/bookings-timeline" element={<BookingsTimeline />} />
         <Route
           path="/bookings-ical"

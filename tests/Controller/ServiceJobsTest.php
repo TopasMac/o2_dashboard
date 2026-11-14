@@ -51,7 +51,8 @@ final class ServiceJobsTest extends KernelTestCase
             self::assertArrayHasKey('IT_001', $units);
             self::assertArrayNotHasKey('SERVICE_JOB_INACTIVE', $units);
             self::assertArrayHasKey('Mantenimiento', $categories);
-            self::assertSame([], array_diff(array_keys($categories), ['Mantenimiento', 'Equipamiento', 'Servicios Externos']));
+            self::assertSame(8, (int) ($categories['Limpieza_extra'] ?? 0));
+            self::assertSame([], array_diff(array_keys($categories), ['Mantenimiento', 'Limpieza_extra', 'Servicios Externos']));
 
             $directory = $this->json('GET', '/api/service-providers', $admin, 200);
             self::assertNotEmpty($directory['providers']);
@@ -75,6 +76,7 @@ final class ServiceJobsTest extends KernelTestCase
             foreach ([
                 ['GET', self::JOBS, []],
                 ['GET', self::JOBS.'/options', []],
+                ['GET', self::JOBS.'/activity?start=2026-11-12&end=2026-11-12', []],
                 ['POST', self::JOBS, $payload],
                 ['PATCH', $path, ['status' => 'done']],
             ] as [$method, $url, $data]) {
@@ -87,12 +89,22 @@ final class ServiceJobsTest extends KernelTestCase
             self::assertSame($providerId, $assigned['provider']['id']);
             $this->json('PATCH', $path, $admin, 200, ['status' => 'done', 'notes' => 'Completed']);
             $this->json('PATCH', $path, $admin, 200, ['bill_to' => 'OWNERS2']);
-            $second = $this->json('POST', self::JOBS, $admin, 201, $payload + ['bill_to' => 'OWNERS2'])['job'];
+            $second = $this->json('POST', self::JOBS, $admin, 201, array_replace($payload, ['categoryId' => 8, 'bill_to' => 'OWNERS2']))['job'];
+            self::assertSame(8, $second['category']['id']);
             self::assertSame('OWNERS2', $second['bill_to']);
             $this->json('PATCH', self::JOBS.'/'.$second['id'], $admin, 200, ['bill_to' => 'CLIENT']);
             $this->json('PATCH', self::JOBS.'/'.$second['id'], $admin, 200, ['status' => 'cancelled']);
 
-            $uncurated = $connection->fetchOne("SELECT id FROM transaction_category WHERE name NOT IN ('Mantenimiento', 'Equipamiento', 'Servicios Externos') LIMIT 1");
+            $activity = array_column($this->json('GET', self::JOBS.'/activity?start=2026-11-12&end=2026-11-12', $admin, 200)['jobs'], null, 'id');
+            self::assertArrayNotHasKey($second['id'], $activity);
+            self::assertSame('IT_001', $activity[$created['id']]['unitName']);
+            self::assertSame('Clean pipes', $activity[$created['id']]['description']);
+            self::assertSame('Completed', $activity[$created['id']]['notes']);
+            self::assertSame($assigned['provider']['name'], $activity[$created['id']]['providerName']);
+            $nextDay = array_column($this->json('GET', self::JOBS.'/activity?start=2026-11-13&end=2026-11-13', $admin, 200)['jobs'], null, 'id');
+            self::assertArrayNotHasKey($created['id'], $nextDay);
+
+            $uncurated = $connection->fetchOne("SELECT id FROM transaction_category WHERE name = 'Equipamiento' LIMIT 1");
             self::assertNotFalse($uncurated);
             foreach ([
                 ['scheduledDate' => '2026-02-30'],
