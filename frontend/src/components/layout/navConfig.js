@@ -58,7 +58,6 @@ import {
       submenu: [
         { label: 'Table', icon: DocumentTextIcon, to: '/bookings' },
         { label: 'Calendar', icon: CalendarDaysIcon, to: '/bookings-timeline' },
-        { label: 'CheckInOut', icon: ArrowsRightLeftIcon, to: '/check-in-out' },
         { label: 'iCal Table', icon: ExclamationTriangleIcon, to: '/bookings-ical' },
       ],
     },
@@ -86,10 +85,9 @@ import {
       icon: WrenchScrewdriverIcon,
       roles: ['ROLE_ADMIN','ROLE_MANAGER'],
       submenu: [
-        { label: 'CheckInOut View', icon: ArrowsRightLeftIcon, to: '/check-in-out' }, // using arrows icon for turnover vibe
+        { label: 'Activity Schedule', icon: ArrowsRightLeftIcon, to: '/check-in-out' }, // using arrows icon for turnover vibe
         { label: 'Cleanings Table', icon: ReceiptPercentIcon, to: '/hk-cleanings' }, // (you can swap back to Sparkles if you prefer)
         { label: 'Service Jobs', icon: WrenchScrewdriverIcon, to: '/service-jobs', roles: ['ROLE_ADMIN'] },
-        { label: 'Laundry Records', icon: ClipboardDocumentListIcon, to: '/hk-laundry-records' },
         { 
           label: 'HK Reconciliation', 
           icon: DocumentChartBarIcon, 
