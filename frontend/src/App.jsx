@@ -152,6 +152,11 @@ function RoleRoute({ roles = [], children, fallback = '/dashboard' }) {
 }
 // --- end role helpers ---
 
+function DashboardRoute() {
+  const userRoles = getUserRolesFromToken(getToken());
+  return <Dashboard showAirbnbReviews={hasAnyRole(userRoles, ['ROLE_ADMIN'])} />;
+}
+
 // Decides where to land after auth based on role
 function LandingRedirect() {
   const token = getToken();
@@ -205,7 +210,7 @@ function App() {
             path="/dashboard"
             element={
               <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
-                <Dashboard showAirbnbReviews={hasAnyRole(getUserRolesFromToken(getToken()), ['ROLE_ADMIN'])} />
+                <DashboardRoute />
               </RoleRoute>
             }
           />
