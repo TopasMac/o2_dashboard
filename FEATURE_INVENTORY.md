@@ -140,6 +140,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Airbnb guest reviews | Keep | Desktop Admins can work the review queue under Alertas → Reseñas Airbnb. The Manager dashboard also has the queue. Reviews are submitted manually in Airbnb, and Owners2 records completed, skipped, and timed-out outcomes for reporting. |
 | Holds and soft reservations | Protect | Affects availability and automatic expiry. Test before consolidation. |
 | Housekeeping cleanings and reconciliation | Keep | High-volume operational data and automatic booking side effects. |
+| Service Jobs | Keep | Admin-only scheduling under Housekeeping. Jobs use a curated selection of transaction categories and can be assigned to providers from the existing directory. Admins can explicitly allocate completed jobs to multiple Labour and Equipment transactions. Each Client-billed line appears in the owner report for its transaction month. |
 | Housekeeping laundry | Review | 19 laundry records and 3 rate rows. Confirm whether this workflow is still used. |
 | Employees and tasks | Keep | 7 employees, 64 tasks, comments, mobile task UI, access generation, and notifications. |
 | Employee cash and financial ledgers | Keep | 204 cash rows and 92 financial-ledger rows, with approval and allocation workflows. |
