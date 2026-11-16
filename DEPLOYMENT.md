@@ -96,5 +96,4 @@ Roll back to the commit recorded in step 1.2: check it out on the server, rebuil
 
 ## 6. After the release
 
-- Fast-forward `develop` to `main` so the merge commit is on `develop`.
 - Record the production commit and rollback point in `PROJECT_STATUS.md`, and update `FEATURE_INVENTORY.md` for kept, retired, or redesigned features.

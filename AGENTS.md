@@ -41,7 +41,7 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 
 ## Working method
 
-1. Start from an up-to-date `develop` branch and use a short-lived, purpose-specific branch.
+1. Start from an up-to-date `main` branch and use a short-lived, purpose-specific branch.
 2. Inspect the relevant frontend, backend, database, scheduled-job, and external-integration paths before editing.
 3. Keep changes focused. Do not mix cleanup, schema repair, and feature behavior in one change.
 4. Preserve unrelated user changes and call out unexpected repository state before proceeding.
@@ -54,14 +54,14 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 Before any edits:
 
 1. Run `git fetch origin --prune` and report the current branch and worktree.
-2. If `git log origin/develop..HEAD` or `git status --short` is non-empty, stop and tell the user. If HEAD is detached, stop unless this is a linked worktree (not the main checkout) with a clean tree and no commits ahead of `origin/develop`; a detached HEAD there is expected (for example, Codex worktrees). Otherwise run `git reset --hard origin/develop`.
-3. Name the branch `feature/<name>` using the name the user provides. Do not choose the name. In an app-managed worktree, rename the app-created branch with the app's rename tool, never raw `git branch -m`. Outside an app worktree, or from a detached HEAD in a linked worktree, create it with `git switch -c feature/<name> --no-track origin/develop`.
-4. Verify and report: branch name, `HEAD == origin/develop`, clean tree.
-5. Never branch from or reuse another feature branch. If the main checkout is on unfinished work, use a separate `git worktree add` from `origin/develop`.
+2. If `git log origin/main..HEAD` or `git status --short` is non-empty, stop and tell the user. If HEAD is detached, stop unless this is a linked worktree (not the main checkout) with a clean tree and no commits ahead of `origin/main`; a detached HEAD there is expected (for example, Codex worktrees). Otherwise run `git reset --hard origin/main`.
+3. Name the branch `feature/<name>` using the name the user provides. Do not choose the name. In an app-managed worktree, rename the app-created branch with the app's rename tool, never raw `git branch -m`. Outside an app worktree, or from a detached HEAD in a linked worktree, create it with `git switch -c feature/<name> --no-track origin/main`.
+4. Verify and report: branch name, `HEAD == origin/main`, clean tree.
+5. Never branch from or reuse another feature branch. If the main checkout is on unfinished work, use a separate `git worktree add` from `origin/main`.
 
 ## Finishing a feature
 
-Squash-merged branches are not recognized by `git branch -d`; use `git branch -D feature/<name>` only after confirming the PR is merged. Never delete `develop` or `main`. Remove any worktree first (`git worktree remove <path>`), then delete the branch. GitHub deletes the remote branch on merge; confirm with `git fetch --prune`.
+Squash-merged branches are not recognized by `git branch -d`; use `git branch -D feature/<name>` only after confirming the PR is merged. Never delete `main`. Remove any worktree first (`git worktree remove <path>`), then delete the branch. GitHub deletes the remote branch on merge; confirm with `git fetch --prune`.
 
 ## Database changes
 
@@ -77,11 +77,11 @@ Squash-merged branches are not recognized by `git branch -d`; use `git branch -D
 The intended promotion path is:
 
 ```text
-feature/fix branch -> pull request into develop -> local/staging verification
--> pull request from develop into main -> explicit manual production deployment
+feature/fix branch -> pull request into main (squash merge) -> local verification
+-> explicit manual production deployment
 ```
 
-`develop` is the permanent integration branch. Do not delete it after a pull request is merged.
+`main` is the only long-lived branch. Protect it on GitHub (require a pull request).
 
 Merging into `main` is not itself a deployment. The current deployment script pulls `main`, installs dependencies, runs migrations, builds the frontend, and restarts Nginx. Review the change set, migration SQL, backup status, and rollback plan before invoking it.
 

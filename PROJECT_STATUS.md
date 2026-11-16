@@ -126,15 +126,14 @@ Use the approved local snapshot. Never connect local code to production. Load lo
 
 ```text
 short-lived branch
--> pull request into develop
+-> pull request into main (squash merge)
 -> local/staging verification
--> pull request from develop into main
 -> explicit manual production deployment
 ```
 
 Merging into `main` does not deploy automatically. Before deployment, inspect the production working tree. If it is dirty, stop, archive the changes, reconcile intended behavior into Git, and only then clean the checkout. Confirm the backup, exact target commit, migration plan, rollback plan, and explicit authorization before running `bash deploy.sh`.
 
-Before each pull request from `develop` into `main`, update `FEATURE_INVENTORY.md` for any feature that was kept, retired, or materially redesigned, and update the production commit in this file after the deployment is verified.
+Before each pull request into `main`, update `FEATURE_INVENTORY.md` for any feature that was kept, retired, or materially redesigned, and update the production commit in this file after the deployment is verified.
 
 After deployment, verify the Git revision, Nginx state, migration status, login, Bookings, and Housekeeping/Cleanings. Retain safety artifacts until the release is confirmed stable.
 
