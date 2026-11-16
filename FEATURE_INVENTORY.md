@@ -83,6 +83,8 @@ Required protection:
 
 Bookings feed month slices, calendar availability, financial reports, status updates, holds, housekeeping cleanings, and reconciliations.
 
+Reservation status changes from Upcoming to Ongoing at 15:00 on the stored check-in date and from Ongoing to Past at 11:00 on the stored checkout date, using the shared America/Cancun business clock for all cities. These cutoffs apply when status is recalculated. The check-in/out schedule and housekeeping continue to use the stored calendar dates.
+
 Current exact local snapshot counts:
 
 | Data | Rows |

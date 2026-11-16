@@ -5,6 +5,7 @@ namespace App\Command;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\AllBookings;
 use App\Service\HKCleaningManager;
+use App\Service\ReservationStatus;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -28,7 +29,7 @@ class UpdateBookingStatusCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $today = (new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun')))->format('Y-m-d');
+        $dates = ReservationStatus::transitionDates();
         $connection = $this->entityManager->getConnection();
 
         $past = $connection->executeStatement(
@@ -36,9 +37,9 @@ class UpdateBookingStatusCommand extends Command
              SET status = 'Past'
              WHERE source <> 'Owners2'
                AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'canceled')
-               AND check_out < :today
+               AND check_out <= :lastDeparted
                AND status <> 'Past'",
-            ['today' => $today]
+            ['lastDeparted' => $dates['lastDeparted']]
         );
 
         $upcoming = $connection->executeStatement(
@@ -46,9 +47,10 @@ class UpdateBookingStatusCommand extends Command
              SET status = 'Upcoming'
              WHERE source <> 'Owners2'
                AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'canceled')
-               AND check_in > :today
+               AND check_in > :lastArrived
+               AND check_out > :lastDeparted
                AND status <> 'Upcoming'",
-            ['today' => $today]
+            ['lastArrived' => $dates['lastArrived'], 'lastDeparted' => $dates['lastDeparted']]
         );
 
         $ongoing = $connection->executeStatement(
@@ -56,10 +58,10 @@ class UpdateBookingStatusCommand extends Command
              SET status = 'Ongoing'
              WHERE source <> 'Owners2'
                AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'canceled')
-               AND check_in <= :today
-               AND check_out >= :today
+               AND check_in <= :lastArrived
+               AND check_out > :lastDeparted
                AND status <> 'Ongoing'",
-            ['today' => $today]
+            ['lastArrived' => $dates['lastArrived'], 'lastDeparted' => $dates['lastDeparted']]
         );
 
         $pastBlocks = $connection->executeStatement(
@@ -70,7 +72,7 @@ class UpdateBookingStatusCommand extends Command
                AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'canceled')
                AND check_out < :today
                AND status <> 'Past'",
-            ['today' => $today]
+            ['today' => $dates['today']]
         );
 
         // Apply the idempotent booking -> cleaning policy only from the cutoff onward.
