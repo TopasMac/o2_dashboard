@@ -75,14 +75,7 @@ class BookingProcessingService
                 continue;
             }
             // Determine booking status
-            $now = new \DateTimeImmutable();
-            if ($now < $checkIn) {
-                $booking->setStatus('upcoming');
-            } elseif ($now >= $checkIn && $now <= $checkOut) {
-                $booking->setStatus('ongoing');
-            } else {
-                $booking->setStatus('past');
-            }
+            $booking->setStatus(strtolower(ReservationStatus::resolve($checkIn, $checkOut)));
             $booking->setPayout($email->getPayout());
             $booking->setCleaningFee($email->getCleaningFee());
             $booking->setRoomFee($email->getRoomFee());

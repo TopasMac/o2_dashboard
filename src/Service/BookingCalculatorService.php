@@ -193,14 +193,7 @@ class BookingCalculatorService
 
         // Update status based on dates
         if (!$isCancelled) {
-            $now = new \DateTime();
-            if ($checkOut && $checkOut < $now) {
-                $booking->setStatus('Past');
-            } elseif ($checkIn && $checkIn > $now) {
-                $booking->setStatus('Upcoming');
-            } else {
-                $booking->setStatus('Ongoing');
-            }
+            $booking->setStatus(ReservationStatus::resolve($checkIn, $checkOut, fallback: 'Ongoing'));
         } else {
             $booking->setStatus('Cancelled');
         }

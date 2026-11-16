@@ -19,6 +19,7 @@ import RHFTextField from './rhf/RHFTextField';
 import RHFSelect from './rhf/RHFSelect';
 import RHFDatePicker from './rhf/RHFDatePicker';
 import api from '../../api';
+import { CANCUN_TZ } from '../../utils/dateTimeCancun';
 import useUnitCalendarAvailability from '../../hooks/useUnitCalendarAvailability';
 import { toast } from 'react-toastify';
 
@@ -245,12 +246,6 @@ export default function BookingNewFormRHF({
     return alreadyLoaded ? unitOptions : [initialUnit, ...unitOptions];
   }, [initialUnit, unitOptions]);
 
-  const parseYMDLocal = (ymd) => {
-    if (!ymd) return null;
-    const [y, m, d] = String(ymd).split('-').map(Number);
-    if (!y || !m || !d) return null;
-    return new Date(y, m - 1, d);
-  };
   const formatYMD = (d) => {
     if (!(d instanceof Date)) return '';
     const y = d.getFullYear();
@@ -258,17 +253,26 @@ export default function BookingNewFormRHF({
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
-  const computeStatus = (ci, co) => {
-    const today = new Date();
-    const start = parseYMDLocal(ci);
-    const end = parseYMDLocal(co);
-    if (!start || !end) return 'Upcoming';
-    // treat [start, end) like nights
-    if (today < start) return 'Upcoming';
-    if (today >= start && today < end) return 'Ongoing';
-    return 'Past';
-  };
+  const computeStatus = (checkIn, checkOut) => {
+    if (!checkIn || !checkOut) return 'Upcoming';
 
+    const parts = new Intl.DateTimeFormat('en', {
+      timeZone: CANCUN_TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date());
+    const { year, month, day, hour } = Object.fromEntries(
+      parts.map(({ type, value }) => [type, value]),
+    );
+    const today = `${year}-${month}-${day}`;
+
+    if (checkOut < today || (checkOut === today && Number(hour) >= 11)) return 'Past';
+    if (checkIn > today || (checkIn === today && Number(hour) < 15)) return 'Upcoming';
+    return 'Ongoing';
+  };
 
   const checkInVal = watch('checkIn');
   const checkOutVal = watch('checkOut');

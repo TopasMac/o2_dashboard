@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
 use App\Service\BookingAggregatorService;
 use App\Entity\PrivateReservation;
 use App\Service\BookingStatusUpdaterService;
+use App\Service\ReservationStatus;
 use App\Service\MonthSliceRefresher;
 use App\Service\UnitListService;
 use App\Service\HKCleaningManager;
@@ -1513,17 +1514,10 @@ class BookingsController extends AbstractController
         }
 
         // Compute status (Upcoming/Ongoing/Past) and persist
-        $now = new \DateTimeImmutable();
         $ci = $b->getCheckIn();
         $co = $b->getCheckOut();
         if ($ci instanceof \DateTimeInterface && $co instanceof \DateTimeInterface) {
-            if ($now < $ci) {
-                $b->setStatus('Upcoming');
-            } elseif ($now >= $ci && $now < $co) {
-                $b->setStatus('Ongoing');
-            } else {
-                $b->setStatus('Past');
-            }
+            $b->setStatus(ReservationStatus::resolve($ci, $co));
         }
 
         $em->persist($b);

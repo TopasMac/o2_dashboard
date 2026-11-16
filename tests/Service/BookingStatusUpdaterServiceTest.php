@@ -127,6 +127,34 @@ final class BookingStatusUpdaterServiceTest extends TestCase
         self::assertSame('Upcoming', $booking->getStatus());
     }
 
+    public function testStatusTransitionsKeepTheStoredCheckoutDayAndDoNotCompleteCleaning(): void
+    {
+        $utc = new \DateTimeZone('UTC');
+        $checkIn = new \DateTimeImmutable('2026-11-02', $utc);
+        $checkOut = new \DateTimeImmutable('2026-11-16', $utc);
+        $entityManager = $this->createMock(EntityManagerInterface::class);
+        $cleaningManager = $this->createMock(HKCleaningManager::class);
+        $cleaningManager->method('usesReconciliationPolicy')->with($checkOut)->willReturn(true);
+        $cleaningManager->expects(self::exactly(5))->method('syncCheckoutCleaningForBooking');
+        $cleaningManager->expects(self::never())->method('markDoneAndCreateTransaction');
+        $updater = new BookingStatusUpdaterService($entityManager, $cleaningManager);
+
+        foreach ([
+            '2026-11-02 14:59:59' => 'Upcoming',
+            '2026-11-02 15:00:00' => 'Ongoing',
+            '2026-11-15 22:50:00' => 'Ongoing',
+            '2026-11-16 10:59:59' => 'Ongoing',
+            '2026-11-16 11:00:00' => 'Past',
+        ] as $time => $expected) {
+            $booking = $this->booking($checkIn, $checkOut)->setCity('Tulum')->setStatus('Past');
+            $now = new \DateTimeImmutable($time, new \DateTimeZone('America/Cancun'));
+            $updater->updateStatuses([$booking], now: $now->setTimezone($utc));
+
+            self::assertSame($expected, $booking->getStatus(), $time);
+            self::assertSame($checkOut, $booking->getCheckOut());
+        }
+    }
+
     private function booking(\DateTimeImmutable $checkIn, \DateTimeImmutable $checkOut): AllBookings
     {
         return (new AllBookings())

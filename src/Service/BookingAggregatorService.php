@@ -425,14 +425,7 @@ class BookingAggregatorService
         }
 
         // Ensure status is set based on check-in and check-out dates
-        $now = new \DateTime();
-        if ($booking->getCheckOut() < $now) {
-            $booking->setStatus('Past');
-        } elseif ($booking->getCheckIn() > $now) {
-            $booking->setStatus('Upcoming');
-        } else {
-            $booking->setStatus('Ongoing');
-        }
+        $booking->setStatus(ReservationStatus::resolve($booking->getCheckIn(), $booking->getCheckOut(), fallback: 'Ongoing'));
 
         // Ensure any other required numeric fields are not null
         if ($booking->getTaxPercent() === null) {
@@ -552,14 +545,7 @@ class BookingAggregatorService
         }
 
         // Ensure status is set based on check-in and check-out dates
-        $now = new \DateTime();
-        if ($booking->getCheckOut() < $now) {
-            $booking->setStatus('Past');
-        } elseif ($booking->getCheckIn() > $now) {
-            $booking->setStatus('Upcoming');
-        } else {
-            $booking->setStatus('Ongoing');
-        }
+        $booking->setStatus(ReservationStatus::resolve($booking->getCheckIn(), $booking->getCheckOut(), fallback: 'Ongoing'));
 
         // Ensure any other required numeric fields are not null
         if ($booking->getTaxPercent() === null) {
@@ -773,14 +759,7 @@ class BookingAggregatorService
             if (is_string($originalStatus) && strcasecmp($originalStatus, 'Cancelled') === 0) {
                 $booking->setStatus('Cancelled');
             } else {
-                $now = new \DateTime();
-                if ($booking->getCheckOut() < $now) {
-                    $booking->setStatus('Past');
-                } elseif ($booking->getCheckIn() > $now) {
-                    $booking->setStatus('Upcoming');
-                } else {
-                    $booking->setStatus('Ongoing');
-                }
+                $booking->setStatus(ReservationStatus::resolve($booking->getCheckIn(), $booking->getCheckOut(), fallback: 'Ongoing'));
             }
         }
 
