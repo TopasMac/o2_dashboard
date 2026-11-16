@@ -65,8 +65,8 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `3872f5c` — `Merge pull request #94 from TopasMac/develop` (deployed 2026-11-14; rollback point `4aea8ac`; 4 additive migrations (service_job table; hktransactions allocation columns), 242 executed; Admin-only Service Jobs, mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
-- **GitHub `main`:** `3872f5c` — `Merge pull request #94 from TopasMac/develop`
+- **Production server checkout last verified:** `fc27b38` — `Merge pull request #97 from TopasMac/develop` (deployed 2026-11-14; rollback point `3872f5c`; no migrations; service jobs in dashboard Activity card and check-in/out schedule, mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
+- **GitHub `main`:** `fc27b38` — `Merge pull request #97 from TopasMac/develop`
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
