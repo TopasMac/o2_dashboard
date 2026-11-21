@@ -22,10 +22,13 @@ import IconButton from '@mui/material/IconButton';
 import { PaperClipIcon } from '@heroicons/react/24/outline';
 import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import { alpha } from '@mui/material/styles';
 
 import { formatDateDMY, formatMoney, capitalizeFirst } from '../../utils/formatters';
 import DocumentPreview from '../common/DocumentPreview';
 import O2Tooltip from '../common/O2Tooltip';
+import TablePaginationFooter from './TablePaginationFooter';
+import useClientTablePagination from './useClientTablePagination';
 
 // Compact select with placeholder-like label (matches our DataTable look)
 
@@ -151,6 +154,10 @@ const getColumnFilterKey = (col) =>
  *  - page, pageSize, total: numbers for simple paging display
  *  - onPageChange: (nextPage) => void
  *  - autoFilter: boolean (default true) — if true, TableLite filters rows internally based on header filters
+ *  - showHeaderFilters: boolean (default true) — render configured filter controls in column headers
+ *  - visualVariant: 'legacy' | 'hausin' (default 'legacy') — opt-in table presentation
+ *  - clientPagination: opt into fixed 25-row pages and an external HausIn footer
+ *  - paginationResetKey: change with caller-owned sort state to return to page one
  *  - optionsSourceRows: array — optional master dataset to derive filter option lists from
  */
 const TableLite = forwardRef(function TableLite(
@@ -171,12 +178,20 @@ const TableLite = forwardRef(function TableLite(
     filterValues = {},
     onFilterChange,
     autoFilter = true,
+    showHeaderFilters = true,
+    visualVariant = 'legacy',
+    clientPagination = false,
+    paginationResetKey = '',
     optionsSourceRows = null,
     defaultStringTransform = 'capitalizeFirst',
   },
   ref
 )
 {
+  const scrollRef = useRef(null);
+  const pendingPaginationHighlightRef = useRef(false);
+  const pendingHighlightScrollRef = useRef(false);
+  const isHausinVariant = visualVariant === 'hausin';
   // If parent does not control filters, keep a local copy
   const [localFilterValues, setLocalFilterValues] = useState({});
   const effectiveFilterValues = onFilterChange ? (filterValues || {}) : localFilterValues;
@@ -377,6 +392,7 @@ const TableLite = forwardRef(function TableLite(
       if (!e || !e.detail) return;
       const rawId = e.detail.id;
       if (rawId === undefined || rawId === null) return;
+      pendingPaginationHighlightRef.current = true;
       setHighlightId(rawId);
     };
 
@@ -549,7 +565,35 @@ const TableLite = forwardRef(function TableLite(
     () => (autoFilter ? applyFilters(rows) : (rows || [])),
     [rows, autoFilter, enableFilters, effectiveFilterValues, normalizedColumns]
   );
-  const displayRows = filteredRows;
+  // Input rows retain the caller's ordering; filter before taking the page slice.
+  const pagination = useClientTablePagination({
+    rows: filteredRows,
+    pageSize: 25,
+    resetKey: clientPagination ? `${JSON.stringify(effectiveFilterValues)}:${paginationResetKey}` : '',
+  });
+  const displayRows = clientPagination ? pagination.rows : filteredRows;
+
+  useLayoutEffect(() => {
+    if (clientPagination && scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [clientPagination, pagination.page]);
+
+  // Keep deep-link and post-save highlights reachable beyond the first page.
+  useEffect(() => {
+    if (!clientPagination || highlightId == null || !pendingPaginationHighlightRef.current) return;
+    const index = filteredRows.findIndex((row) => String(row.id) === String(highlightId));
+    if (index >= 0) {
+      pendingPaginationHighlightRef.current = false;
+      pendingHighlightScrollRef.current = true;
+      pagination.onPageChange(Math.floor(index / 25));
+    }
+  }, [clientPagination, highlightId, filteredRows, pagination.onPageChange]);
+
+  useEffect(() => {
+    if (clientPagination && pendingHighlightScrollRef.current && highlightRowRef.current) {
+      pendingHighlightScrollRef.current = false;
+      highlightRowRef.current.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [clientPagination, pagination.page, highlightId]);
 
   const rangeText = useMemo(() => {
     if (typeof onPageChange === 'function') {
@@ -609,6 +653,8 @@ const TableLite = forwardRef(function TableLite(
       <Box ref={ref} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, width: '100%', maxWidth: '100%', flex: 1, height: '100%' }}>
       {/* Scroll container that holds the table and provides the only scrollbar */}
       <Box
+        ref={scrollRef}
+        data-testid="table-scroll-container"
         sx={{
           position: 'relative',
           display: 'block',
@@ -627,8 +673,8 @@ const TableLite = forwardRef(function TableLite(
           borderRadius: 0,
           // reserve space under the table so the sticky footer never overlaps last row
           '--table-footer-offset': '2px', // visual overlap toward the card border
-          paddingBottom: `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
-          scrollPaddingBottom: `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
+          paddingBottom: clientPagination ? 0 : `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
+          scrollPaddingBottom: clientPagination ? 0 : `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
         }}
       >
         <Table
@@ -641,7 +687,9 @@ const TableLite = forwardRef(function TableLite(
               position: 'sticky',
               top: useParentScroll ? 'var(--page-sticky-offset, 0px)' : 0,
               zIndex: 3,
-              backgroundColor: (theme) => theme.palette.background.paper,
+              backgroundColor: (theme) => (
+                isHausinVariant ? theme.hausin.colors.subtle : theme.palette.background.paper
+              ),
             }}
           >
             <TableRow sx={{ minWidth: 'auto' }}>
@@ -679,9 +727,15 @@ const TableLite = forwardRef(function TableLite(
                     {...restHeaderProps}
                     sx={{
                       fontWeight: 600,
-                      fontSize: 14.5,
+                      fontSize: isHausinVariant ? (theme) => theme.hausin.controls.fontSize : 14.5,
                       lineHeight: 1.4,
-                      borderBottom: '1px solid #1E6F68',
+                      borderBottom: isHausinVariant
+                        ? (theme) => `1px solid ${theme.hausin.colors.border}`
+                        : '1px solid #1E6F68',
+                      backgroundColor: isHausinVariant
+                        ? (theme) => theme.hausin.colors.subtle
+                        : undefined,
+                      color: isHausinVariant ? (theme) => theme.hausin.colors.textSecondary : undefined,
                       // If a maxWidth is provided, treat it as the effective width cap
                       width: widthValue || maxWidthValue || minWidthValue,
                       minWidth: minWidthValue || maxWidthValue || widthValue,
@@ -696,7 +750,7 @@ const TableLite = forwardRef(function TableLite(
                     }}
                   >
                     {(() => {
-                      const hasFilter = enableFilters && col.filter;
+                      const hasFilter = enableFilters && showHeaderFilters && col.filter;
                       if (!hasFilter) {
                         return <Box component="span">{col.header}</Box>;
                       }
@@ -977,9 +1031,21 @@ const TableLite = forwardRef(function TableLite(
                     ref={isHighlighted ? highlightRowRef : null}
                     sx={{
                       minWidth: 'auto',
+                      ...(isHausinVariant && !isHighlighted
+                        ? {
+                            '&.MuiTableRow-hover:hover': {
+                              backgroundColor: (theme) => alpha(theme.hausin.colors.primaryTeal, 0.04),
+                            },
+                          }
+                        : {}),
                       ...(isHighlighted
                         ? {
-                            backgroundColor: 'rgba(245, 124, 0, 0.12)', // soft orange highlight
+                            backgroundColor: isHausinVariant
+                              ? (theme) => alpha(theme.hausin.colors.primaryTeal, 0.10)
+                              : 'rgba(245, 124, 0, 0.12)',
+                            boxShadow: isHausinVariant
+                              ? (theme) => `inset 3px 0 0 ${theme.hausin.colors.primaryTeal}`
+                              : undefined,
                             transition: 'background-color 0.25s ease-in-out',
                           }
                         : {}),
@@ -1026,6 +1092,13 @@ const TableLite = forwardRef(function TableLite(
                           minWidth: minWidthValue || maxWidthValue || widthValue,
                           maxWidth: maxWidthValue || widthValue || minWidthValue,
                           fontSize: 14.5,
+                          ...(isHausinVariant
+                            ? {
+                                fontSize: (theme) => theme.hausin.controls.fontSize,
+                                color: (theme) => theme.hausin.colors.textPrimary,
+                                borderBottomColor: (theme) => theme.hausin.colors.border,
+                              }
+                            : {}),
                           lineHeight: 1.5,
                           py: basePy,
                           px: 2,
@@ -1102,9 +1175,10 @@ const TableLite = forwardRef(function TableLite(
                             const meta = rendered.meta ?? rendered.bottom ?? '';
 
                             const variantClass = col.twoLineClassName ? ` ${col.twoLineClassName}` : '';
+                            const hausinVariantClass = isHausinVariant ? ' o2-cell-two-line--hausin' : '';
 
                             const twoLineEl = (
-                              <div className={`o2-cell-two-line${variantClass}`}>
+                              <div className={`o2-cell-two-line${hausinVariantClass}${variantClass}`}>
                                 {primary ? <div className="o2-cell-primary">{primary}</div> : null}
                                 {meta ? <div className="o2-cell-meta">{meta}</div> : null}
                               </div>
@@ -1189,8 +1263,8 @@ const TableLite = forwardRef(function TableLite(
           </TableBody>
         </Table>
 
-        {/* Sticky footer bar (sits inside the same scroll area so it stays visible) */}
-        <Box
+        {/* Legacy footer remains inside the scroll area for unmigrated pages. */}
+        {!clientPagination && <Box
           ref={footerRef}
           sx={{
             position: 'sticky',
@@ -1241,8 +1315,9 @@ const TableLite = forwardRef(function TableLite(
               </Button>
             </>
           )}
-        </Box>
+        </Box>}
       </Box>
+      {clientPagination && <TablePaginationFooter {...pagination} />}
     </Box>
     <Dialog
       open={previewState.open}
@@ -1319,6 +1394,10 @@ TableLite.propTypes = {
   filterValues: PropTypes.object,
   onFilterChange: PropTypes.func,
   autoFilter: PropTypes.bool,
+  showHeaderFilters: PropTypes.bool,
+  clientPagination: PropTypes.bool,
+  paginationResetKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  visualVariant: PropTypes.oneOf(['legacy', 'hausin']),
   // Optional master dataset used to derive filter option lists globally (so options don't shrink after filtering)
   optionsSourceRows: PropTypes.array,
   defaultStringTransform: PropTypes.oneOfType([PropTypes.string, PropTypes.func]),

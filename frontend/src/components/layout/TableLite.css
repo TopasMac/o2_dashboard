@@ -22,6 +22,10 @@
   color: #6b7280;
 }
 
+.o2-cell-two-line--hausin .o2-cell-meta {
+  font-size: 12px;
+}
+
 /* Line 2 — Style 1 (reservation / transaction code) */
 .o2-cell-two-line.o2-two-line-code .o2-cell-meta,
 .o2-cell-two-line.o2-two-line-click .o2-cell-meta {

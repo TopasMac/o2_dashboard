@@ -1,16 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api, { BACKEND_BASE } from '../api';
 import TableLite from '../components/layout/TableLite';
+import TableToolbar from '../components/layout/TableToolbar';
 import AppDrawer from '../components/common/AppDrawer';
 import UnitTransactionEditFormRHF from '../components/forms/UnitTransactionEditFormRHF';
 import UnitTransactionNewFormRHF from '../components/forms/UnitTransactionNewFormRHF';
-import NewClientUnitNote from '../components/forms/NewClientUnitNote';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import DocumentPreview from '../components/common/DocumentPreview';
 import { HiOutlineDocumentText } from 'react-icons/hi';
-import { Button, Stack } from '@mui/material';
+import {
+  Autocomplete,
+  Box,
+  Button,
+  IconButton,
+  InputAdornment,
+  TextField,
+  Typography,
+  Tooltip,
+} from '@mui/material';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import SearchIcon from '@mui/icons-material/Search';
+import { alpha, darken, useTheme } from '@mui/material/styles';
 import PageScaffold from '../components/layout/PageScaffold';
+
+const INITIAL_FILTER_VALUES = {
+  unitName: '',
+  category: '',
+  description: '',
+};
 
 const formatDateDisplay = (value) => {
   if (!value) return '';
@@ -18,27 +35,28 @@ const formatDateDisplay = (value) => {
     // Handle date-only strings: YYYY-MM-DD
     const m = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (m) {
-      return `${m[3]}/${m[2]}/${m[1]}`; // dd/mm/yyyy
+      return `${m[3]}-${m[2]}-${m[1]}`; // dd-mm-yyyy
     }
     // Handle ISO datetime strings: YYYY-MM-DDThh:mm... (take the date part only)
     const m2 = value.match(/^(\d{4})-(\d{2})-(\d{2})T/);
     if (m2) {
-      return `${m2[3]}/${m2[2]}/${m2[1]}`; // dd/mm/yyyy
+      return `${m2[3]}-${m2[2]}-${m2[1]}`; // dd-mm-yyyy
     }
   }
   // Fallback to Date parsing if needed
   const d = new Date(value);
   if (isNaN(d)) return String(value);
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
 };
 
 const Owners2UnitTransactions = () => {
+  const theme = useTheme();
+  const tokens = theme.hausin;
   const [transactions, setTransactions] = useState([]);
-  const [filterKey, setFilterKey] = useState(0);
+  const [filterValues, setFilterValues] = useState({ ...INITIAL_FILTER_VALUES });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [newDrawerOpen, setNewDrawerOpen] = useState(false);
-  const [commentDrawerOpen, setCommentDrawerOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewTitle, setPreviewTitle] = useState('Document Preview');
@@ -209,6 +227,145 @@ const Owners2UnitTransactions = () => {
     window.history.replaceState({}, '', url.toString());
   }, [location.search, transactions]);
 
+  const unitOptions = useMemo(
+    () => Array.from(
+      new Set(
+        transactions
+          .map((transaction) => transaction.unitName)
+          .filter((value) => value !== undefined && value !== null)
+          .map((value) => String(value))
+      )
+    ).sort(),
+    [transactions]
+  );
+
+  const categoryOptions = useMemo(
+    () => Array.from(
+      new Set(
+        transactions
+          .map((transaction) => transaction.category)
+          .filter((value) => value !== undefined && value !== null && value !== 'N/A')
+          .map((value) => String(value))
+      )
+    ).sort(),
+    [transactions]
+  );
+
+  const handleFilterChange = (key, value) => {
+    if (!Object.prototype.hasOwnProperty.call(INITIAL_FILTER_VALUES, key)) {
+      return;
+    }
+    setFilterValues((previous) => ({
+      ...previous,
+      [key]: value || '',
+    }));
+  };
+
+  const hasActiveFilters = Object.values(filterValues).some((value) => value !== '');
+  const clearFilters = () => {
+    setFilterValues({ ...INITIAL_FILTER_VALUES });
+  };
+  const controlSx = {
+    '& .MuiOutlinedInput-root': {
+      height: tokens.controls.height,
+      borderRadius: `${tokens.controls.borderRadius}px`,
+      backgroundColor: theme.palette.common.white,
+      '& .MuiInputBase-input, & .MuiSelect-select': {
+        fontSize: tokens.controls.fontSize,
+        fontWeight: tokens.controls.fontWeight,
+      },
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.border,
+      },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.primaryTeal,
+      },
+      '&.Mui-focused': {
+        boxShadow: `0 0 0 2px ${alpha(tokens.colors.primaryTeal, 0.18)}`,
+      },
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.primaryTeal,
+        borderWidth: 1,
+      },
+    },
+  };
+  const filterFieldSx = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0.5,
+    flex: '0 0 auto',
+  };
+  const filterLabelSx = {
+    color: tokens.colors.textSecondary,
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    lineHeight: 1.25,
+    pl: '1px',
+  };
+  const primaryButtonSx = {
+    height: tokens.controls.height,
+    borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2,
+    fontSize: tokens.controls.fontSize,
+    fontWeight: tokens.controls.fontWeight,
+    backgroundColor: tokens.colors.primaryTeal,
+    '&:hover': {
+      backgroundColor: darken(tokens.colors.primaryTeal, 0.12),
+    },
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${tokens.colors.primaryTeal}`,
+      outlineOffset: 2,
+    },
+    '&.Mui-disabled': {
+      backgroundColor: tokens.colors.subtle,
+      color: tokens.colors.muted,
+    },
+  };
+  const secondaryButtonSx = {
+    height: tokens.controls.height,
+    borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2,
+    fontSize: tokens.controls.fontSize,
+    fontWeight: tokens.controls.fontWeight,
+    color: tokens.colors.primaryTeal,
+    borderColor: tokens.colors.primaryTeal,
+    backgroundColor: theme.palette.common.white,
+    '&:hover': {
+      borderColor: tokens.colors.primaryTeal,
+      backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+    },
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${tokens.colors.primaryTeal}`,
+      outlineOffset: 2,
+    },
+    '&.Mui-disabled': {
+      color: tokens.colors.muted,
+      borderColor: tokens.colors.border,
+    },
+  };
+  const utilityButtonSx = {
+    ...secondaryButtonSx,
+    color: tokens.colors.textSecondary,
+    borderColor: tokens.colors.border,
+    '&:hover': {
+      borderColor: tokens.colors.border,
+      backgroundColor: tokens.colors.subtle,
+      color: tokens.colors.textPrimary,
+    },
+  };
+  const clearFiltersButtonSx = {
+    ...utilityButtonSx,
+    ...(hasActiveFilters && {
+      color: tokens.colors.primaryTeal,
+      borderColor: tokens.colors.primaryTeal,
+      '&:hover': {
+        borderColor: tokens.colors.primaryTeal,
+        backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+        color: tokens.colors.primaryTeal,
+      },
+    }),
+  };
+
   const columns = [
     {
       header: 'Code',
@@ -235,6 +392,7 @@ const Owners2UnitTransactions = () => {
                 cursor: 'pointer',
                 color: '#1e6f68',
                 textDecoration: 'none',
+                fontWeight: 600,
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.color = '#f57c00';
@@ -261,9 +419,9 @@ const Owners2UnitTransactions = () => {
     },
     {
       header: 'Type',
-      accessor: 'type',
+      accessor: 'category',
       filterable: true,
-      filterType: 'select',
+      filterType: 'autocomplete',
       width: '170px',
       minWidth: '170px',
       render: (value, row) => {
@@ -281,8 +439,8 @@ const Owners2UnitTransactions = () => {
       header: 'Description',
       accessor: 'description',
       filterable: true,
-      width: '300px',
-      minWidth: '300px',
+      width: '260px',
+      minWidth: '260px',
     },
     {
       header: 'Amount',
@@ -298,6 +456,8 @@ const Owners2UnitTransactions = () => {
     {
       header: 'Documents',
       accessor: 'documents',
+      align: 'center',
+      headerAlign: 'center',
       cell: (row) => {
         const docs = Array.isArray(row?.documents) ? row.documents : [];
         if (docs.length === 0) return '';
@@ -317,28 +477,33 @@ const Owners2UnitTransactions = () => {
               const link = rawUrl && rawUrl.startsWith('/') ? `${base}${rawUrl}` : rawUrl;
               if (!link) return null;
               return (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setPreviewUrl(link);
-                    setPreviewTitle(`Document ${idx + 1}`);
-                    setPreviewOpen(true);
-                  }}
-                  style={{
-                    marginRight: '0.35rem',
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center'
-                  }}
-                  title={`Preview document ${idx + 1}`}
-                  aria-label={`Preview document ${idx + 1}`}
-                >
-                  <InsertDriveFileOutlinedIcon fontSize="small" sx={{ color: '#1e6f68' }} />
-                </button>
+                <Tooltip key={idx} title={`Preview document ${idx + 1}`} placement="top">
+                  <IconButton
+                    type="button"
+                    size="small"
+                    aria-label={`Preview document ${idx + 1}`}
+                    onClick={() => {
+                      setPreviewUrl(link);
+                      setPreviewTitle(`Document ${idx + 1}`);
+                      setPreviewOpen(true);
+                    }}
+                    sx={{
+                      width: tokens.controls.compactHeight,
+                      height: tokens.controls.compactHeight,
+                      color: tokens.colors.primaryTeal,
+                      borderRadius: `${tokens.controls.borderRadius}px`,
+                      '&:hover': {
+                        backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+                      },
+                      '&.Mui-focusVisible': {
+                        outline: `2px solid ${tokens.colors.primaryTeal}`,
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <InsertDriveFileOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               );
             })}
           </span>
@@ -347,25 +512,102 @@ const Owners2UnitTransactions = () => {
     }
   ];
 
-  const stickyHeader = (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
-      <Button variant="contained" onClick={() => setNewDrawerOpen(true)}>
-        + New Transaction
-      </Button>
-      <Button
-        component={Link}
-        to="/report-comments"
-        variant="outlined"
-      >
-        View Comments
-      </Button>
-      <Button
-        variant="outlined"
-        onClick={() => setFilterKey((prev) => prev + 1)}
-      >
-        Reset Filters
-      </Button>
-    </Stack>
+  const toolbar = (
+    <TableToolbar
+      title="Unit Transactions"
+      layout="stacked"
+      actions={(
+        <>
+          <Button variant="contained" sx={primaryButtonSx} onClick={() => setNewDrawerOpen(true)}>
+            + New Transaction
+          </Button>
+        </>
+      )}
+      filters={(
+        <>
+          <Box sx={{ ...filterFieldSx, width: 200 }}>
+            <Typography component="span" sx={filterLabelSx}>Unit</Typography>
+            <Autocomplete
+              clearOnBlur={false}
+              size="small"
+              options={unitOptions}
+              value={unitOptions.includes(filterValues.unitName) ? filterValues.unitName : null}
+              inputValue={filterValues.unitName}
+              onChange={(_, value) => handleFilterChange('unitName', value)}
+              onInputChange={(_, value, reason) => {
+                if (reason !== 'reset') {
+                  handleFilterChange('unitName', value);
+                }
+              }}
+              sx={controlSx}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="All units"
+                  inputProps={{
+                    ...params.inputProps,
+                    'aria-label': 'Filter by unit',
+                  }}
+                />
+              )}
+            />
+          </Box>
+          <Box sx={{ ...filterFieldSx, width: 220 }}>
+            <Typography component="span" sx={filterLabelSx}>Type</Typography>
+            <Autocomplete
+              clearOnBlur={false}
+              size="small"
+              options={categoryOptions}
+              value={categoryOptions.includes(filterValues.category) ? filterValues.category : null}
+              inputValue={filterValues.category}
+              onChange={(_, value) => handleFilterChange('category', value)}
+              onInputChange={(_, value, reason) => {
+                if (reason !== 'reset') {
+                  handleFilterChange('category', value);
+                }
+              }}
+              sx={controlSx}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="All types"
+                  inputProps={{
+                    ...params.inputProps,
+                    'aria-label': 'Filter by type',
+                  }}
+                />
+              )}
+            />
+          </Box>
+          <Box sx={{ ...filterFieldSx, width: 360, minWidth: 320, flex: '0 1 360px' }}>
+            <Typography component="span" sx={filterLabelSx}>Description</Typography>
+            <TextField
+              size="small"
+              placeholder="Search description..."
+              value={filterValues.description}
+              onChange={(event) => handleFilterChange('description', event.target.value)}
+              inputProps={{ 'aria-label': 'Search description' }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={controlSx}
+            />
+          </Box>
+          <Button
+            variant="outlined"
+            sx={{ ...clearFiltersButtonSx, alignSelf: 'flex-end' }}
+            disabled={!hasActiveFilters}
+            onClick={clearFilters}
+          >
+            Clear Filters
+          </Button>
+        </>
+      )}
+    />
   );
 
   return (
@@ -374,15 +616,21 @@ const Owners2UnitTransactions = () => {
       sectionKey="transactions"
       currentPath="/unit-transactions"
       layout="table"
-      stickyHeader={stickyHeader}
+      stickyHeader={toolbar}
+      tableToolbar
     >
-      <div className="table-container">
+      <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
         <TableLite
-          key={filterKey}
           columns={columns}
           rows={transactions}
+          height="100%"
           enableFilters
+          filterValues={filterValues}
+          onFilterChange={handleFilterChange}
           optionsSourceRows={transactions}
+          showHeaderFilters={false}
+          visualVariant="hausin"
+          clientPagination
           rowProps={(row) => ({
             id: `row-${row.id}`
           })}
@@ -452,31 +700,6 @@ const Owners2UnitTransactions = () => {
                 }),
               );
             }
-          }}
-        />
-      </AppDrawer>
-      <AppDrawer
-        anchor="right"
-        open={commentDrawerOpen}
-        size="default"
-        onClose={() => {
-          setCommentDrawerOpen(false);
-          fetchTransactions(); // refresh table on close
-        }}
-      >
-        <NewClientUnitNote
-          unitId={null}
-          onClose={() => {
-            setCommentDrawerOpen(false);
-            fetchTransactions(); // refresh table on close
-          }}
-          onCancel={() => {
-            setCommentDrawerOpen(false);
-            fetchTransactions(); // refresh table on cancel
-          }}
-          onSave={() => {
-            setCommentDrawerOpen(false);
-            fetchTransactions(); // refresh table on save
           }}
         />
       </AppDrawer>

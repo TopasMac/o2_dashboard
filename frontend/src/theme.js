@@ -1,6 +1,28 @@
 import { createTheme } from '@mui/material/styles';
 
 const theme = createTheme({
+  // Opt-in design tokens for new HausIn UI primitives. Existing MUI palette,
+  // shape, and component defaults intentionally remain unchanged.
+  hausin: {
+    colors: {
+      primaryTeal: '#1E6F68',
+      textPrimary: '#1F2937',
+      textSecondary: '#6B7280',
+      muted: '#9CA3AF',
+      border: '#E5E7EB',
+      subtle: '#F1F3F5',
+      success: '#2E7D5B',
+      danger: '#D9534F',
+      warningAccent: '#F57C4D',
+    },
+    controls: {
+      height: 36,
+      compactHeight: 32,
+      borderRadius: 6,
+      fontSize: '0.8125rem',
+      fontWeight: 500,
+    },
+  },
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
     fontSize: 14, // Base font size
