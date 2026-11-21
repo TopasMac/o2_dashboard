@@ -1,3 +1,4 @@
+import { parseBookingDate, validateBookingDates } from './bookingDates';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import O2ConfirmDialog from '../common/O2ConfirmDialog';
 import useUnitCalendarAvailability from '../../hooks/useUnitCalendarAvailability';
@@ -139,6 +140,7 @@ const BaseSchemaCore = z.object({
 });
 
 const BaseSchema = BaseSchemaCore.superRefine((data, ctx) => {
+  validateBookingDates(data, ctx);
   const source = (data.source || '').toLowerCase();
   const paymentMethod = normalizePaymentMethod(data.paymentMethod);
   const isPaid = !!data.isPaid;
@@ -195,6 +197,7 @@ export default function BookingEditFormRHF({
   const {
     control,
     handleSubmit,
+    trigger,
     reset,
     setValue,
     watch,
@@ -283,6 +286,9 @@ export default function BookingEditFormRHF({
   // Calendar availability integration
   const checkInValRaw = watch('checkIn');
   const checkOutValRaw = watch('checkOut');
+  useEffect(() => {
+    if (checkInValRaw && checkOutValRaw) trigger(['checkIn', 'checkOut']);
+  }, [checkInValRaw, checkOutValRaw, trigger]);
   const checkInYmd = useMemo(() => dmyToYMD(checkInValRaw), [checkInValRaw]);
   const checkOutYmd = useMemo(() => dmyToYMD(checkOutValRaw), [checkOutValRaw]);
   // Treat checkout as exclusive for the *range* query so warnings on the checkout day do not show.
@@ -531,6 +537,7 @@ export default function BookingEditFormRHF({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 0', minWidth: 0 }}>
               <RHFDatePicker
                 name="checkIn"
+                showValidation
                 control={control}
                 label="Check In"
                 format="DD/MM/YYYY"
@@ -561,6 +568,8 @@ export default function BookingEditFormRHF({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 0', minWidth: 0 }}>
               <RHFDatePicker
                 name="checkOut"
+                showValidation
+                minDate={parseBookingDate(checkInValRaw)?.add(1, 'day') || undefined}
                 control={control}
                 label="Check Out"
                 format="DD/MM/YYYY"

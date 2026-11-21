@@ -14,6 +14,7 @@ use App\Service\BookingAggregatorService;
 use App\Entity\PrivateReservation;
 use App\Service\BookingStatusUpdaterService;
 use App\Service\ReservationStatus;
+use App\Service\BookingDateValidator;
 use App\Service\MonthSliceRefresher;
 use App\Service\UnitListService;
 use App\Service\HKCleaningManager;
@@ -455,6 +456,21 @@ class BookingsController extends AbstractController
             $data = [];
         }
 
+        // Validate ordinary booking date edits before any entity changes or side effects.
+        // Owners2 blocks/holds retain their separate start/end semantics.
+        $dateEdit = array_intersect(['checkIn', 'check_in', 'checkOut', 'check_out', 'start', 'end'], array_keys($data));
+        $softEntry = strtolower((string)$booking->getSource()) === 'owners2'
+            || in_array(strtolower((string)$booking->getGuestType()), ['hold', 'block', 'cleaning', 'maintenance', 'late check-out', 'late checkout', 'other'], true);
+        if ($dateEdit && !$softEntry) {
+            $error = BookingDateValidator::error(
+                $data['start'] ?? $data['checkIn'] ?? $data['check_in'] ?? $oldCheckIn,
+                $data['end'] ?? $data['checkOut'] ?? $data['check_out'] ?? $oldCheckOut
+            );
+            if ($error) {
+                return new JsonResponse(['error' => $error], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
         // --- Soft reservation normalization (Owners2 Block/Hold) ---
         $incomingType = isset($data['type']) ? (string)$data['type'] : null;
         $incomingReason = (string)($data['reason'] ?? $data['block_reason'] ?? $data['guestType'] ?? $data['guest_type'] ?? '');
@@ -779,6 +795,14 @@ class BookingsController extends AbstractController
                 return null;
             }
         };
+
+        $dateError = BookingDateValidator::error(
+            $data['check_in'] ?? $data['checkIn'] ?? null,
+            $data['check_out'] ?? $data['checkOut'] ?? null
+        );
+        if ($dateError) {
+            return new JsonResponse(['error' => $dateError], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         $reservation = new PrivateReservation();
         // Prefer explicit booking_date, else fall back to check_in, else today

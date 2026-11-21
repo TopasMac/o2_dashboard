@@ -1,9 +1,10 @@
 import dayjs from 'dayjs';
+import { parseBookingDate } from '../bookingDates';
 import { Controller } from 'react-hook-form';
 import { DatePicker } from '@mui/x-date-pickers';
 import { widthMap } from './widthMap';
 
-export default function RHFDatePicker({ name, control, rules, label, widthVariant = 'full', sx, ...rest }) {
+export default function RHFDatePicker({ name, control, rules, label, widthVariant = 'full', sx, showValidation = false, ...rest }) {
   const widthSx = widthMap[widthVariant] || widthMap.full;
 
   // Build a consistent text field style that matches MUI TextField (outlined/medium)
@@ -12,14 +13,14 @@ export default function RHFDatePicker({ name, control, rules, label, widthVarian
 
   const mergedTextFieldSx = {
     ...(widthSx || {}),
-    height: baseInputHeight,
+    ...(showValidation ? { minHeight: baseInputHeight } : { height: baseInputHeight }),
     display: 'flex',
-    alignItems: 'center',
+    alignItems: showValidation ? 'stretch' : 'center',
     mb: 2,
     paddingBottom: 0,
     '& .MuiInputBase-root': { height: baseInputHeight, alignItems: 'center' },
     '& .MuiInputBase-input': { padding: `${paddingY} 14px` },
-    '& .MuiFormHelperText-root': { display: 'none', height: 0, minHeight: 0, margin: 0, padding: 0 },
+    '& .MuiFormHelperText-root': showValidation ? { margin: '3px 14px 0' } : { display: 'none', height: 0, minHeight: 0, margin: 0, padding: 0 },
     '&.MuiFormControl-root': { margin: 0 },
     // remove default bottom padding that MUI X adds on picker text fields
     '&.MuiPickersTextField-root': { paddingBottom: 0 },
@@ -35,13 +36,14 @@ export default function RHFDatePicker({ name, control, rules, label, widthVarian
       rules={rules}
       render={({ field, fieldState }) => (
         <DatePicker
+          {...rest}
           label={label}
           format="DD/MM/YYYY"
           value={(() => {
             const v = field.value;
             if (!v) return null;
             if (dayjs.isDayjs(v)) return v;
-            return dayjs(v);
+            return showValidation ? (parseBookingDate(v) || dayjs(v)) : dayjs(v);
           })()}
           onChange={(v) => field.onChange(v ? dayjs(v).format('YYYY-MM-DD') : '')}
           slotProps={{
@@ -52,6 +54,7 @@ export default function RHFDatePicker({ name, control, rules, label, widthVarian
             },
             textField: {
               ...(rest.slotProps?.textField || {}),
+              onBlur: field.onBlur,
               error: !!fieldState.error,
               helperText: fieldState.error ? fieldState.error.message : undefined,
               fullWidth: widthVariant !== 'auto' ? true : rest.fullWidth,
@@ -73,16 +76,12 @@ export default function RHFDatePicker({ name, control, rules, label, widthVarian
                 ...(rest.slotProps?.textField?.FormHelperTextProps || {}),
                 ...(rest.FormHelperTextProps || {})
               },
-              FormControlProps: {
-                sx: { m: 0 }
-              },
               sx: {
                 ...(rest.slotProps?.textField?.sx || {}),
                 ...mergedTextFieldSx
               }
             }
           }}
-          {...rest}
         />
       )}
     />

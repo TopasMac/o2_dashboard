@@ -1,3 +1,4 @@
+import { parseBookingDate, validateBookingDates } from './bookingDates';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import {
@@ -70,6 +71,7 @@ const SchemaCore = z.object({
 });
 
 const Schema = SchemaCore.superRefine((data, ctx) => {
+  validateBookingDates(data, ctx);
   const source = (data.source || '').toLowerCase();
   const paymentMethod = (data.paymentMethod || '').toLowerCase();
   const isPaid = !!data.isPaid;
@@ -174,7 +176,7 @@ export default function BookingNewFormRHF({
     isPaid: false,
   }), []);
 
-  const { control, handleSubmit, watch, setValue, getValues, reset, formState: { isSubmitting } } = useForm({
+  const { control, handleSubmit, trigger, watch, setValue, getValues, reset, formState: { isSubmitting } } = useForm({
     resolver: zodResolver(Schema),
     defaultValues,
     mode: 'onBlur',
@@ -276,6 +278,9 @@ export default function BookingNewFormRHF({
 
   const checkInVal = watch('checkIn');
   const checkOutVal = watch('checkOut');
+  useEffect(() => {
+    if (checkInVal && checkOutVal) trigger(['checkIn', 'checkOut']);
+  }, [checkInVal, checkOutVal, trigger]);
   useEffect(() => {
     const st = computeStatus(checkInVal, checkOutVal);
     setValue('status', st, { shouldDirty: true });
@@ -573,6 +578,7 @@ export default function BookingNewFormRHF({
           <Box sx={{ minWidth: 0 }}>
             <RHFDatePicker
               name="checkIn"
+              showValidation
               control={control}
               label="Check In"
               format="DD/MM/YYYY"
@@ -588,6 +594,8 @@ export default function BookingNewFormRHF({
           <Box sx={{ minWidth: 0 }}>
             <RHFDatePicker
               name="checkOut"
+              showValidation
+              minDate={parseBookingDate(checkInVal)?.add(1, 'day') || undefined}
               control={control}
               label="Check Out"
               format="DD/MM/YYYY"
