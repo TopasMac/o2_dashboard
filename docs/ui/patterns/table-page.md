@@ -65,10 +65,6 @@ application background, or the outer white-card geometry.
 
 ## Prototype and Migration Status
 
-`frontend/src/pages/Owners2UnitTransactions.jsx` is the first reference
-implementation of this desktop table-page pattern. Its title/actions/filters
-toolbar has been visually validated, but the broader `TableLite` visual
-treatment is still being developed.
+`frontend/src/pages/Owners2UnitTransactions.jsx` is the deployed reference as of release #106 (`0d87b65`). The toolbar, opt-in table styling, and 25-row pagination were visually verified locally and smoke-tested in production by the owner.
 
-Do not migrate other table pages blindly. Migrate incrementally only after the
-prototype is complete and the page's existing behavior has been verified.
+Migrate comparable pages incrementally from current `main`, preserving each page's behavior and testing its filters, actions, drawers, scrolling, and responsive layout. Record converted pages in `IMPLEMENTATION_STATUS.md`.

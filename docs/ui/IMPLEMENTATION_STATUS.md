@@ -2,10 +2,7 @@
 
 ## Purpose
 
-The `feature/ui-design-system` branch establishes the new HausIn desktop UI
-design system. It uses **Unit Transactions** as the first real
-prototype/reference implementation so the shared system can be validated on one
-page before other pages are migrated.
+Release #106 (`0d87b65`) deployed the HausIn desktop table foundations and Unit Transactions reference page on 2026-11-21 (America/Cancun). Other table pages can adopt the approved patterns in focused, independently verified PRs from current `main`.
 
 ## Authoritative Documentation
 
@@ -59,7 +56,7 @@ Completed and visually validated:
 - `Unit Transactions` title inside the white card
 - `+ New Transaction` primary teal action adjacent to the page title
 - Unit autocomplete moved from the table header to the toolbar
-- Type select moved from the table header to the toolbar
+- Type control moved from the table header to the toolbar; it searches category text using case-insensitive substring matching, as approved by the owner
 - Description search moved from the table header to the toolbar
 - `Clear Filters` replaces `Reset Filters` in the new toolbar and is disabled
   when no filters are active
@@ -80,7 +77,7 @@ Completed and visually validated:
   centered
 - Document preview actions use compact MUI icon buttons with tooltip, hover,
   and keyboard-focus treatment
-- Existing transaction business logic, drawers, document preview, navigation,
+- Existing transaction business logic, drawers, document preview,
   deep links, highlighting, scrolling, and column resizing were preserved
 
 ## Shared Implementation Completed
@@ -100,6 +97,11 @@ Completed and visually validated:
   - Supports `visualVariant="hausin"` as an opt-in table presentation; legacy
     consumers retain their existing appearance.
 
+- `frontend/src/components/layout/TablePaginationFooter.jsx`
+  - Shared results count, page indicator, and Previous/Next controls outside vertical scrolling.
+- `frontend/src/components/layout/useClientTablePagination.js`
+  - Fixed 25-row paging for the pilot after filtering, with filter resets and dataset clamping.
+
 ## Important Backward-Compatibility Strategy
 
 The design system is intentionally **opt-in during migration**. Do not globally
@@ -108,74 +110,43 @@ restyle existing pages merely because the new tokens and components exist.
 Existing pages should retain their current appearance until they are
 intentionally migrated and tested.
 
-## What Is Not Finished
+## Approved Pilot Behavior
 
-- The first Unit Transactions `TableLite` visual-treatment pass is complete,
-  but broader table visual work is not yet complete.
-- Loading, empty, error, and footer/pagination states still need design review.
-- The Unit Transactions toolbar and first table-treatment pass are approved,
-  but the complete table-page prototype is not finished.
-- Reservations, Units, Clients, Owners2 Transactions, and HK Transactions have
-  not been migrated.
-- Do not blindly migrate other pages until Unit Transactions is completed and
-  validated.
+- Fixed 25-row client-side pages retain newest-first ordering after filtering.
+- The footer remains outside vertical scrolling. Page changes reset scrolling; filters reset the page; dataset changes clamp it.
+- Unit and category substring searches persist through blur and page navigation. Filters combine with AND semantics.
+- The Type label searches category text. This behavior is approved.
+- The View Comments shortcut was intentionally removed because the owner does not use that workflow. The report-comments page and its data remain.
 
-## Recommended Next Step
+## Rollout Status and Remaining Work
 
-**Define and prototype a server-side filtering, sorting, and pagination
-strategy before migrating other large operational tables.**
+- Converted and deployed — Unit Transactions.
+- Pending migration — Reservations, Units, Clients, Owners2 Transactions, HK Transactions, and other comparable table pages.
+- Service Jobs and Service Providers retain their existing presentation; compatibility was checked during the pilot.
+- General form layouts, typography beyond the documented table controls, and other new patterns require design and approval.
+- Server-side filtering, sorting, and pagination remain future work. The current pilot uses client-side pagination. Plan backend changes separately when dataset size or performance requires them.
+- Review loading and error treatments during each page migration. The pilot's empty and final-page states were verified.
 
-Preserve:
+Preserve column behavior, two-line cells, document actions, amount formatting, sticky headers, internal scrolling, resizing, highlights, and operational permissions when adapting another page. Record each completed migration here.
 
-- Existing column widths unless there is a specific visual reason to change them
-- Two-line cells
-- Document actions
-- Amount formatting
-- Sticky headers
-- Internal vertical scrolling
-- Column resizing
-- Row highlight and focus behavior
+## Release and Recovery Points
 
-The intended future standard is server-side filtering and sorting with a
-bounded page size, a footer such as `Showing 1-50 of 677`, and Previous/Next
-navigation rather than unbounded client-side datasets or numbered pagination.
-Keep the current Unit Transactions implementation unchanged until this is
-designed and tested as a separate platform task.
-
-Make shared `TableLite` changes opt-in where there is meaningful risk to
-unmigrated pages. Visually review each meaningful change rather than
-implementing a broad redesign in one large step.
-
-## Git Checkpoint
-
-- Branch: `feature/ui-design-system`
-- Latest implementation checkpoint:
-  - `d40c8dcc71225540349fef9232fdb5d1cc9e5ba2`
-  - `feat(ui): refine Unit Transactions table treatment`
-
-Earlier commits on this branch establish the table-page documentation,
-toolbar/table standards, button/filter standards, color foundation, and
-toolbar prototype. The branch has not been merged or deployed.
+- Production release — `0d87b65`, PR #106.
+- Previous production release and rollback point — `745c827`.
+- Original recovery branch — `feature/ui-design-system` at `5ed9023`.
+- The continuation branch `codex/ui-design-system-pagination` was squash-merged and cleaned up. Start subsequent stages from current `main` on a fresh purpose-specific branch.
 
 ## Validation Status
 
-During implementation:
+The feature chat reported the following against the integrated release candidate with standard test timeouts.
 
-- `git diff --check` passed.
-- Frontend JSX parsing checks passed.
-- `npm --prefix frontend run build` completed successfully with existing
-  repository warnings.
-
-The Unit Transactions toolbar and first table-treatment pass were visually
-reviewed locally. No automated functional tests are claimed here.
+- Backend — 64 passed, 2 guarded integration tests skipped.
+- Frontend — 87 passed, 1 Service Jobs allocation test failed intermittently. All 3 Service Jobs tests passed when rerun alone. The full-suite failure remains a verification limitation.
+- Production build and whitespace checks passed; the build emitted warnings.
+- Local visual checks covered 729 transactions, final/empty pages, filters, pagination, sticky headers, scrolling, responsive footer, and transaction drawers. Shared Service Jobs and Service Providers consumers were checked.
+- The owner confirmed production smoke tests passed after deployment. Production HEAD was `0d87b65`, the tree was clean, Nginx was active, and migrations showed 242 executed, 242 available, and 0 new.
+- Mobile publishing was not required by the owner.
 
 ## Working Method
 
-- Read the authoritative UI documentation and this status file before changing
-  code.
-- Inspect current code rather than assuming this handover is perfectly current.
-- Make small, testable changes.
-- Preserve unrelated changes.
-- Do not redesign global application chrome.
-- Do not migrate additional pages until the Unit Transactions prototype is
-  completed.
+Read these standards before UI work, inspect the current implementation, and reuse shared components. Work in small stages from current `main`, preserving unrelated behavior. Verify each migrated page locally, run the relevant regression checks, and complete release smoke tests. Update this status file with approved decisions and converted pages so work can continue across chats and releases.
