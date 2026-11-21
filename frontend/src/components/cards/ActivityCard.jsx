@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material';
 import Link from '@mui/material/Link';
 import {
   ArrowLeftIcon,
@@ -11,6 +12,7 @@ import {
 } from '@heroicons/react/24/solid';
 import api from '../../api';
 import ServiceJobIcon from '../ServiceJobIcon';
+import BookingEditFormRHF from '../forms/BookingEditFormRHF';
 import { getCleaningTypeLabel } from '../../mobile/cleaningsModel';
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -40,9 +42,9 @@ function parseYmd(value) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function formatYmd(value) {
+function formatCheckoutDate(value) {
   const date = parseYmd(value);
-  return date ? formatShortDate(date) : '-';
+  return date ? `${String(date.getDate()).padStart(2, '0')}/${MONTH_ABBR[date.getMonth()]}` : '-';
 }
 
 function calculateNights(checkIn, checkOut) {
@@ -130,31 +132,49 @@ function ActivitySection({ icon, iconColor, title, items, emptyMessage, children
   );
 }
 
-function ReservationRow({ item, type }) {
+function ReservationRow({ item, type, onEdit }) {
+  const editable = Boolean(onEdit && item.id > 0);
+  const Row = editable ? Button : 'div';
+  const buttonProps = editable ? {
+    type: 'button',
+    onClick: () => onEdit({ item, type }),
+    'aria-label': `Editar reserva de ${item.unitName}, ${formatGuestName(item.guestName) || 'sin huésped'}`,
+    sx: {
+      textAlign: 'left',
+      textTransform: 'none',
+      fontFamily: 'inherit',
+      fontWeight: 'inherit',
+      lineHeight: 'inherit',
+      alignItems: 'start',
+      '&:hover': { boxShadow: 'inset 0 0 0 1px #087f80' },
+      '&:focus-visible': { outline: '2px solid #087f80', outlineOffset: 2 },
+    },
+  } : {};
+
   return (
-    <div style={{ ...ACTIVITY_ROW_STYLE, display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: 8 }}>
-      <div style={{ paddingTop: 2 }}><ReservationSourceIcon source={item.source} /></div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ color: '#071825', fontSize: 14, lineHeight: 1.25 }}>
+    <Row {...buttonProps} style={{ ...ACTIVITY_ROW_STYLE, display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: 8 }}>
+      <span style={{ display: 'block', paddingTop: 2 }}><ReservationSourceIcon source={item.source} /></span>
+      <span style={{ display: 'block', minWidth: 0 }}>
+        <span style={{ display: 'block', color: '#071825', fontSize: 14, lineHeight: 1.25 }}>
           <strong>{item.unitName}</strong>
-        </div>
-        <div style={{ color: '#4c5964', fontSize: 13, marginTop: 2 }}>{formatGuestName(item.guestName) || '-'}</div>
+        </span>
+        <span style={{ display: 'block', color: '#4c5964', fontSize: 13, marginTop: 2 }}>{formatGuestName(item.guestName) || '-'}</span>
         {type === 'checkIn' ? (
           <>
-            <div style={{ color: '#65717b', fontSize: 12, marginTop: 4 }}>
-              Check-out: {formatYmd(item.checkOut)}{item.nights != null ? ` (${item.nights} noches)` : ''}
-            </div>
-            <div style={{ color: '#65717b', fontSize: 12, marginTop: 4 }}><strong>Notas:</strong> {item.notes || '-'}</div>
-            <div style={{ color: '#65717b', fontSize: 12, marginTop: 2 }}><strong>Notas CheckIn:</strong> {item.checkInNotes || '-'}</div>
+            <span style={{ display: 'block', color: '#65717b', fontSize: 12, marginTop: 4 }}>
+              Check-out: {formatCheckoutDate(item.checkOut)}{item.nights != null ? ` (${item.nights} noches)` : ''}
+            </span>
+            <span style={{ display: 'block', color: '#65717b', fontSize: 12, marginTop: 4 }}><strong>Notas:</strong> {item.notes || '-'}</span>
+            <span style={{ display: 'block', color: '#65717b', fontSize: 12, marginTop: 2 }}><strong>Notas CheckIn:</strong> {item.checkInNotes || '-'}</span>
           </>
         ) : (
           <>
-            <div style={{ color: '#65717b', fontSize: 12, marginTop: 4 }}><strong>Notas CheckOut:</strong> {item.checkOutNotes || '-'}</div>
-            <div style={{ color: '#65717b', fontSize: 12, marginTop: 2 }}><strong>Notas Limpieza:</strong> {item.cleanerNotes || '-'}</div>
+            <span style={{ display: 'block', color: '#65717b', fontSize: 12, marginTop: 4 }}><strong>Notas CheckOut:</strong> {item.checkOutNotes || '-'}</span>
+            <span style={{ display: 'block', color: '#65717b', fontSize: 12, marginTop: 2 }}><strong>Notas Limpieza:</strong> {item.cleanerNotes || '-'}</span>
           </>
         )}
-      </div>
-    </div>
+      </span>
+    </Row>
   );
 }
 
@@ -219,7 +239,7 @@ function ServicesSection({ services }) {
   );
 }
 
-function CityActivityPanel({ cityName, activity }) {
+function CityActivityPanel({ cityName, activity, onEditBooking }) {
   return (
     <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <h3 style={{ margin: 0, color: '#087f80', fontSize: 17 }}>{cityName}</h3>
@@ -231,7 +251,7 @@ function CityActivityPanel({ cityName, activity }) {
         emptyMessage="No hay entradas hoy"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {activity.checkIns.map((item) => <ReservationRow key={`in-${item.id}`} item={item} type="checkIn" />)}
+          {activity.checkIns.map((item) => <ReservationRow key={`in-${item.id}`} item={item} type="checkIn" onEdit={onEditBooking} />)}
         </div>
       </ActivitySection>
       <ActivitySection
@@ -242,11 +262,141 @@ function CityActivityPanel({ cityName, activity }) {
         emptyMessage="No hay salidas hoy"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {activity.checkOuts.map((item) => <ReservationRow key={`out-${item.id}`} item={item} type="checkOut" />)}
+          {activity.checkOuts.map((item) => <ReservationRow key={`out-${item.id}`} item={item} type="checkOut" onEdit={onEditBooking} />)}
         </div>
       </ActivitySection>
       <ServicesSection services={activity.services} />
     </div>
+  );
+}
+
+function ActivityBookingDialog({ item, onClose, onSaved }) {
+  const formId = 'activity-booking-edit-form';
+  const [editor, setEditor] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    Promise.all([
+      api.get(`/api/bookings/${item.id}`, options),
+      api.get('/api/units/options', options),
+    ]).then(([{ data: booking }, { data: units }]) => {
+      if (controller.signal.aborted) return;
+      const unitOptions = units.map((unit) => ({ id: unit.id, label: unit.unit_name }));
+      if (booking.unitId && !unitOptions.some((unit) => Number(unit.id) === Number(booking.unitId))) {
+        unitOptions.push({ id: booking.unitId, label: booking.unitName || item.unitName });
+      }
+      setEditor({ booking, unitOptions });
+    }).catch(() => {
+      if (!controller.signal.aborted) setLoadError(true);
+    });
+    return () => controller.abort();
+  }, [item]);
+
+  async function saveBooking(values) {
+    if (saving) return;
+    setSaveError('');
+    setSaving(true);
+    try {
+      await api.put(`/api/bookings/${item.id}`, values, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      onSaved();
+    } catch (error) {
+      setSaveError(error.response?.data?.message || 'No se pudo guardar la reserva.');
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open fullWidth maxWidth="sm" onClose={saving ? undefined : onClose} aria-labelledby="activity-booking-title">
+      <DialogTitle id="activity-booking-title">Editar reserva · {item.unitName}</DialogTitle>
+      <DialogContent dividers>
+        {loadError && <p role="alert">No se pudo cargar la reserva.</p>}
+        {saveError && <p role="alert">{saveError}</p>}
+        {!editor && !loadError && <p role="status">Cargando reserva…</p>}
+        {editor && (
+          <BookingEditFormRHF
+            formId={formId}
+            initialValues={editor.booking}
+            unitOptions={editor.unitOptions}
+            onSubmit={saveBooking}
+          />
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>Cancelar</Button>
+        <Button type="submit" form={formId} variant="contained" disabled={!editor || saving}>
+          {saving ? 'Guardando…' : 'Guardar'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function ActivityCheckoutDialog({ item, onClose }) {
+  const formId = 'activity-checkout-edit-form';
+  const hasCleaning = item.cleaningId > 0;
+  const [checkOutNotes, setCheckOutNotes] = useState(item.checkOutNotes);
+  const [cleanerNotes, setCleanerNotes] = useState(item.cleanerNotes);
+  const [savedCheckoutNotes, setSavedCheckoutNotes] = useState(item.checkOutNotes);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const checkoutChanged = checkOutNotes !== savedCheckoutNotes;
+  const cleaningChanged = hasCleaning && cleanerNotes !== item.cleanerNotes;
+  const cancel = () => onClose(savedCheckoutNotes !== item.checkOutNotes);
+
+  async function save(event) {
+    event.preventDefault();
+    if (saving || (!checkoutChanged && !cleaningChanged)) return;
+    setSaving(true);
+    setError('');
+    let checkoutSaved = savedCheckoutNotes !== item.checkOutNotes;
+    try {
+      if (checkoutChanged) {
+        await api.put(`/api/bookings/${item.id}`, { checkOutNotes });
+        setSavedCheckoutNotes(checkOutNotes);
+        checkoutSaved = true;
+      }
+      if (cleaningChanged) {
+        await api.put(`/api/hk-cleanings/${item.cleaningId}/notes`, { cleanerNotes });
+      }
+      onClose(true);
+    } catch (requestError) {
+      const message = requestError.response?.data?.error || requestError.response?.data?.message
+        || 'No se pudieron guardar los cambios.';
+      setError(checkoutSaved ? `Las notas de check-out ya se guardaron. ${message}` : message);
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open fullWidth maxWidth="sm" onClose={saving ? undefined : cancel} aria-labelledby="activity-checkout-title">
+      <DialogTitle id="activity-checkout-title">Editar check-out</DialogTitle>
+      <DialogContent dividers>
+        <Stack component="form" id={formId} onSubmit={save} spacing={2}>
+          <div>
+            <div><strong>Unidad</strong> <span>{item.unitName || '—'}</span></div>
+            <div><strong>Huésped</strong> <span>{item.guestName || '—'}</span></div>
+          </div>
+          <TextField label="Notas Checkout" multiline minRows={2} value={checkOutNotes}
+            onChange={(event) => setCheckOutNotes(event.target.value)} disabled={saving} />
+          <TextField label="Notas Limpieza" multiline minRows={2} value={cleanerNotes}
+            onChange={(event) => setCleanerNotes(event.target.value)} disabled={saving || !hasCleaning}
+            helperText={hasCleaning ? undefined : 'Esta reserva no tiene una limpieza vinculada.'} />
+          {error && <p role="alert">{error}</p>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={cancel} disabled={saving}>Cancelar</Button>
+        <Button type="submit" form={formId} variant="contained" disabled={saving || (!checkoutChanged && !cleaningChanged)}>
+          {saving ? 'Guardando…' : 'Guardar'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -260,6 +410,12 @@ export default function ActivityCard({ showServiceJobs = false }) {
   const [error, setError] = useState(null);
   const [serviceJobsError, setServiceJobsError] = useState(false);
   const [groupedDays, setGroupedDays] = useState({});
+  const [editingBooking, setEditingBooking] = useState(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const closeEditor = (refresh = false) => {
+    setEditingBooking(null);
+    if (refresh) setRefreshCount((count) => count + 1);
+  };
 
   const currentKey = formatYmdInCancun(day);
   const isToday = formatYmdInCancun(day) === formatYmdInCancun(today);
@@ -327,6 +483,7 @@ export default function ActivityCard({ showServiceJobs = false }) {
                 checkOut: row.check_out,
                 checkOutNotes: row.check_out_notes || row.checkOutNotes || '',
                 cleanerNotes: row.cleaner_notes ?? row.checklist_cleaning_notes ?? '',
+                cleaningId: row.hk_cleaning_id ?? row.hk?.id,
               });
             }
           }
@@ -372,7 +529,7 @@ export default function ActivityCard({ showServiceJobs = false }) {
 
     loadActivity();
     return () => { cancelled = true; };
-  }, [dateOptions, windowFrom, windowTo, showServiceJobs]);
+  }, [dateOptions, windowFrom, windowTo, showServiceJobs, refreshCount]);
 
   const emptyActivity = { checkIns: [], checkOuts: [], services: [] };
   const current = groupedDays[currentKey] || { playa: emptyActivity, tulum: emptyActivity, other: emptyActivity };
@@ -420,7 +577,7 @@ export default function ActivityCard({ showServiceJobs = false }) {
       {loading && <p style={{ color: '#65717b', margin: 0 }}>Cargando actividad...</p>}
       {error && <p style={{ color: '#c62828', margin: 0 }}>{error}</p>}
 
-      {!loading && !error && (
+      {(!loading || groupedDays[currentKey]) && !error && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(80px, 1fr))', border: '1px solid #dce6e7', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
             <ActivityTotal icon={<ArrowPathIcon />} color="#087f80" value={turnoverUnits} label="Cambios" />
@@ -431,9 +588,9 @@ export default function ActivityCard({ showServiceJobs = false }) {
           {serviceJobsError && <p role="status" style={{ color: '#a33d21', fontSize: 13 }}>No se pudieron cargar los trabajos programados.</p>}
           <div style={{ border: '1px solid #dce6e7', borderRadius: 12, padding: 14, overflow: 'hidden' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 20 }}>
-              <CityActivityPanel cityName="Playa del Carmen" activity={current.playa} />
+              <CityActivityPanel cityName="Playa del Carmen" activity={current.playa} onEditBooking={setEditingBooking} />
               <div style={{ minWidth: 0, borderLeft: '2px solid #8bcacb', paddingLeft: 20 }}>
-                <CityActivityPanel cityName="Tulum" activity={current.tulum} />
+                <CityActivityPanel cityName="Tulum" activity={current.tulum} onEditBooking={setEditingBooking} />
               </div>
             </div>
             {current.other.services.length > 0 && (
@@ -444,6 +601,16 @@ export default function ActivityCard({ showServiceJobs = false }) {
             )}
           </div>
         </>
+      )}
+      {editingBooking?.type === 'checkIn' && (
+        <ActivityBookingDialog
+          item={editingBooking.item}
+          onClose={() => closeEditor()}
+          onSaved={() => closeEditor(true)}
+        />
+      )}
+      {editingBooking?.type === 'checkOut' && (
+        <ActivityCheckoutDialog item={editingBooking.item} onClose={closeEditor} />
       )}
     </div>
   );
