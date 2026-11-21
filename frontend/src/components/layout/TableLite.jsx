@@ -27,6 +27,8 @@ import { alpha } from '@mui/material/styles';
 import { formatDateDMY, formatMoney, capitalizeFirst } from '../../utils/formatters';
 import DocumentPreview from '../common/DocumentPreview';
 import O2Tooltip from '../common/O2Tooltip';
+import TablePaginationFooter from './TablePaginationFooter';
+import useClientTablePagination from './useClientTablePagination';
 
 // Compact select with placeholder-like label (matches our DataTable look)
 
@@ -154,6 +156,8 @@ const getColumnFilterKey = (col) =>
  *  - autoFilter: boolean (default true) — if true, TableLite filters rows internally based on header filters
  *  - showHeaderFilters: boolean (default true) — render configured filter controls in column headers
  *  - visualVariant: 'legacy' | 'hausin' (default 'legacy') — opt-in table presentation
+ *  - clientPagination: opt into fixed 25-row pages and an external HausIn footer
+ *  - paginationResetKey: change with caller-owned sort state to return to page one
  *  - optionsSourceRows: array — optional master dataset to derive filter option lists from
  */
 const TableLite = forwardRef(function TableLite(
@@ -175,12 +179,17 @@ const TableLite = forwardRef(function TableLite(
     autoFilter = true,
     showHeaderFilters = true,
     visualVariant = 'legacy',
+    clientPagination = false,
+    paginationResetKey = '',
     optionsSourceRows = null,
     defaultStringTransform = 'capitalizeFirst',
   },
   ref
 )
 {
+  const scrollRef = useRef(null);
+  const pendingPaginationHighlightRef = useRef(false);
+  const pendingHighlightScrollRef = useRef(false);
   const isHausinVariant = visualVariant === 'hausin';
   // If parent does not control filters, keep a local copy
   const [localFilterValues, setLocalFilterValues] = useState({});
@@ -382,6 +391,7 @@ const TableLite = forwardRef(function TableLite(
       if (!e || !e.detail) return;
       const rawId = e.detail.id;
       if (rawId === undefined || rawId === null) return;
+      pendingPaginationHighlightRef.current = true;
       setHighlightId(rawId);
     };
 
@@ -554,7 +564,35 @@ const TableLite = forwardRef(function TableLite(
     () => (autoFilter ? applyFilters(rows) : (rows || [])),
     [rows, autoFilter, enableFilters, effectiveFilterValues, normalizedColumns]
   );
-  const displayRows = filteredRows;
+  // Input rows retain the caller's ordering; filter before taking the page slice.
+  const pagination = useClientTablePagination({
+    rows: filteredRows,
+    pageSize: 25,
+    resetKey: clientPagination ? `${JSON.stringify(effectiveFilterValues)}:${paginationResetKey}` : '',
+  });
+  const displayRows = clientPagination ? pagination.rows : filteredRows;
+
+  useLayoutEffect(() => {
+    if (clientPagination && scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [clientPagination, pagination.page]);
+
+  // Keep deep-link and post-save highlights reachable beyond the first page.
+  useEffect(() => {
+    if (!clientPagination || highlightId == null || !pendingPaginationHighlightRef.current) return;
+    const index = filteredRows.findIndex((row) => String(row.id) === String(highlightId));
+    if (index >= 0) {
+      pendingPaginationHighlightRef.current = false;
+      pendingHighlightScrollRef.current = true;
+      pagination.onPageChange(Math.floor(index / 25));
+    }
+  }, [clientPagination, highlightId, filteredRows, pagination.onPageChange]);
+
+  useEffect(() => {
+    if (clientPagination && pendingHighlightScrollRef.current && highlightRowRef.current) {
+      pendingHighlightScrollRef.current = false;
+      highlightRowRef.current.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [clientPagination, pagination.page, highlightId]);
 
   const rangeText = useMemo(() => {
     if (typeof onPageChange === 'function') {
@@ -614,6 +652,8 @@ const TableLite = forwardRef(function TableLite(
       <Box ref={ref} sx={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, width: '100%', maxWidth: '100%', flex: 1, height: '100%' }}>
       {/* Scroll container that holds the table and provides the only scrollbar */}
       <Box
+        ref={scrollRef}
+        data-testid="table-scroll-container"
         sx={{
           position: 'relative',
           display: 'block',
@@ -632,8 +672,8 @@ const TableLite = forwardRef(function TableLite(
           borderRadius: 0,
           // reserve space under the table so the sticky footer never overlaps last row
           '--table-footer-offset': '2px', // visual overlap toward the card border
-          paddingBottom: `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
-          scrollPaddingBottom: `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
+          paddingBottom: clientPagination ? 0 : `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
+          scrollPaddingBottom: clientPagination ? 0 : `calc(var(--page-content-padding-bottom, 0px) + ${reservePad}px)`,
         }}
       >
         <Table
@@ -1222,8 +1262,8 @@ const TableLite = forwardRef(function TableLite(
           </TableBody>
         </Table>
 
-        {/* Sticky footer bar (sits inside the same scroll area so it stays visible) */}
-        <Box
+        {/* Legacy footer remains inside the scroll area for unmigrated pages. */}
+        {!clientPagination && <Box
           ref={footerRef}
           sx={{
             position: 'sticky',
@@ -1274,8 +1314,9 @@ const TableLite = forwardRef(function TableLite(
               </Button>
             </>
           )}
-        </Box>
+        </Box>}
       </Box>
+      {clientPagination && <TablePaginationFooter {...pagination} />}
     </Box>
     <Dialog
       open={previewState.open}
@@ -1352,6 +1393,8 @@ TableLite.propTypes = {
   onFilterChange: PropTypes.func,
   autoFilter: PropTypes.bool,
   showHeaderFilters: PropTypes.bool,
+  clientPagination: PropTypes.bool,
+  paginationResetKey: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   visualVariant: PropTypes.oneOf(['legacy', 'hausin']),
   // Optional master dataset used to derive filter option lists globally (so options don't shrink after filtering)
   optionsSourceRows: PropTypes.array,

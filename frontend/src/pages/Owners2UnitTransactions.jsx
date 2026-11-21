@@ -528,6 +528,7 @@ const Owners2UnitTransactions = () => {
           <Box sx={{ ...filterFieldSx, width: 200 }}>
             <Typography component="span" sx={filterLabelSx}>Unit</Typography>
             <Autocomplete
+              clearOnBlur={false}
               size="small"
               options={unitOptions}
               value={unitOptions.includes(filterValues.unitName) ? filterValues.unitName : null}
@@ -554,6 +555,7 @@ const Owners2UnitTransactions = () => {
           <Box sx={{ ...filterFieldSx, width: 220 }}>
             <Typography component="span" sx={filterLabelSx}>Type</Typography>
             <Autocomplete
+              clearOnBlur={false}
               size="small"
               options={categoryOptions}
               value={categoryOptions.includes(filterValues.category) ? filterValues.category : null}
@@ -628,6 +630,7 @@ const Owners2UnitTransactions = () => {
           optionsSourceRows={transactions}
           showHeaderFilters={false}
           visualVariant="hausin"
+          clientPagination
           rowProps={(row) => ({
             id: `row-${row.id}`
           })}
