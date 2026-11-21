@@ -65,18 +65,18 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `082d1bd` — `Use local check-in and checkout times for reservation status (#100)` (deployed 2026-11-15; rollback point `fc27b38`; no migrations; reservation status changes at 15:00 check-in and 11:00 checkout Cancún time, mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
-- **GitHub `main`:** `082d1bd` — `Use local check-in and checkout times for reservation status (#100)`
+- **Production server checkout last verified:** `745c827` — `Edit reservations from the activity dashboard (#103)` (deployed 2026-11-20, America/Cancun; rollback point `082d1bd`; no migrations; mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
+- **GitHub `main`:** `745c827` — `Edit reservations from the activity dashboard (#103)` (release target; subsequent release-record commits are documentation only)
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
-- **Doctrine migrations:** 238 executed, 238 available, 0 new; latest `Version20260918000300`
-- **Smoke tests:** dashboard and Mobile V2 return `200`, the protected alerts API returns `401` without authentication, and authenticated Admin and Cleaner workflows were verified by the owner after the S3/CloudFront refresh.
-- **Database backup:** `/home/ubuntu/backups/owners2_dashboard_2026-09-19-pre-c99a921.sql.gz` was integrity-checked and its completed SQL dump was structurally verified before migration.
-- **Rollback point:** `9778910` — `release: prevent iOS standalone login zoom`
+- **Doctrine migrations:** 242 executed, 242 available, 0 new; latest `Version20261113000100` (verified after #103).
+- **Smoke tests:** owner confirmed dashboard reservation editing and checkout/cleaning-note editing passed after #103; saved values persisted.
+- **Database backup:** existing automated backup `s3://owners2-db-backups/owners2_dashboard_2026-11-20-02-30.sql` (3,580,948 bytes) was listed before #103; 02:30 America/Mexico_City server time, 03:30 America/Cancun. Restore integrity was not tested.
+- **Rollback point:** `082d1bd` — `Use local check-in and checkout times for reservation status (#100)`.
 - **Safety recovery:** production WIP was archived and retained in stash `pre-deploy-production-wip-2026-09-16`; do not reapply it without review because its intended behavior is now reconciled in Git.
 
-The latest release added the Mobile V2 Admin home and alerts, improved service-payment and calendar-block behavior, added optional Unit payment-reference and Airbnb-link fields, and added booking-source branding. It introduced the reviewed `unit.internet_pago` and `unit.airbnb_link` columns through four forward migrations; it did not change cron, Nginx configuration, environment variables, or historical data.
+Release #103 added reservation editing from dashboard check-in rows and checkout/linked cleaning-note editing from checkout rows. Activity refreshes after saving, and retries after a partial save update only the failed request. The release introduced no migrations or dependency changes.
 
 Mobile V2 in production supports administrators and the controlled Cleaner pilot. Verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. Manager access is not enabled.
 
