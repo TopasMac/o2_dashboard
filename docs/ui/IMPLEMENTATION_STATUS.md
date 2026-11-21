@@ -136,6 +136,10 @@ Preserve column behavior, two-line cells, document actions, amount formatting, s
 - Original recovery branch — `feature/ui-design-system` at `5ed9023`.
 - The continuation branch `codex/ui-design-system-pagination` was squash-merged and cleaned up. Start subsequent stages from current `main` on a fresh purpose-specific branch.
 
+## Booking Date Validation
+
+New/edit booking forms retain their current layout. Checkout calendars use check-in plus one day as the minimum. These forms opt into visible date-field validation messages with room below the control; other shared date-picker consumers retain their existing helper-text presentation. This is a focused validation correction, not a general form-layout standard or table-page migration.
+
 ## Validation Status
 
 The feature chat reported the following against the integrated release candidate with standard test timeouts.

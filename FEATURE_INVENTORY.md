@@ -104,6 +104,8 @@ Critical commands include:
 - `app:update-booking-calculations`
 - housekeeping backfill commands
 
+Booking form date safeguards: new/edit booking checkout calendars start one day after check-in. Typed invalid or non-increasing dates show a field error and prevent saving. Private-reservation creation and ordinary booking date updates also reject invalid ranges with HTTP 422 before writes or downstream side effects. Existing records and separate Owners2 Hold/Block rules are unchanged.
+
 Housekeeping completion policy:
 
 - Booking lifecycle synchronization may create or update the checkout cleaning, but a new cleaning remains `pending`.
