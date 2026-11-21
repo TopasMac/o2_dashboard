@@ -427,6 +427,9 @@ class BookingsController extends AbstractController
             'cleaningFee' => method_exists($booking, 'getCleaningFee') ? $booking->getCleaningFee() : null,
             'commissionPercent' => method_exists($booking, 'getCommissionPercent') ? $booking->getCommissionPercent() : null,
             'notes' => $booking->getNotes(),
+            'checkInNotes' => $booking->getCheckInNotes(),
+            'checkOutNotes' => $booking->getCheckOutNotes(),
+            'isPaid' => $booking->isPaid(),
             'reservationUrl' => $reservationUrl,
         ];
 
