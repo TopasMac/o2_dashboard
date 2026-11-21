@@ -65,18 +65,18 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `745c827` — `Edit reservations from the activity dashboard (#103)` (deployed 2026-11-20, America/Cancun; rollback point `082d1bd`; no migrations; mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
-- **GitHub `main`:** `745c827` — `Edit reservations from the activity dashboard (#103)` (release target; subsequent release-record commits are documentation only)
+- **Production server checkout last verified:** `0d87b65` — `Introduce HausIn design-system foundations and paginated Unit Transactions pilot (#106)` (deployed 2026-11-21, America/Cancun; rollback point `745c827`; no migrations; mobile S3/CloudFront publishing not required and not performed; see `DEPLOYMENT.md`)
+- **GitHub `main`:** `0d87b65` — `Introduce HausIn design-system foundations and paginated Unit Transactions pilot (#106)` (release target; subsequent release-record commits are documentation only)
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
-- **Doctrine migrations:** 242 executed, 242 available, 0 new; latest `Version20261113000100` (verified after #103).
-- **Smoke tests:** owner confirmed dashboard reservation editing and checkout/cleaning-note editing passed after #103; saved values persisted.
-- **Database backup:** existing automated backup `s3://owners2-db-backups/owners2_dashboard_2026-11-20-02-30.sql` (3,580,948 bytes) was listed before #103; 02:30 America/Mexico_City server time, 03:30 America/Cancun. Restore integrity was not tested.
-- **Rollback point:** `082d1bd` — `Use local check-in and checkout times for reservation status (#100)`.
+- **Doctrine migrations:** 242 executed, 242 available, 0 new; latest `Version20261113000100` (verified after #106).
+- **Smoke tests:** owner confirmed the requested Unit Transactions pagination, filters, scrolling, drawers, and Service Jobs/Service Providers smoke tests passed after #106.
+- **Database backup:** fresh manual backup `s3://owners2-db-backups/owners2_dashboard_2026-11-20-23-29.sql` (3,583,016 bytes) was uploaded and listed before #106; November 20 at 23:29 America/Mexico_City server time, November 21 at 00:29 America/Cancun. Restore integrity was not tested.
+- **Rollback point:** `745c827` — `Edit reservations from the activity dashboard (#103)`.
 - **Safety recovery:** production WIP was archived and retained in stash `pre-deploy-production-wip-2026-09-16`; do not reapply it without review because its intended behavior is now reconciled in Git.
 
-Release #103 added reservation editing from dashboard check-in rows and checkout/linked cleaning-note editing from checkout rows. Activity refreshes after saving, and retries after a partial save update only the failed request. The release introduced no migrations or dependency changes.
+Release #106 introduced opt-in HausIn theme tokens and shared table/toolbar components, with Unit Transactions as the deployed reference page. It adds fixed 25-row client-side pagination after filtering, an external footer, persistent unit/category searches, and the approved removal of the View Comments shortcut. See `docs/ui/IMPLEMENTATION_STATUS.md` for adoption guidance. The release introduced no migrations or dependency changes.
 
 Mobile V2 in production supports administrators and the controlled Cleaner pilot. Verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. Manager access is not enabled.
 

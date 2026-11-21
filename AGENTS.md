@@ -49,6 +49,14 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 6. Report what changed, what was verified, known limitations, and any manual checks still needed.
 7. Do not commit, push, open or merge a pull request, or deploy unless the user explicitly asks for that step.
 
+## UI design standards
+
+Before changing UI, read `docs/ui/IMPLEMENTATION_STATUS.md` and the relevant standards linked from `docs/ui/README.md`. Unit Transactions (`frontend/src/pages/Owners2UnitTransactions.jsx`) is the deployed reference for desktop table pages.
+
+Reuse the approved `theme.hausin` tokens, `TableToolbar`, opt-in `PageScaffold`/`TableLite` behavior, and pagination components for comparable pages. Migrate pages incrementally in focused PRs from current `main`, preserving each page's operational behavior and verifying shared consumers. Existing pages adopt the new presentation when explicitly included in the task.
+
+Table-page patterns are approved. General form layouts and other patterns still require design and approval before being treated as project standards. Record new decisions and converted pages in the UI documentation so future chats can continue the rollout.
+
 ## Starting local servers
 
 When the user asks to start local, start the local server, or run the app, start both the React frontend and Symfony backend using the commands in `LOCAL_DEVELOPMENT.md`. A request specifying port 3000 still includes the backend unless the user explicitly requests only one component.

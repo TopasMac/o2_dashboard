@@ -146,6 +146,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Housekeeping laundry | Review | Laundry Records is disabled in desktop navigation and routing. Historical records, rates, and the API remain available. Confirm usage before permanent retirement. |
 | Employees and tasks | Keep | 7 employees, 64 tasks, comments, mobile task UI, access generation, and notifications. |
 | Employee cash and financial ledgers | Keep | 204 cash rows and 92 financial-ledger rows, with approval and allocation workflows. |
+| Unit Transactions desktop UI | Keep | Release #106 establishes the HausIn table-page reference with toolbar filters, category substring searching, and fixed 25-row pagination. View Comments navigation was intentionally removed with owner approval; the report-comments page and historical data remain. |
 | Unit ledger and balances | Keep, then consolidate | `unit_balance_ledger` has 588 rows and `unit_transactions` has 677 exact rows. The separate `unit_balance` table is empty and may be a derived/cache design; investigate before removal. |
 | O2 and HK transactions | Keep | Active financial data and report dependencies. |
 | Service payments | Keep | Month Payments lists active units with expected service payments. The HOA Report Preview and PDF include only active units without a recorded HOA payment for the selected month. Users can exclude individual unpaid units from the report for the current period. |

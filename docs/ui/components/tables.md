@@ -90,9 +90,10 @@ independently on each table page.
 
 ## Pagination
 
-- Continuous vertical scrolling is the preferred experience.
-- Existing previous and next pagination support may remain available for large
-  or server-driven datasets.
+- The deployed Unit Transactions reference uses fixed 25-row client-side pages after filtering and newest-first ordering.
+- Keep the results count, page indicator, and Previous/Next controls outside the vertical scroll container. Preserve internal scrolling and sticky headers within each page.
+- Filters reset to the first page, page changes reset vertical scrolling, and dataset changes clamp the current page.
+- Reuse `TablePaginationFooter` and `useClientTablePagination` for comparable client-side tables. Server-side filtering, sorting, and pagination remain a separate future task.
 - Do not introduce visible numbered pagination as the default table experience.
 
 ## States
