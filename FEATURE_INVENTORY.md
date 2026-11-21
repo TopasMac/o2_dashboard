@@ -83,6 +83,8 @@ Required protection:
 
 Bookings feed month slices, calendar availability, financial reports, status updates, holds, housekeeping cleanings, and reconciliations.
 
+Reservation status changes from Upcoming to Ongoing at 15:00 on the stored check-in date and from Ongoing to Past at 11:00 on the stored checkout date, using the shared America/Cancun business clock for all cities. These cutoffs apply when status is recalculated. The check-in/out schedule and housekeeping continue to use the stored calendar dates.
+
 Current exact local snapshot counts:
 
 | Data | Rows |
@@ -110,6 +112,9 @@ Housekeeping completion policy:
 - Explicit completion records `done_at` and, when an employee identity is available, `done_by` before running the existing reconciliation/transaction logic.
 - Booking cancellation synchronization remains in place.
 - Overdue cleanings remain pending and should be highlighted by the client rather than silently completed.
+- Cleaning statuses are unified through a single display-status service (`HKCleaningDisplayStatus`) shared by the cleanings view, check-in/out view, and reconciliation (#56).
+- HK reconciliation autosaves edits instead of requiring a manual save (#56).
+- Marking a Playa del Carmen cleaning `reported` in HK reconciliation completes it (`done`, with `done_at`) unless it is already done or cancelled, so reported cleanings reach the unit month report's gastos. Existing `reported` + `pending` rows need a separate, backed-up data fix.
 
 The local production-derived snapshot contains 40 post-2026-06-01 `done` cleanings with neither `done_at` nor an employee and no submitted checklist. These are strong candidates for historical automatic completion, but any correction must be a separate backed-up, reviewed data operation because older manual bulk actions may be indistinguishable.
 
@@ -134,13 +139,16 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Bookings table and calendar | Protect | Central system of record with 1,242 rows and multiple downstream consumers. |
 | Airbnb email ingestion | Protect | External entry point and 1,000 historical import rows. Upstream sender is not contained in this repository. |
 | Airbnb iCal sync and reconciliation | Protect | Frequent production job, 1,000 events, booking fallback and conflict detection. |
+| Airbnb guest reviews | Keep | Desktop Admins can work the review queue under Alertas → Reseñas Airbnb. The Manager dashboard also has the queue. Reviews are submitted manually in Airbnb, and Owners2 records completed, skipped, and timed-out outcomes for reporting. |
 | Holds and soft reservations | Protect | Affects availability and automatic expiry. Test before consolidation. |
 | Housekeeping cleanings and reconciliation | Keep | High-volume operational data and automatic booking side effects. |
-| Housekeeping laundry | Review | 19 laundry records and 3 rate rows. Confirm whether this workflow is still used. |
+| Service Jobs | Keep | Admin-only scheduling under Housekeeping. The Admin dashboard shows scheduled jobs alongside extra cleanings in Actividad → Servicios for the selected day. Activity Schedule also shows scheduled jobs by date and city for Admins. Jobs use a curated selection of transaction categories and can be assigned to providers from the existing directory. Admins can explicitly allocate completed jobs to multiple Labour and Equipment transactions. Each Client-billed line appears in the owner report for its transaction month. |
+| Housekeeping laundry | Review | Laundry Records is disabled in desktop navigation and routing. Historical records, rates, and the API remain available. Confirm usage before permanent retirement. |
 | Employees and tasks | Keep | 7 employees, 64 tasks, comments, mobile task UI, access generation, and notifications. |
 | Employee cash and financial ledgers | Keep | 204 cash rows and 92 financial-ledger rows, with approval and allocation workflows. |
 | Unit ledger and balances | Keep, then consolidate | `unit_balance_ledger` has 588 rows and `unit_transactions` has 677 exact rows. The separate `unit_balance` table is empty and may be a derived/cache design; investigate before removal. |
 | O2 and HK transactions | Keep | Active financial data and report dependencies. |
+| Service payments | Keep | Month Payments lists active units with expected service payments. The HOA Report Preview and PDF include only active units without a recorded HOA payment for the selected month. Users can exclude individual unpaid units from the report for the current period. |
 | Accounting/Santander import | Review | 106 Santander entries plus accountant imports and entries. Confirm current bank-import workflow. |
 | Airbnb payout reconciliation | Keep pending workflow review | 80 payouts and 212 payout items. Older payout tables also contain data, indicating parallel generations that must be reconciled rather than dropped blindly. |
 | Monthly owner reports | Keep | Month slices, report cycles, PDF generation, email, payment workflows, and historical financial output. Consolidate duplicate controllers only after contract tests. |
@@ -149,13 +157,13 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Unit media | Review | 3 exact media records plus S3 rename/delete logic. Confirm whether this separate feature is still needed alongside unit documents. |
 | Unit onboarding inventory | Review | Exact data exists: 1 session, 12 items, and 16 photos, with desktop and mobile workflows. |
 | Unit purchase lists/catalog | Review | 24 catalog entries, 1 list, and 10 lines. Confirm whether onboarding purchases remain part of operations. |
-| Service providers | Review | One exact provider record and a visible navigation item. Confirm whether this feature is in active use. |
+| Service providers | Keep | Admins can list, add, edit and deactivate providers. The directory can include inactive records, and the table shows the account holder, bank, and masked last four digits of the saved Card or CLABE. Saving one type through the bank details form clears the other. |
 | Contracts | Review | Three draft records and public preview routes. Confirm whether contracts are generated from Owners2 today. |
 | Public share links | Review | No current share-token rows, but frontend and backend public exchange routes exist. Confirm whether report sharing is planned or obsolete. |
 | Social posts/calendar | Removal candidate | Visible admin navigation and full API/entity implementation, but both social tables contain zero rows. Strong candidate if marketing is managed elsewhere. |
 | Settings | Removal candidate | The `/settings` route renders only `Settings Page`; it is a navigation placeholder, not a working feature. |
 | Private reservation staging | Review/consolidate | One row, two similarly named sync commands, booking-controller creation, and the newer direct booking flow. Determine the canonical private-booking path. |
-| Mobile application | Keep pending role review | Mobile V2 has a fixed-viewport Admin home with a placeholder summary, five-day daily-activity summaries for Playa and Tulum, and service-payment alerts ordered by urgency for overdue items and the next seven days. Daily activity includes same-unit turnover grouping, booking notes, and independent cleaning services. The application also includes an admin reservations calendar and a daily cleanings page with city filtering, cleaning status, assignment visibility, and unit/condo access details. The controlled Cleaner pilot is deployed: Cleaners receive only the cleanings page, their city scope is enforced by the backend, and self-only completion remains protected. Mobile V2 is intentionally a clean restart: pre-V2 Client, Supervisor/non-Cleaner employee, task, cash, unit-detail, and inventory workflows are unsupported until rebuilt, and old `/m/*` bookmarks enter the Mobile V2 access gate. Manager access remains disabled pending separate implementation and testing. |
+| Mobile application | Keep pending role review | Mobile V2 has a fixed-viewport Admin home with a placeholder summary, five-day daily-activity summaries for Playa and Tulum, and service-payment alerts ordered by urgency for overdue items and the next seven days. Daily activity includes same-unit turnover grouping, booking notes, and independent cleaning services. The application also includes an admin reservations calendar and a daily cleanings page with city filtering, cleaning status, assignment visibility, and unit/condo access details (including a Google Maps link icon). A Unidades page lists Active and Onboarding units with a search box, an access card, and a structured copy-for-WhatsApp action; Admins see all units and Cleaners only their city. The footer places the HausIn home logo in the center. The controlled Cleaner pilot is deployed: Cleaners receive only the cleanings page, their city scope is enforced by the backend, and self-only completion remains protected. Mobile V2 is intentionally a clean restart: pre-V2 Client, Supervisor/non-Cleaner employee, task, cash, unit-detail, and inventory workflows are unsupported until rebuilt, and old `/m/*` bookmarks enter the Mobile V2 access gate. Manager access remains disabled pending separate implementation and testing. |
 
 ## High-confidence code cleanup candidates
 
@@ -237,7 +245,7 @@ For each feature selected for removal:
 1. **Verify production-critical operations**: email sender, cron command mismatch, iCal freshness, duplicate status schedule, backups and deployment.
 2. **Build the safety net**: tests for email ingestion, iCal, booking overlap/dates, status transitions, holds, and housekeeping side effects.
 3. **Remove obvious UI scaffolding**: Settings placeholder, dev route exposure, redundant route aliases, and duplicated layout wrappers.
-4. **Owner feature decisions**: marketing, service providers, laundry, contracts, occupancy, inventory/purchases, share links, and mobile role usage.
+4. **Owner feature decisions**: marketing, laundry, contracts, occupancy, inventory/purchases, share links, and mobile role usage.
 5. **Consolidate duplicate generations**: navigation/layout, private reservations, reports, payout reconciliation, and transaction models.
 6. **Retire data last**: archive and remove confirmed obsolete tables only after code and scheduled writers are gone.
 
@@ -247,7 +255,6 @@ For the next review, answer **keep**, **remove**, or **unsure** for each:
 
 - Social Posts and Social Calendar
 - Settings placeholder
-- Service Providers
 - Housekeeping Laundry
 - Unit onboarding Inventory
 - Unit Purchase Lists and Catalog

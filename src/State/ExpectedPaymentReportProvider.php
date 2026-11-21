@@ -6,6 +6,7 @@ use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProviderInterface;
 use App\Dto\ExpectedPaymentsReport;
 use App\Dto\ExpectedPaymentsRow;
+use App\Entity\Unit;
 use Doctrine\ORM\EntityManagerInterface;
 
 class ExpectedPaymentReportProvider implements ProviderInterface
@@ -27,15 +28,21 @@ class ExpectedPaymentReportProvider implements ProviderInterface
         }
 
         $rows = [];
+        $units = $this->em->createQueryBuilder()
+            ->from(Unit::class, 'u')
+            ->orderBy('u.unitName', 'ASC');
+
+        if (($context['filters']['activeOnly'] ?? false) === true) {
+            $units->andWhere('LOWER(u.status) = :activeStatus')
+                ->setParameter('activeStatus', 'active');
+        }
 
         if ($service === 'HOA') {
             // Example: join Units with Condos and pull HOA fields
-            $qb = $this->em->createQueryBuilder()
+            $qb = (clone $units)
                 ->select('u.id AS unitId, u.unitName AS unitName, u.hoaAmount AS hoaAmount, c.hoaBank, c.hoaAccountName, c.hoaAccountNr, c.hoaEmail, c.hoaDueDay')
-                ->from('App\\Entity\\Unit', 'u')
                 ->join('u.condo', 'c')
-                ->where('u.hoa = 1')
-                ->orderBy('u.unitName', 'ASC');
+                ->andWhere('u.hoa = 1');
 
             $results = $qb->getQuery()->getArrayResult();
 
@@ -64,11 +71,9 @@ class ExpectedPaymentReportProvider implements ProviderInterface
         }
 
         if ($service === 'INTERNET') {
-            $qb = $this->em->createQueryBuilder()
-                ->select('u.id AS unitId, u.unitName AS unitName, u.internetIsp, u.internetReference, u.internetCost, u.internetDeadline')
-                ->from('App\\Entity\\Unit', 'u')
-                ->where('u.internet = 1')
-                ->orderBy('u.unitName', 'ASC');
+            $qb = (clone $units)
+                ->select('u.id AS unitId, u.unitName AS unitName, u.internetIsp, u.internetReference, u.internetPago, u.internetCost, u.internetDeadline')
+                ->andWhere('u.internet = 1');
 
             $results = $qb->getQuery()->getArrayResult();
 
@@ -85,6 +90,7 @@ class ExpectedPaymentReportProvider implements ProviderInterface
                     servicio: 'Internet',
                     banco: $r['internetIsp'] ?? null, // reuse banco field for ISP label
                     nombre: $r['internetReference'] ?? null, // reuse nombre field for reference
+                    paymentReference: $r['internetPago'],
                     cuenta: null,
                     monto: $r['internetCost'] ?? null,
                     fechaPagoIso: $date ? $date->format('Y-m-d') : null,
@@ -95,12 +101,10 @@ class ExpectedPaymentReportProvider implements ProviderInterface
         }
 
         if ($service === 'AGUAKAN') {
-            $qb = $this->em->createQueryBuilder()
+            $qb = (clone $units)
                 ->select('u.id AS unitId, u.unitName AS unitName, u.waterReference, u.waterDeadline, c.hoaEmail AS hoaEmail')
-                ->from('App\\Entity\\Unit', 'u')
                 ->join('u.condo', 'c')
-                ->where('u.water = 1')
-                ->orderBy('u.unitName', 'ASC');
+                ->andWhere('u.water = 1');
 
             $results = $qb->getQuery()->getArrayResult();
 
@@ -128,11 +132,9 @@ class ExpectedPaymentReportProvider implements ProviderInterface
         }
 
         if ($service === 'CFE') {
-            $qb = $this->em->createQueryBuilder()
+            $qb = (clone $units)
                 ->select('u.id AS unitId, u.unitName AS unitName, u.cfeReference, u.cfeName, u.cfePeriod, u.cfePaymentDay, u.cfeStartingMonth')
-                ->from('App\\Entity\\Unit', 'u')
-                ->where('u.cfe = 1')
-                ->orderBy('u.unitName', 'ASC');
+                ->andWhere('u.cfe = 1');
 
             $results = $qb->getQuery()->getArrayResult();
 

@@ -36,7 +36,7 @@ const formatMonthName = (ym) => {
 const yymm = (date = new Date()) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
 
-const Dashboard = () => {
+const Dashboard = ({ showAirbnbReviews, showServiceJobs }) => {
   const navigate = useNavigate();
   const OW_CARD_HEIGHT = 600;
   const ALERTS_HEIGHT = 230;            // fixed height for Alerts card
@@ -695,25 +695,33 @@ const Dashboard = () => {
       <PageScaffold>
         <MonthSummaryCard />
 
-        <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div
+          style={{
+            marginTop: '1.5rem',
+            display: 'flex',
+            gap: '1rem',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+          }}
+        >
           <div
             style={{
+              flex: '1 1 560px',
+              minWidth: 0,
+              maxWidth: 650,
               display: 'flex',
+              flexDirection: 'column',
               gap: '1rem',
-              alignItems: 'flex-start',
             }}
           >
-            <div style={{ flex: '0 0 440px', maxWidth: 440 }}>
-              <DashboardAlertCenterCard />
-            </div>
-
-            <div style={{ flex: '0 0 500px', maxWidth: 500 }}>
-              <ActivityCard activity={activity} />
+            <DashboardAlertCenterCard showAirbnbReviews={showAirbnbReviews} />
+            <div style={{ minHeight: OW_CARD_HEIGHT }}>
+              <OccupancyWatchCard />
             </div>
           </div>
 
-          <div style={{ maxWidth: 650, minHeight: OW_CARD_HEIGHT }}>
-            <OccupancyWatchCard />
+          <div style={{ flex: '0 1 500px', minWidth: 0, maxWidth: 500 }}>
+            <ActivityCard activity={activity} showServiceJobs={showServiceJobs} />
           </div>
         </div>
 

@@ -27,12 +27,12 @@ import O2Results from './components/reports/O2Results';
 import Condos from './pages/Condos';
 import Clients from './pages/Clients';
 import ServiceProviders from './pages/ServiceProviders';
+import ServiceJobs from './pages/ServiceJobs';
 import ClientForm from './components/forms/ClientForm';
 import NewCondoForm from './components/forms/NewCondoForm';
 import EditCondoForm from './components/forms/EditCondoForm';
 import Owners2UnitTransactions from './pages/Owners2UnitTransactions';
 import HKTransactions from './pages/HKTransactions';
-import HKLaundryRecords from './pages/HKLaundryRecords';
 import HRTransactions from './pages/HRTransactions';
 import EmployeeCashAdmin from './pages/EmployeeCashAdmin';
 import Reports from './pages/Reports';
@@ -68,6 +68,7 @@ import MobileV2Shell from './mobile/MobileV2Shell';
 import MobileV2Home from './mobile/MobileV2Home';
 import MobileV2Calendar from './mobile/MobileV2Calendar';
 import MobileV2Cleanings from './mobile/MobileV2Cleanings';
+import MobileV2Units from './mobile/MobileV2Units';
 import MobileV2EntryRedirect from './mobile/MobileV2EntryRedirect';
 import { MOBILE_FEATURES } from './mobile/mobileFeatures';
 
@@ -151,6 +152,17 @@ function RoleRoute({ roles = [], children, fallback = '/dashboard' }) {
 }
 // --- end role helpers ---
 
+function DashboardRoute() {
+  const userRoles = getUserRolesFromToken(getToken());
+  const isAdmin = hasAnyRole(userRoles, ['ROLE_ADMIN']);
+  return <Dashboard showAirbnbReviews={isAdmin} showServiceJobs={isAdmin} />;
+}
+
+function ActivityScheduleRoute() {
+  const roles = getUserRolesFromToken(getToken());
+  return <CheckInOutView showServiceJobs={hasAnyRole(roles, ['ROLE_ADMIN'])} />;
+}
+
 // Decides where to land after auth based on role
 function LandingRedirect() {
   const token = getToken();
@@ -204,7 +216,7 @@ function App() {
             path="/dashboard"
             element={
               <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
-                <Dashboard />
+                <DashboardRoute />
               </RoleRoute>
             }
           />
@@ -226,7 +238,14 @@ function App() {
           />
           <Route path="/bookings/search" element={<Navigate to="/bookings" replace />} />
           <Route path="/clients" element={<Clients />} />
-          <Route path="/service-providers" element={<ServiceProviders />} />
+          <Route
+            path="/service-providers"
+            element={
+              <RoleRoute roles={['ROLE_ADMIN']} fallback="/">
+                <ServiceProviders />
+              </RoleRoute>
+            }
+          />
           <Route path="/clients/new" element={<ClientForm />} />
           <Route path="/clients/edit/:id" element={<EditClientForm />} />
           <Route path="/units" element={<Units />} />
@@ -237,7 +256,6 @@ function App() {
           <Route path="/condos/edit/:id" element={<EditCondoForm />} />
           <Route path="/condos/new" element={<NewCondoForm />} />
           <Route path="/hk-transactions" element={<HKTransactions />} />
-          <Route path="/hk-laundry-records" element={<HKLaundryRecords />} />
           <Route path="/hr-transactions" element={<HRTransactions />} />
           <Route
             path="/employee-cash-admin"
@@ -250,6 +268,14 @@ function App() {
           <Route path="/hk-results" element={<HKResults />} />
         <Route path="/hk-cleanings" element={<HKCleaningsView />} />
         <Route
+          path="/service-jobs"
+          element={
+            <RoleRoute roles={['ROLE_ADMIN']} fallback="/">
+              <ServiceJobs />
+            </RoleRoute>
+          }
+        />
+        <Route
           path="/hk-cleanings-reconcile"
           element={
             <RoleRoute roles={['ROLE_ADMIN','ROLE_MANAGER']}>
@@ -257,7 +283,7 @@ function App() {
             </RoleRoute>
           }
         />
-        <Route path="/check-in-out" element={<CheckInOutView />} />
+        <Route path="/check-in-out" element={<ActivityScheduleRoute />} />
         <Route path="/bookings-timeline" element={<BookingsTimeline />} />
         <Route
           path="/bookings-ical"
@@ -386,6 +412,20 @@ function App() {
                 {(access) => (
                   <MobileV2Shell access={access}>
                     <MobileV2Cleanings access={access} />
+                  </MobileV2Shell>
+                )}
+              </MobileV2AccessGate>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/m/v2/units"
+          element={
+            <PrivateRoute>
+              <MobileV2AccessGate feature={MOBILE_FEATURES.units}>
+                {(access) => (
+                  <MobileV2Shell access={access}>
+                    <MobileV2Units />
                   </MobileV2Shell>
                 )}
               </MobileV2AccessGate>

@@ -566,6 +566,12 @@ SQL;
             return new Response('Invalid month/year', 400);
         }
 
+        $excludedIds = $request->query->getString('excludeUnitIds');
+        if ($excludedIds !== '' && !preg_match('/\A[1-9][0-9]*(?:,[1-9][0-9]*)*\z/', $excludedIds)) {
+            return new Response('Invalid excluded unit IDs', 400);
+        }
+        $excludedUnits = $excludedIds === '' ? [] : array_fill_keys(explode(',', $excludedIds), true);
+
         // Fetch rows directly from the bulk endpoint on the same host (parity with FE)
         $rows = [];
         $ym = sprintf('%04d-%02d', $year, $month);
@@ -580,30 +586,38 @@ SQL;
         }
 
         $base = $request->getSchemeAndHttpHost(); // e.g., https://dashboard.owners2.com
-        $url  = $base . '/api/services/expected-payments/bulk?yearMonth=' . urlencode($ym);
+        $url = $base . '/api/services/expected-payments/bulk?' . http_build_query([
+            'yearMonth' => $ym,
+            'activeOnly' => 1,
+        ]);
 
         try {
-            $resp = $httpClient->request('GET', $url, $httpOpts);
-            if ($resp->getStatusCode() === 200) {
-                $json = $resp->toArray(false);
-                if (isset($json['services']) && is_array($json['services'])) {
-                    // exact key or case-insensitive
-                    if (isset($json['services'][$service]) && is_array($json['services'][$service])) {
-                        $rows = $json['services'][$service];
-                    } else {
-                        foreach ($json['services'] as $svcKey => $svcRows) {
-                            if (is_string($svcKey) && strtoupper($svcKey) === strtoupper($service) && is_array($svcRows)) {
-                                $rows = $svcRows;
-                                break;
-                            }
-                        }
+            $json = $httpClient->request('GET', $url, $httpOpts)->toArray();
+            $rows = $json['services'][$service] ?? null;
+            if (!is_array($rows)) {
+                throw new \UnexpectedValueException('Expected payment rows are missing');
+            }
+
+            if ($rows !== []) {
+                $statusUrl = $base . '/api/service-payment-check/bulk?' . http_build_query([
+                    'yearMonth' => $ym,
+                    'unitId' => implode(',', array_column($rows, 'unitId')),
+                ]);
+                $statuses = $httpClient->request('GET', $statusUrl, $httpOpts)->toArray();
+
+                $rows = array_values(array_filter($rows, static function (array $row) use ($statuses, $service, $excludedUnits): bool {
+                    $status = $statuses[$row['unitId']] ?? null;
+                    if (!is_array($status) || !array_key_exists($service, $status['paidDetailsThisMonth'] ?? [])) {
+                        throw new \UnexpectedValueException('Payment status is missing for a report unit');
                     }
-                }
-            } else {
-                @error_log(sprintf('[services-payments/export.pdf] HTTP %d for %s', $resp->getStatusCode(), $url));
+
+                    return !$status['paidDetailsThisMonth'][$service] && !isset($excludedUnits[$row['unitId']]);
+                }));
             }
         } catch (\Throwable $e) {
             @error_log('[services-payments/export.pdf] HTTP fetch failed: ' . $e->getMessage());
+
+            return new Response('Unable to load service payments. Please try again.', 503);
         }
 
         // Company logo (data URI)

@@ -60,6 +60,15 @@ final class CleaningCityScopeServiceTest extends TestCase
         self::assertSame('Tulum', $this->scope->resolve($cleaner, true, 'Tulum'));
     }
 
+    public function testUnitAccessIsLimitedToAdministratorsAndCleaners(): void
+    {
+        $this->scope->assertUnitAccessRole(null, true);
+        $this->scope->assertUnitAccessRole($this->employee('Cleaner', 'Tulum'), false);
+
+        $this->expectException(AccessDeniedHttpException::class);
+        $this->scope->assertUnitAccessRole($this->employee('Manager', 'Tulum'), false);
+    }
+
     public function testPlayaCleanerCannotMutateTulumCleaning(): void
     {
         $this->expectException(AccessDeniedHttpException::class);

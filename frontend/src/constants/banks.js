@@ -10,9 +10,9 @@ export const BANKS = [
     "Scotiabank",
     "Inbursa",   
     "STP",
-    "Arcus",
     "Cibanco",
     "Kapital Bank",
     "Mercado Pago",
-    "Monex"
+    "Monex",
+    "Compartamos"
   ];

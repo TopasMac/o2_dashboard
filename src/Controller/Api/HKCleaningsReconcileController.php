@@ -3,6 +3,8 @@
 namespace App\Controller\Api;
 
 use App\Entity\HKCleanings;
+use App\Service\HKCleaningDisplayStatus;
+use App\Service\HKCleaningManager;
 use App\Service\HKReconcileService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -65,7 +67,7 @@ class HKCleaningsReconcileController extends AbstractController
     }
 
     #[Route('/{id<\d+>}', name: 'api_hk_reconcile_update', methods: ['PUT'])]
-    public function update(int $id, Request $request, EntityManagerInterface $em): JsonResponse
+    public function update(int $id, Request $request, EntityManagerInterface $em, HKCleaningManager $cleaningManager): JsonResponse
     {
         $payload = [];
         try {
@@ -114,15 +116,21 @@ class HKCleaningsReconcileController extends AbstractController
             }
         }
 
-        // Only allow reconcile updates for DONE rows (per your workflow)
+        // Only DONE cleanings can be reconciled, except non-cancelled Playa del Carmen cleanings,
+        // which may be reconciled (costs and report status) before they are marked done.
         $status = method_exists($hk, 'getStatus') ? (string)($hk->getStatus() ?? '') : '';
-        if ($status !== '' && strtolower($status) !== 'done') {
-            return $this->json([
-                'ok' => false,
-                'error' => 'invalid_status',
-                'message' => 'Only DONE cleanings can be reconciled',
-                'status' => $status,
-            ], 409);
+        $isDone = strtolower($status) === 'done';
+        if ($status !== '' && !$isDone) {
+            $allowsPreDone = HKCleaningDisplayStatus::appliesToCity($hk->getCity())
+                && strtolower($status) !== HKCleanings::STATUS_CANCELLED;
+            if (!$allowsPreDone) {
+                return $this->json([
+                    'ok' => false,
+                    'error' => 'invalid_status',
+                    'message' => 'Only DONE cleanings can be reconciled',
+                    'status' => $status,
+                ], 409);
+            }
         }
 
         // Accept field aliases from frontend:
@@ -350,6 +358,11 @@ class HKCleaningsReconcileController extends AbstractController
                 // ignore rollback errors
             }
             throw $e;
+        }
+
+        // Reporting a cleaning means it was performed: complete it explicitly (Admin/Manager action).
+        if (HKCleaningDisplayStatus::shouldCompleteWhenReported($hk->getCity(), $hk->getStatus(), $hk->getReportStatus())) {
+            $cleaningManager->completeCleaning($hk);
         }
 
         return $this->json([

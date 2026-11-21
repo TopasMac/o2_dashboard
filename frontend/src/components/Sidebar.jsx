@@ -120,7 +120,6 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
     location.pathname.startsWith('/check-in-out') ||
     location.pathname.startsWith('/hk-cleanings') ||
     location.pathname.startsWith('/hk-transactions') ||
-    location.pathname.startsWith('/hk-laundry-records') ||
     location.pathname.startsWith('/inventory')
   );
   const unitsActive = location.pathname.startsWith('/units') || location.pathname.startsWith('/unit-balance');
@@ -368,7 +367,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                     {expandedGroup === 'housekeepers' && (
                       <>
                         <li style={{ marginBottom: '8px' }}>
-                          <PanelLink to="/check-in-out" label="CheckInOut View" icon={ArrowsUpDownIcon} active={location.pathname === '/check-in-out'} onClick={() => {}} />
+                          <PanelLink to="/check-in-out" label="Activity Schedule" icon={ArrowsUpDownIcon} active={location.pathname === '/check-in-out'} onClick={() => {}} />
                         </li>
                         <li style={{ marginBottom: '8px' }}>
                           <PanelLink to="/hk-cleanings" label="Cleanings Table" icon={SparklesIcon} active={location.pathname === '/hk-cleanings'} onClick={() => {}} />
@@ -382,17 +381,6 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                             onClick={() => {}}
                           />
                         </li>
-                        {isAdmin && (
-                          <li style={{ marginBottom: '8px' }}>
-                            <PanelLink
-                              to="/hk-laundry-records"
-                              label="Laundry Records"
-                              icon={ClipboardDocumentListIcon}
-                              active={location.pathname === '/hk-laundry-records'}
-                              onClick={() => {}}
-                            />
-                          </li>
-                        )}
                         {isAdmin && (
                           <li style={{ marginBottom: '8px' }}>
                             <PanelLink to="/hk-transactions" label="HK Transactions" icon={ReceiptPercentIcon} active={location.pathname === '/hk-transactions'} onClick={() => {}} />

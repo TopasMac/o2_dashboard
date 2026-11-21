@@ -43,7 +43,7 @@ import {
         { label: 'Units', icon: BuildingOfficeIcon, to: '/units' },
         { label: 'Unit Media', icon: PhotoIcon, to: '/units-media' },
         { label: 'Condos', icon: BuildingOffice2Icon, to: '/condos' },
-        { label: 'Service Providers', icon: WrenchScrewdriverIcon, to: '/service-providers' },
+        { label: 'Service Providers', icon: WrenchScrewdriverIcon, to: '/service-providers', roles: ['ROLE_ADMIN'] },
         { label: 'HR', icon: UserGroupIcon, to: '/employees', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
         { label: 'Tasks', icon: ClipboardDocumentCheckIcon, to: '/employee-tasks', roles: ['ROLE_ADMIN','ROLE_MANAGER'] },
       ],
@@ -58,7 +58,6 @@ import {
       submenu: [
         { label: 'Table', icon: DocumentTextIcon, to: '/bookings' },
         { label: 'Calendar', icon: CalendarDaysIcon, to: '/bookings-timeline' },
-        { label: 'CheckInOut', icon: ArrowsRightLeftIcon, to: '/check-in-out' },
         { label: 'iCal Table', icon: ExclamationTriangleIcon, to: '/bookings-ical' },
       ],
     },
@@ -82,13 +81,13 @@ import {
     // Group: Housekeepers
     {
       key: 'housekeepers',
-      label: 'Housekeepers',
+      label: 'Housekeeping',
       icon: WrenchScrewdriverIcon,
       roles: ['ROLE_ADMIN','ROLE_MANAGER'],
       submenu: [
-        { label: 'CheckInOut View', icon: ArrowsRightLeftIcon, to: '/check-in-out' }, // using arrows icon for turnover vibe
+        { label: 'Activity Schedule', icon: ArrowsRightLeftIcon, to: '/check-in-out' }, // using arrows icon for turnover vibe
         { label: 'Cleanings Table', icon: ReceiptPercentIcon, to: '/hk-cleanings' }, // (you can swap back to Sparkles if you prefer)
-        { label: 'Laundry Records', icon: ClipboardDocumentListIcon, to: '/hk-laundry-records' },
+        { label: 'Service Jobs', icon: WrenchScrewdriverIcon, to: '/service-jobs', roles: ['ROLE_ADMIN'] },
         { 
           label: 'HK Reconciliation', 
           icon: DocumentChartBarIcon, 

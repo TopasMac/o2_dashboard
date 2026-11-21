@@ -49,6 +49,17 @@ final class CleaningCityScopeService
         }
     }
 
+    public function assertUnitAccessRole(?Employee $employee, bool $isAdmin): void
+    {
+        if ($isAdmin) {
+            return;
+        }
+
+        if (!$employee instanceof Employee || $this->normalize($employee->getArea()) !== 'CLEANER') {
+            throw new AccessDeniedHttpException('Unit access is limited to administrators and cleaners.');
+        }
+    }
+
     private function clean(?string $value): ?string
     {
         $value = trim((string) $value);

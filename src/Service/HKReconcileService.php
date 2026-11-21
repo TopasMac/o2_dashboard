@@ -3,13 +3,14 @@
 namespace App\Service;
 
 use App\Entity\HKCleanings;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Builds the HK reconciliation "month view" payload for the UI.
  *
  * Notes:
- * - "Charged" is what the housekeeper reports (cleaning + laundry) from HKCleaningsReconcile.
+ * - "Charged" uses the reservation fee for linked guest checkouts and the saved cleaning charge for client-billed owner stays.
  * - "Expected" is computed from the system rates for that month (active units + effective rate).
  *
  * We return plain arrays (view-model), intentionally (no DTOs yet).
@@ -54,7 +55,8 @@ class HKReconcileService
             );
         }
 
-        // Load DONE hk_cleanings rows for this month + city.
+        // Load hk_cleanings rows for this month + city: all non-cancelled for Playa del Carmen,
+        // DONE only for the other cities.
         // NOTE: Reconciliation is now a view/editor over hk_cleanings (single source of truth).
         $start = $asOf->format('Y-m-01');
         $end   = $asOf->format('Y-m-t');
@@ -76,7 +78,11 @@ class HKReconcileService
             // city may be stored on hk_cleanings or unit; prefer unit when present
             ->andWhere('COALESCE(u.city, hc.city) IN (:cities)')
             ->andWhere('hc.checkoutDate BETWEEN :d1 AND :d2')
-            ->andWhere('LOWER(COALESCE(hc.status, \'\')) = \'done\'')
+            ->andWhere(
+                '(COALESCE(u.city, hc.city) = :playa AND LOWER(COALESCE(hc.status, \'\')) <> \'cancelled\')'
+                . ' OR (COALESCE(u.city, hc.city) <> :playa AND LOWER(COALESCE(hc.status, \'\')) = \'done\')'
+            )
+            ->setParameter('playa', 'Playa del Carmen')
             ->setParameter('cities', $cities)
             ->setParameter('d1', new \DateTimeImmutable($start))
             ->setParameter('d2', new \DateTimeImmutable($end))
@@ -85,11 +91,31 @@ class HKReconcileService
             ->getQuery()
             ->getResult();
 
+        $bookingIds = [];
+        foreach ($cleanings as $hc) {
+            $bookingId = $hc->getBookingId();
+            if ($bookingId !== null && in_array($hc->getCleaningType(), [HKCleanings::TYPE_CHECKOUT, HKCleanings::TYPE_OWNER], true)) {
+                $bookingIds[$bookingId] = $bookingId;
+            }
+        }
+        $bookings = $bookingIds === [] ? [] : $this->em->getConnection()->fetchAllAssociativeIndexed(
+            'SELECT id, cleaning_fee, guest_type FROM all_bookings WHERE id IN (:ids)',
+            ['ids' => array_values($bookingIds)],
+            ['ids' => ArrayParameterType::INTEGER],
+        );
+
         $sumCharged = 0.0;
         $sumCost = 0.0;
 
         $rows = [];
         foreach ($cleanings as $hc) {
+            $booking = $bookings[$hc->getBookingId()] ?? null;
+            $cleaningType = $hc->getCleaningType();
+            $isOwnerStay = strtolower(trim((string) ($booking['guest_type'] ?? ''))) === 'owner';
+            if ($isOwnerStay && $cleaningType === HKCleanings::TYPE_CHECKOUT) {
+                continue;
+            }
+
             $unitId = $hc->getUnit()?->getId();
             $rowCity = $hc->getUnit()?->getCity();
             if (($rowCity === null || $rowCity === '') && method_exists($hc, 'getCity')) {
@@ -100,14 +126,18 @@ class HKReconcileService
                 ? $expectedByUnitId[$unitId]
                 : null;
 
-            // Charged cost for reconciliation = o2CollectedFee if present, else unit cleaning fee, else 0
-            if (method_exists($hc, 'getO2CollectedFee') && $hc->getO2CollectedFee() !== null && $hc->getO2CollectedFee() !== '') {
-                $chargedF = $this->toFloat($hc->getO2CollectedFee());
-            } elseif ($hc->getUnit() !== null && method_exists($hc->getUnit(), 'getCleaningFee')) {
-                $chargedF = $this->toFloat($hc->getUnit()->getCleaningFee());
-            } else {
-                $chargedF = 0.0;
+            $bookingFee = $cleaningType === HKCleanings::TYPE_CHECKOUT
+                ? ($booking['cleaning_fee'] ?? null)
+                : null;
+            $savedFee = $hc->getO2CollectedFee();
+            if ($savedFee === '') {
+                $savedFee = null;
             }
+            $unitFee = $hc->getUnit()?->getCleaningFee();
+            $isClientBilledOwnerCleaning = $isOwnerStay
+                && $cleaningType === HKCleanings::TYPE_OWNER
+                && $hc->getBillTo() === HKCleanings::BILL_TO_CLIENT;
+            $chargedF = $this->toFloat($isClientBilledOwnerCleaning ? $savedFee : ($bookingFee ?? $savedFee ?? $unitFee));
 
             // Total cost = cleaning_cost + laundry_cost
             $cleaningCostF = $this->toFloat(method_exists($hc, 'getCleaningCost') ? $hc->getCleaningCost() : null);
@@ -116,8 +146,13 @@ class HKReconcileService
 
             $diff = $chargedF - $totalCostF;
 
-            $sumCharged += $chargedF;
-            $sumCost += $totalCostF;
+            $displayStatus = HKCleaningDisplayStatus::derive($rowCity, $hc->getStatus(), $hc->getReportStatus());
+
+            // Playa totals only include cleanings marked as reported.
+            if ($displayStatus === null || $displayStatus === HKCleaningDisplayStatus::REPORTED) {
+                $sumCharged += $chargedF;
+                $sumCost += $totalCostF;
+            }
 
             $serviceDate = $hc->getCheckoutDate();
 
@@ -143,6 +178,8 @@ class HKReconcileService
                 'bill_to'       => method_exists($hc, 'getBillTo') ? $hc->getBillTo() : null,
                 'source'        => method_exists($hc, 'getSource') ? $hc->getSource() : null,
                 'report_status' => method_exists($hc, 'getReportStatus') ? $hc->getReportStatus() : null,
+                'status'         => $hc->getStatus(),
+                'display_status' => $displayStatus,
 
                 'notes'         => method_exists($hc, 'getNotes') ? $hc->getNotes() : null,
 

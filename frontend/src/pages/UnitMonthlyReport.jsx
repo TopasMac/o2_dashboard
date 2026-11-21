@@ -21,6 +21,7 @@ import EmailSendDrawer from '../components/common/EmailSendDrawer';
 import O2ConfirmDialog from '../components/common/O2ConfirmDialog';
 import PageScaffold from '../components/layout/PageScaffold';
 import YearMonthPicker from '../components/layout/components/YearMonthPicker';
+import { getReportClosingBalance } from '../utils/unitMonthlyReportBalance';
 
 // --- UI helpers ---
 const peso = (n) => {
@@ -816,32 +817,6 @@ export default function UnitMonthlyReport() {
   };
   const openEditCommentDrawer = (id, txt) => { setEditNoteId(id); setEditCommentValue(txt); setDrawer('comment-edit'); };
 
-  const getWorkflowClosingBalance = () => {
-    const bundle = previewData || {};
-    const direct = Number(
-      bundle?.closingBalance ?? bundle?.closing_balance ?? bundle?.closing
-    );
-    if (Number.isFinite(direct)) return direct;
-
-    const opening = Number(
-      bundle?.openingBalance ?? bundle?.opening_balance ?? bundle?.opening
-    );
-
-    const monthResult = Number(
-      bundle?.monthlyResult ?? bundle?.monthly_result ?? bundle?.result
-    );
-
-    const movements = Number(
-      bundle?.balanceMovements ?? bundle?.balance_movements ?? bundle?.movements ?? 0
-    );
-
-    if (Number.isFinite(opening) && Number.isFinite(monthResult)) {
-      return opening + monthResult + (Number.isFinite(movements) ? movements : 0);
-    }
-
-    return null;
-  };
-
   const workflowEmailAlreadySent = () => {
     const src = (statusData && statusData.workflow) ? statusData.workflow : (statusData || {});
     const sentBool = src.emailSent ?? src.email?.sent ?? false;
@@ -864,7 +839,7 @@ export default function UnitMonthlyReport() {
 
   const shouldPromptSendEmailAfterReport = () => {
     if (workflowEmailAlreadySent()) return false;
-    const closing = getWorkflowClosingBalance();
+    const closing = getReportClosingBalance(previewData);
 
     // If client owes Owners2, the sequence is: report -> email -> pay.
     if (Number.isFinite(closing) && closing < 0) return true;
@@ -877,7 +852,7 @@ export default function UnitMonthlyReport() {
 
   const shouldPromptSendEmailAfterPay = () => {
     if (workflowEmailAlreadySent()) return false;
-    const closing = getWorkflowClosingBalance();
+    const closing = getReportClosingBalance(previewData);
 
     // If Owners2 owes the client, the sequence is: report -> pay -> email.
     return Number.isFinite(closing) && closing >= 0;
@@ -1250,6 +1225,11 @@ export default function UnitMonthlyReport() {
   const derivedClientCredit = clientPayFromPrivate + abonosTotal; // (Private Client Pay) + (Abonos)
   const derivedClientDebit = airbnbO2Pay + airbnbCleaning + gastosTotal; // (Airbnb O2 Pay) + (Airbnb Cleaning) + (Gastos)
 
+  const closingBalance = getReportClosingBalance(
+    previewData,
+    isClientUnit ? derivedClientCredit - derivedClientDebit : undefined,
+  );
+
   const actionsHeader = (
     <Box
       sx={{
@@ -1582,47 +1562,9 @@ export default function UnitMonthlyReport() {
 
       {/* Closing Balance */}
       <NotchedCard label="Closing Balance" sx={{ width: '100%' }}>
-        {(() => {
-          // Prefer backend closingBalance to avoid drift with PDF/service rules
-          const closingBackend = Number(
-            previewData?.closingBalance ?? previewData?.closing_balance ?? previewData?.closing
-          );
-          if (Number.isFinite(closingBackend)) {
-            return (
-              <Typography variant="h6" sx={{ mt: 0.5, color: amtColor(closingBackend) }}>
-                {peso(closingBackend)}
-              </Typography>
-            );
-          }
-
-          // Fallback: compute locally from backend opening + monthly + movements
-          const opening = Number(
-            previewData?.openingBalance ?? previewData?.opening_balance ?? previewData?.opening
-          );
-
-          let monthVal = NaN;
-          if (isClientUnit) {
-            monthVal = Number(derivedClientCredit) - Number(derivedClientDebit);
-          } else {
-            const rk = pick(previewData, ['monthlyResult', 'monthly_result', 'result']);
-            monthVal = rk ? Number(previewData[rk]) : NaN;
-          }
-
-          const movements = Number(
-            previewData?.balanceMovements ??
-            previewData?.balance_movements ??
-            previewData?.movements ??
-            0
-          );
-          const val = (Number.isFinite(opening) && Number.isFinite(monthVal))
-            ? (opening + monthVal + (Number.isFinite(movements) ? movements : 0))
-            : undefined;
-          return (
-            <Typography variant="h6" sx={{ mt: 0.5, color: amtColor(val) }}>
-              {val === undefined ? '-' : peso(val)}
-            </Typography>
-          );
-        })()}
+        <Typography variant="h6" sx={{ mt: 0.5, color: amtColor(closingBalance) }}>
+          {peso(closingBalance)}
+        </Typography>
       </NotchedCard>
     </Box>
 
@@ -2680,48 +2622,9 @@ export default function UnitMonthlyReport() {
             unitId={selectedUnit?.id}
             unitNamePreset={selectedUnit?.unitName}
             yearMonth={yearMonth}
-            closingBalance={(function () {
-              if (!previewData) return 0;
-              const ok = pick(previewData, ['openingBalance', 'opening_balance', 'opening']);
-              const opening = ok ? Number(previewData[ok]) : NaN;
-              let monthVal = NaN;
-              if (isClientUnit) {
-                monthVal = Number(derivedClientCredit) - Number(derivedClientDebit);
-              } else {
-                const rk = pick(previewData, ['monthlyResult', 'monthly_result', 'result']);
-                monthVal = rk ? Number(previewData[rk]) : NaN;
-              }
-              if (Number.isFinite(opening) && Number.isFinite(monthVal)) return opening + monthVal;
-              return 0;
-            })()}
-            defaultType={(function () {
-              if (!previewData) return 'O2 Payment';
-              const ok = pick(previewData, ['openingBalance', 'opening_balance', 'opening']);
-              const opening = ok ? Number(previewData[ok]) : NaN;
-              let monthVal = NaN;
-              if (isClientUnit) {
-                monthVal = Number(derivedClientCredit) - Number(derivedClientDebit);
-              } else {
-                const rk = pick(previewData, ['monthlyResult', 'monthly_result', 'result']);
-                monthVal = rk ? Number(previewData[rk]) : NaN;
-              }
-              const closing = (Number.isFinite(opening) && Number.isFinite(monthVal)) ? opening + monthVal : 0;
-              return closing < 0 ? 'Client Payment' : 'O2 Payment';
-            })()}
-            defaultAmount={(function () {
-              if (!previewData) return '';
-              const ok = pick(previewData, ['openingBalance', 'opening_balance', 'opening']);
-              const opening = ok ? Number(previewData[ok]) : NaN;
-              let monthVal = NaN;
-              if (isClientUnit) {
-                monthVal = Number(derivedClientCredit) - Number(derivedClientDebit);
-              } else {
-                const rk = pick(previewData, ['monthlyResult', 'monthly_result', 'result']);
-                monthVal = rk ? Number(previewData[rk]) : NaN;
-              }
-              const closing = (Number.isFinite(opening) && Number.isFinite(monthVal)) ? opening + monthVal : NaN;
-              return Number.isFinite(closing) ? Math.abs(closing).toFixed(2) : '';
-            })()}
+            closingBalance={closingBalance}
+            defaultType={closingBalance < 0 ? 'Client Payment' : 'O2 Payment'}
+            defaultAmount={closingBalance === null ? '' : Math.abs(closingBalance).toFixed(2)}
             defaultPaymentMethod="Transfer"
             defaultDescription={(() => {
               const ym = String(yearMonth || '').trim();

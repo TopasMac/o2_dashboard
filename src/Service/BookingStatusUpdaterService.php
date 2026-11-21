@@ -18,9 +18,10 @@ class BookingStatusUpdaterService
         $this->hkCleaningManager = $hkCleaningManager;
     }
 
-    public function updateStatuses(iterable $bookings, bool $flush = false): void
+    public function updateStatuses(iterable $bookings, bool $flush = false, ?\DateTimeImmutable $now = null): void
     {
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('America/Cancun'));
+        $now ??= new \DateTimeImmutable();
+        $today = ReservationStatus::transitionDates($now)['today'];
 
         foreach ($bookings as $booking) {
             // Respect explicit Cancelled/Canceled first
@@ -50,7 +51,7 @@ class BookingStatusUpdaterService
                     'late check-out',
                 ], true);
                 if ($isBlockType && $co instanceof \DateTimeInterface) {
-                    $isPastCalendarDate = $co->format('Y-m-d') < $now->format('Y-m-d');
+                    $isPastCalendarDate = $co->format('Y-m-d') < $today;
                     if ($isPastCalendarDate && !in_array($currentStatus, ['cancelled','canceled'], true)) {
                         if ($booking->getStatus() !== 'Past') {
                             $booking->setStatus('Past');
@@ -69,20 +70,7 @@ class BookingStatusUpdaterService
             $checkIn = $booking->getCheckIn();
             $checkOut = $booking->getCheckOut();
 
-            $status = $booking->getStatus();
-            if ($checkOut instanceof \DateTimeInterface && $checkOut < $now) {
-                $status = 'Past';
-            } elseif ($checkIn instanceof \DateTimeInterface && $checkIn > $now) {
-                $status = 'Upcoming';
-            } elseif ($checkIn instanceof \DateTimeInterface && $checkOut instanceof \DateTimeInterface) {
-                $status = 'Ongoing';
-            } elseif ($checkOut instanceof \DateTimeInterface && $checkOut >= $now) {
-                $status = 'Ongoing';
-            } elseif ($checkIn instanceof \DateTimeInterface && $checkIn <= $now) {
-                $status = 'Ongoing';
-            } else {
-                $status = $booking->getStatus() ?: 'Upcoming';
-            }
+            $status = ReservationStatus::resolve($checkIn, $checkOut, $now, $booking->getStatus() ?: 'Upcoming');
 
             if ($booking->getStatus() !== $status) {
                 $booking->setStatus($status);

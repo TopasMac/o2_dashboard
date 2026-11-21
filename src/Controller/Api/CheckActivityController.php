@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\AllBookings;
 use App\Entity\Employee;
 use App\Service\CleaningCityScopeService;
+use App\Service\HKCleaningDisplayStatus;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\DBAL\Types\Types;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -207,7 +208,8 @@ class CheckActivityController extends AbstractController
             $accessSql[] = '       u.wifi_name AS wifiName,';
             $accessSql[] = '       u.wifi_password AS wifiPassword,';
             $accessSql[] = '       c.condo_name AS condoName,';
-            $accessSql[] = '       c.door_code AS condoDoorCode';
+            $accessSql[] = '       c.door_code AS condoDoorCode,';
+            $accessSql[] = '       c.google_maps AS condoGoogleMaps';
             $accessSql[] = 'FROM unit u';
             $accessSql[] = 'LEFT JOIN condo c ON c.id = u.condo_id';
             $accessSql[] = 'WHERE u.id IN (' . implode(',', array_map('intval', array_keys($unitIds))) . ')';
@@ -227,6 +229,7 @@ class CheckActivityController extends AbstractController
                     'wifi_password' => $accessRow['wifiPassword'] ?? null,
                     'condo_name' => $accessRow['condoName'] ?? null,
                     'condo_door_code' => $accessRow['condoDoorCode'] ?? null,
+                    'condo_google_maps' => $accessRow['condoGoogleMaps'] ?? null,
                 ];
             }
         }
@@ -242,6 +245,7 @@ class CheckActivityController extends AbstractController
             $row['wifi_password'] = $access['wifi_password'] ?? null;
             $row['condo_name'] = $access['condo_name'] ?? null;
             $row['condo_door_code'] = $access['condo_door_code'] ?? null;
+            $row['condo_google_maps'] = $access['condo_google_maps'] ?? null;
         }
         unset($row);
 
@@ -259,6 +263,7 @@ class CheckActivityController extends AbstractController
         $hkSql[] = '       h.reservation_code AS reservationCode,';
         $hkSql[] = '       h.assign_notes AS cleaningNotes,';
         $hkSql[] = '       h.status,';
+        $hkSql[] = '       h.report_status AS reportStatus,';
         $hkSql[] = '       h.o2_collected_fee AS collectedFee,';
         $hkSql[] = '       h.assigned_to_id AS assignedToId,';
         $hkSql[] = '       e.short_name AS assignedToShortName,';
@@ -269,7 +274,8 @@ class CheckActivityController extends AbstractController
         $hkSql[] = '       u.wifi_name AS wifiName,';
         $hkSql[] = '       u.wifi_password AS wifiPassword,';
         $hkSql[] = '       c.condo_name AS condoName,';
-        $hkSql[] = '       c.door_code AS condoDoorCode';
+        $hkSql[] = '       c.door_code AS condoDoorCode,';
+            $hkSql[] = '       c.google_maps AS condoGoogleMaps';
         $hkSql[] = 'FROM hk_cleanings h';
         $hkSql[] = 'LEFT JOIN unit u ON u.id = h.unit_id';
         $hkSql[] = 'LEFT JOIN condo c ON c.id = u.condo_id';
@@ -301,6 +307,12 @@ class CheckActivityController extends AbstractController
                 'reservationCode' => $h['reservationCode'] ?? null,
                 'cleaningNotes' => $h['cleaningNotes'] ?? null,
                 'status' => (string)($h['status'] ?? ''),
+                'reportStatus' => isset($h['reportStatus']) ? (string)$h['reportStatus'] : null,
+                'displayStatus' => HKCleaningDisplayStatus::derive(
+                    (string)($h['unitCity'] ?? ''),
+                    (string)($h['status'] ?? ''),
+                    isset($h['reportStatus']) ? (string)$h['reportStatus'] : null,
+                ),
                 'collectedFee' => number_format((float)($h['collectedFee'] ?? 0), 2, '.', ''),
                 'assignedToId' => isset($h['assignedToId']) ? (int)$h['assignedToId'] : null,
                 'assignedToShortName' => isset($h['assignedToShortName']) ? (string)$h['assignedToShortName'] : null,
@@ -312,6 +324,7 @@ class CheckActivityController extends AbstractController
                 'wifiPassword' => $h['wifiPassword'] ?? null,
                 'condoName' => $h['condoName'] ?? null,
                 'condoDoorCode' => $h['condoDoorCode'] ?? null,
+                'condoGoogleMaps' => $h['condoGoogleMaps'] ?? null,
             ];
             $hkRows[] = $normalized;
             $hkIndex[$normalized['unitId']][$normalized['checkoutDate']][] = $normalized;
@@ -327,6 +340,8 @@ class CheckActivityController extends AbstractController
             $row['hk_assigned_to_short_name'] = null;
             $row['hk_cleaning_type'] = null;
             $row['hk_status'] = null;
+            $row['hk_report_status'] = null;
+            $row['hk_display_status'] = null;
             $row['cleaning_notes'] = null;
             $row['cleaner_notes'] = null;
 
@@ -368,6 +383,8 @@ class CheckActivityController extends AbstractController
                     $row['hk_done'] = $isDone;
                     $row['hk_cleaning_type'] = $h['cleaningType'];
                     $row['hk_status'] = $h['status'];
+                    $row['hk_report_status'] = $h['reportStatus'];
+                    $row['hk_display_status'] = $h['displayStatus'];
                     $row['hk_assigned_to_id'] = $h['assignedToId'] ?? null;
                     $row['hk_assigned_to_short_name'] = $h['assignedToShortName'] ?? null;
                     $row['cleaning_notes'] = $h['cleaningNotes'] ?? null;
@@ -411,6 +428,8 @@ class CheckActivityController extends AbstractController
                 'hk_done' => $isDone,
                 'hk_cleaning_type' => $h['cleaningType'],
                 'hk_status' => $h['status'],
+                'hk_report_status' => $h['reportStatus'],
+                'hk_display_status' => $h['displayStatus'],
                 'hk_assigned_to_id' => $h['assignedToId'],
                 'hk_assigned_to_short_name' => $h['assignedToShortName'],
                 'cleaning_notes' => $h['cleaningNotes'],
@@ -431,6 +450,7 @@ class CheckActivityController extends AbstractController
                 'wifi_password' => $canViewUnitAccess ? $h['wifiPassword'] : null,
                 'condo_name' => $canViewUnitAccess ? $h['condoName'] : null,
                 'condo_door_code' => $canViewUnitAccess ? $h['condoDoorCode'] : null,
+                'condo_google_maps' => $canViewUnitAccess ? $h['condoGoogleMaps'] : null,
             ];
         }
 

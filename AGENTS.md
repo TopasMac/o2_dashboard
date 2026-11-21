@@ -41,13 +41,38 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 
 ## Working method
 
-1. Start from an up-to-date `develop` branch and use a short-lived, purpose-specific branch.
+1. Start from an up-to-date `main` branch and use a short-lived, purpose-specific branch.
 2. Inspect the relevant frontend, backend, database, scheduled-job, and external-integration paths before editing.
 3. Keep changes focused. Do not mix cleanup, schema repair, and feature behavior in one change.
 4. Preserve unrelated user changes and call out unexpected repository state before proceeding.
 5. Add proportionate automated tests, then run focused checks followed by broader checks when warranted.
 6. Report what changed, what was verified, known limitations, and any manual checks still needed.
 7. Do not commit, push, open or merge a pull request, or deploy unless the user explicitly asks for that step.
+
+## Starting local servers
+
+When the user asks to start local, start the local server, or run the app, start both the React frontend and Symfony backend using the commands in `LOCAL_DEVELOPMENT.md`. A request specifying port 3000 still includes the backend unless the user explicitly requests only one component.
+
+- Run both servers from this worktree, using the Node version pinned in `.nvmrc` and the existing local environment configuration.
+- Serve the frontend at `http://localhost:3000` and the backend at `http://127.0.0.1:8001`. Set `PORT=3000` and `O2_API_TARGET=http://127.0.0.1:8001` for the frontend.
+- Check both ports and identify the owning processes and their working directories before starting. Reuse a healthy server belonging to this worktree. If another worktree or application owns a required port, report the conflict and ask how to proceed. Do not stop that process or silently choose another port.
+- Check the required dependencies and local MySQL/Mailpit services using `LOCAL_DEVELOPMENT.md`. Preserve existing environment files, JWT keys, and database contents. Report any missing configuration needed to start safely without exposing secrets.
+- Keep both servers running in persistent sessions. Verify that each responds and that the frontend can reach the backend through its API proxy before reporting success.
+- Report both URLs and any startup errors or blockers. If the user explicitly requests only the frontend or only the backend, start and verify that component alone.
+
+## Starting a feature
+
+Before any edits:
+
+1. Run `git fetch origin --prune` and report the current branch and worktree.
+2. If `git log origin/main..HEAD` or `git status --short` is non-empty, stop and tell the user. If HEAD is detached, stop unless this is a linked worktree (not the main checkout) with a clean tree and no commits ahead of `origin/main`; a detached HEAD there is expected (for example, Codex worktrees). Otherwise run `git reset --hard origin/main`.
+3. Name the branch `feature/<name>` using the name the user provides. Do not choose the name. In an app-managed worktree, rename the app-created branch with the app's rename tool, never raw `git branch -m`. Outside an app worktree, or from a detached HEAD in a linked worktree, create it with `git switch -c feature/<name> --no-track origin/main`.
+4. Verify and report: branch name, `HEAD == origin/main`, clean tree.
+5. Never branch from or reuse another feature branch. If the main checkout is on unfinished work, use a separate `git worktree add` from `origin/main`.
+
+## Finishing a feature
+
+Squash-merged branches are not recognized by `git branch -d`; use `git branch -D feature/<name>` only after confirming the PR is merged. Never delete `main`. Remove any worktree first (`git worktree remove <path>`), then delete the branch. GitHub deletes the remote branch on merge; confirm with `git fetch --prune`.
 
 ## Database changes
 
@@ -63,13 +88,15 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 The intended promotion path is:
 
 ```text
-feature/fix branch -> pull request into develop -> local/staging verification
--> pull request from develop into main -> explicit manual production deployment
+feature/fix branch -> pull request into main (squash merge) -> local verification
+-> explicit manual production deployment
 ```
 
-`develop` is the permanent integration branch. Do not delete it after a pull request is merged.
+`main` is the only long-lived branch. Protect it on GitHub (require a pull request).
 
 Merging into `main` is not itself a deployment. The current deployment script pulls `main`, installs dependencies, runs migrations, builds the frontend, and restarts Nginx. Review the change set, migration SQL, backup status, and rollback plan before invoking it.
+
+**Read `DEPLOYMENT.md` before any deployment work.** It is the single authoritative procedure, including the separate mobile S3 publishing and CloudFront invalidation that `deploy.sh` does not perform. The `deploy.sh` completion message covers the server deployment only.
 
 Before every production deployment:
 

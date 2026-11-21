@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Stack, FormControl, InputLabel, Select, MenuItem, Grid, Button } from '@mui/material';
+import { Stack, FormControl, InputLabel, Select, MenuItem, Grid, Button, Checkbox, Typography, IconButton, Snackbar, Tooltip } from '@mui/material';
+import { ClipboardDocumentIcon } from '@heroicons/react/24/outline';
 import ServicePaymentsTable from '../components/common/ServicePaymentsTable';
 import api from '../api';
 import AppDrawer from '../components/common/AppDrawer';
@@ -20,6 +21,7 @@ export default function ServicesPaymentsV2() {
   // --- Local state for future drawer/modals (placeholder for now) ---
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [copyMessage, setCopyMessage] = useState('');
   const [actionState, setActionState] = useState({ open: false, action: null, serviceKey: null, row: null });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -190,7 +192,12 @@ export default function ServicesPaymentsV2() {
     try {
       // Fetch PDF bytes
       const { data } = await api.get('/api/reports/services-payments/export.pdf', {
-        params: { service: svc, month: String(month).padStart(2, '0'), year: String(year) },
+        params: {
+          service: svc,
+          month: String(month).padStart(2, '0'),
+          year: String(year),
+          excludeUnitIds: excludedUnitIds.size ? [...excludedUnitIds].join(',') : undefined,
+        },
         responseType: 'arraybuffer',
       });
       // Create/revoke blob URL
@@ -219,7 +226,52 @@ export default function ServicesPaymentsV2() {
       { header: 'Unit', accessor: 'unitName', width: 120 },
       { header: 'Service', accessor: 'serviceDisplay', width: 180 },
       { header: 'Payment Date', accessor: 'paymentDate', type: 'date', width: 110 },
-      { header: 'Reference', accessor: 'reference', width: 250 },
+      {
+        header: 'Reference',
+        accessor: 'reference',
+        width: 250,
+        render: row => {
+          if (row.service === 'Internet' && row.reference) {
+            return (
+              <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                <span>{row.reference}</span>
+                <Tooltip title="Copy reference">
+                  <IconButton
+                    size="small"
+                    aria-label={`Copy Internet reference for ${row.unitName}`}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(String(row.reference));
+                        setCopyMessage('Reference copied');
+                      } catch {
+                        setCopyMessage('Could not copy reference');
+                      }
+                    }}
+                  >
+                    <ClipboardDocumentIcon width={16} height={16} />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+            );
+          }
+
+          if (row.service !== 'HOA') return row.reference;
+
+          const accountDigits = String(row.account ?? '').replace(/\D/g, '');
+          const maskedAccount = accountDigits.length >= 3 ? `*..${accountDigits.slice(-3)}` : '';
+          const bankDetails = [row.bank?.trim(), maskedAccount].filter(Boolean).join(' ');
+          if (!bankDetails) return row.reference;
+
+          return (
+            <Stack>
+              <span>{row.reference}</span>
+              <Typography component="span" variant="caption" color="text.secondary">
+                {bankDetails}
+              </Typography>
+            </Stack>
+          );
+        },
+      },
       { header: 'Amount', accessor: 'amount', type: 'currency', width: 90, align: 'center' },
     ],
     []
@@ -254,21 +306,20 @@ export default function ServicesPaymentsV2() {
   const [year, setYear] = useState(defaultYear);
   const [month, setMonth] = useState(defaultMonth);
   const [serviceFilter, setServiceFilter] = useState('all'); // 'all' | 'CFE' | 'Aguakan' | 'HOA' | 'Internet'
+  const [excludedUnitIds, setExcludedUnitIds] = useState(() => new Set());
+  const [loadedPaymentsPeriod, setLoadedPaymentsPeriod] = useState(null);
+  const ymValue = `${year}-${String(month).padStart(2, '0')}`;
   useEffect(() => {
     try {
       localStorage.setItem('svcFilter', serviceFilter);
     } catch {}
   }, [serviceFilter]);
 
-  const canPreview = useMemo(
-    () => serviceFilter === 'HOA' && Number.isInteger(month) && Number.isInteger(year),
-    [serviceFilter, month, year]
-  );
-
   // Helper: map API item → table row shape expected by ServicePaymentsTable
   const mapPaymentItem = (item) => {
     const serviceKey = (item.servicio || 'cfe').toString().toLowerCase();
-    const ref = item.nombre || item.reference || '';
+    const paymentReference = serviceKey === 'internet' ? String(item.paymentReference ?? '').trim() : '';
+    const ref = paymentReference || item.nombre || item.reference || '';
     const date = item.fechaPagoIso || item.fechaPago || item.paymentDate || '';
     const amtRaw =
       item.hoa_amount ??
@@ -311,8 +362,9 @@ export default function ServicesPaymentsV2() {
     let ignore = false;
     const fetchAll = async () => {
       try {
-        const ym = `${year}-${String(month).padStart(2, '0')}`;
-        const { data } = await api.get('/api/services/expected-payments/bulk', { params: { yearMonth: ym } });
+        const { data } = await api.get('/api/services/expected-payments/bulk', {
+          params: { yearMonth: ymValue, activeOnly: 1 },
+        });
         const svc = data?.services || {};
         const cfe = Array.isArray(svc?.CFE?.items) ? svc.CFE.items : (Array.isArray(svc?.CFE) ? svc.CFE : []);
         const agua = Array.isArray(svc?.Water?.items) ? svc.Water.items : (Array.isArray(svc?.Water) ? svc.Water : []);
@@ -324,6 +376,7 @@ export default function ServicesPaymentsV2() {
           setAguakanRows(agua.map(mapPaymentItem));
           setHoaRows(hoa.map(mapPaymentItem));
           setInternetRows(internet.map(mapPaymentItem));
+          setLoadedPaymentsPeriod(ymValue);
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -335,7 +388,7 @@ export default function ServicesPaymentsV2() {
     };
     fetchAll();
     return () => { ignore = true; };
-  }, [month, year]);
+  }, [ymValue]);
 
   const [internetRows, setInternetRows] = useState([]);
 
@@ -346,6 +399,8 @@ export default function ServicesPaymentsV2() {
   const [paymentStatus, setPaymentStatus] = useState({});
 
   useEffect(() => {
+    if (loadedPaymentsPeriod !== ymValue) return;
+
     let ignore = false;
     const fetchStatuses = async () => {
       try {
@@ -358,10 +413,9 @@ export default function ServicesPaymentsV2() {
           if (!ignore) setPaymentStatus({});
           return;
         }
-        const ym = `${year}-${String(month).padStart(2, '0')}`;
         try {
           const { data } = await api.get('/api/service-payment-check/bulk', {
-            params: { yearMonth: ym, unitId: ids.join(',') },
+            params: { yearMonth: ymValue, unitId: ids.join(',') },
           });
           if (!ignore) {
             const map = {};
@@ -384,7 +438,7 @@ export default function ServicesPaymentsV2() {
     };
     fetchStatuses();
     return () => { ignore = true; };
-  }, [cfeRows, aguakanRows, hoaRows, internetRows, month, year, statusRefreshTick]);
+  }, [cfeRows, aguakanRows, hoaRows, internetRows, loadedPaymentsPeriod, ymValue, statusRefreshTick]);
 
   const allRows = useMemo(() => {
     const tag = (rows, serviceLabel) =>
@@ -440,13 +494,50 @@ export default function ServicesPaymentsV2() {
     return allRows.filter(r => r.service === serviceFilter);
   }, [allRows, serviceFilter]);
 
-  const ymValue = useMemo(() => `${year}-${String(month).padStart(2, '0')}`, [year, month]);
+  const isHoaReport = serviceFilter === 'HOA';
+  const eligibleReportUnitIds = new Set();
+  if (isHoaReport && loadedPaymentsPeriod === ymValue) {
+    filteredRows.forEach(row => {
+      if (row.unitId && paymentStatus[row.unitId]?.HOA === null && !row.paid) {
+        eligibleReportUnitIds.add(row.unitId);
+      }
+    });
+  }
+  const includedReportCount = [...eligibleReportUnitIds].filter(unitId => !excludedUnitIds.has(unitId)).length;
+  const canPreview = isHoaReport && loadedPaymentsPeriod === ymValue;
+  const tableColumns = isHoaReport ? [
+    ...columns,
+    {
+      header: 'Include in report',
+      align: 'center',
+      render: row => eligibleReportUnitIds.has(row.unitId) && (
+        <Checkbox
+          size="small"
+          sx={{ p: 0.5 }}
+          checked={!excludedUnitIds.has(row.unitId)}
+          slotProps={{ input: { 'aria-label': `Include ${row.unitName} in report` } }}
+          onChange={(_, checked) => {
+            setExcludedUnitIds(previous => {
+              const next = new Set(previous);
+              if (checked) next.delete(row.unitId);
+              else next.add(row.unitId);
+              return next;
+            });
+          }}
+        />
+      ),
+    },
+  ] : columns;
+
   const handleYearMonthChange = (ym) => {
-    if (!ym) return;
+    if (!ym || ym === ymValue) return;
     const [nextYear, nextMonth] = ym.split('-');
     const yNum = Number(nextYear);
     const mNum = Number(nextMonth);
     if (Number.isInteger(yNum) && Number.isInteger(mNum)) {
+      setExcludedUnitIds(new Set());
+      setPaymentStatus({});
+      setLoadedPaymentsPeriod(null);
       setYear(yNum);
       setMonth(mNum);
     }
@@ -495,6 +586,11 @@ export default function ServicesPaymentsV2() {
       >
         Report Preview
       </Button>
+      {isHoaReport && (
+        <Typography variant="body2" color="text.secondary" role="status" sx={{ alignSelf: 'center' }}>
+          {includedReportCount} of {eligibleReportUnitIds.size} included
+        </Typography>
+      )}
     </Stack>
   );
 
@@ -512,7 +608,7 @@ export default function ServicesPaymentsV2() {
               title="Month Payments"
               serviceKey="all"
               rows={filteredRows}
-              columns={columns}
+              columns={tableColumns}
               onMarkPaid={handleMarkPaid}
               onSendEmail={handleSendEmail}
               containerWidth="fit-content"
@@ -525,6 +621,13 @@ export default function ServicesPaymentsV2() {
           </Grid>
         </Grid>
       </Stack>
+
+      <Snackbar
+        open={Boolean(copyMessage)}
+        message={copyMessage}
+        autoHideDuration={2000}
+        onClose={() => setCopyMessage('')}
+      />
 
       <AppDrawer
         open={drawerOpen}

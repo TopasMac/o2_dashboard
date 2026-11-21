@@ -4,6 +4,7 @@ import CCO2Results from './CCO2Results';
 import HKResults from './HKResults';
 import PageScaffold from '../layout/PageScaffold';
 import api from '../../api';
+import { summarizeSoftwareExpenses } from '../../utils/recurringSoftware';
 import AppDrawer from '../common/AppDrawer';
 import NewO2TransactionForm from '../forms/NewO2TransactionForm';
 import EditO2TransactionForm from '../forms/EditO2TransactionForm';
@@ -23,6 +24,7 @@ export default function O2Results() {
   }, [today]);
 
   const { ym, year, month, setYm } = useYearMonth(initialYm);
+  const expenseDefaults = useMemo(() => ({ date: `${ym}-01` }), [ym]);
 
   const monthOptions = useMemo(() => {
     if (!ym) return [];
@@ -46,6 +48,7 @@ export default function O2Results() {
   const [slices, setSlices] = useState([]);
   const [commissionByUnit, setCommissionByUnit] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [loadedOwnersMonth, setLoadedOwnersMonth] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [expandedCities, setExpandedCities] = useState(() => new Set());
@@ -98,9 +101,6 @@ export default function O2Results() {
   const otherExpenses = useMemo(() => {
     const hasTx = Array.isArray(transactions) && transactions.length > 0;
     const hasLedger = Array.isArray(employeeLedger) && employeeLedger.length > 0;
-    if (!hasTx && !hasLedger) {
-      return { total: 0, categories: {} };
-    }
 
     const categories = {};
     let total = 0;
@@ -193,38 +193,15 @@ export default function O2Results() {
       };
     }
 
-    // Software category completeness check (AWS, Office, Automate, Beyond)
-    // Attach missing list to the Software category object for UI rendering.
-    const softwareKey = Object.keys(categories).find(
-      (k) => (k || '').toString().trim().toLowerCase() === 'software'
-    );
-    if (softwareKey && categories[softwareKey]) {
-      const allItems = [];
-      const citiesObj = categories[softwareKey].cities || {};
-      Object.values(citiesObj).forEach((cityObj) => {
-        (cityObj.items || []).forEach((it) => allItems.push(it));
-      });
+    const softwareItems = Object.entries(categories)
+      .filter(([name]) => name.trim().toLowerCase() === 'software')
+      .flatMap(([, category]) => Object.values(category.cities).flatMap(({ items }) => items));
+    const softwareAlerts = loadedOwnersMonth === ym
+      ? summarizeSoftwareExpenses(ym, softwareItems)
+      : null;
 
-      const haystack = allItems
-        .map((it) => (it?.description || '').toString().toLowerCase())
-        .join(' | ');
-
-      const expected = [
-        { label: 'AWS', patterns: ['aws', 'amazon web services'] },
-        { label: 'Office', patterns: ['microsoft', 'office', 'o365'] },
-        { label: 'Automate', patterns: ['power automate', 'powerautomate'] },
-        { label: 'Beyond', patterns: ['beyond', 'beyond pricing'] },
-      ];
-
-      const missing = expected
-        .filter((e) => !e.patterns.some((p) => haystack.includes(p)))
-        .map((e) => e.label);
-
-      categories[softwareKey].missingRecurring = missing;
-    }
-
-    return { total, categories };
-  }, [transactions, employeeLedger]);
+    return { total, categories, softwareAlerts };
+  }, [transactions, employeeLedger, loadedOwnersMonth, ym]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,6 +228,7 @@ export default function O2Results() {
           ? payload.transactions
           : (Array.isArray(payload?.o2transactions) ? payload.o2transactions : []);
         setTransactions(tx);
+        setLoadedOwnersMonth(ym);
 
         setEmployeeLedger(Array.isArray(payload?.employeeLedger) ? payload.employeeLedger : []);
       } catch (e) {
@@ -262,6 +240,7 @@ export default function O2Results() {
         setSlices([]);
         setCommissionByUnit([]);
         setTransactions([]);
+        setLoadedOwnersMonth(null);
         setEmployeeLedger([]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -272,7 +251,7 @@ export default function O2Results() {
     return () => {
       cancelled = true;
     };
-  }, [year, month, reloadKey]);
+  }, [year, month, ym, reloadKey]);
 
   useEffect(() => {
     // Only load HK data when user is on HK or All tab
@@ -578,7 +557,7 @@ export default function O2Results() {
             toggleExpenseCentre={toggleExpenseCentre}
             expandedHrGroups={expandedHrGroups}
             toggleHrGroup={toggleHrGroup}
-            onOpenNewExpenseDrawer={openNewExpenseDrawer}
+            openNewExpenseDrawer={openNewExpenseDrawer}
             onOpenEditTxDrawer={openEditTxDrawer}
           />
         )}
@@ -627,12 +606,13 @@ export default function O2Results() {
         open={o2TxDrawerOpen}
         onClose={() => setO2TxDrawerOpen(false)}
         title="New Expense"
-        width={520}
+        size="large"
       >
         <NewO2TransactionForm
-          defaultType="expense"
+          expenseOnly
+          defaultValues={expenseDefaults}
           onCancel={() => setO2TxDrawerOpen(false)}
-          onSuccess={() => {
+          onSaved={() => {
             setO2TxDrawerOpen(false);
             setReloadKey((k) => k + 1);
           }}

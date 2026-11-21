@@ -67,6 +67,7 @@ export function buildDailyCleaningCards(rows, selectedYmd) {
           unitNumber: row?.unit_number || '',
           unitFloor: row?.unit_floor || '',
           condoDoorCode: row?.condo_door_code || '',
+          condoGoogleMaps: row?.condo_google_maps || '',
           accessType: row?.access_type || '',
           accessCode: row?.access_code || '',
           wifiName: row?.wifi_name || '',

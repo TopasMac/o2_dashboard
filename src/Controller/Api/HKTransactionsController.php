@@ -9,6 +9,7 @@ use App\Entity\UnitDocumentAttachment;
 use App\Service\Document\AttachOptions;
 use App\Service\Document\DocumentUploadService;
 use App\Service\Document\UploadRequestDTO;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -289,6 +290,33 @@ class HKTransactionsController extends AbstractController
             return $this->json(['message' => 'Transaction not found'], 404);
         }
 
+        if ($tx->getServiceJob() !== null) {
+            if (!$this->isGranted('ROLE_ADMIN')) {
+                return $this->json(['error' => 'Access denied.'], 403);
+            }
+            $file = $request->files->get('file');
+            if (!$file instanceof UploadedFile || !$file->isValid()
+                || !in_array($file->getMimeType(), ['application/pdf', 'image/jpeg', 'image/png'], true)
+            ) {
+                return $this->json(['error' => 'Choose a PDF, JPEG, or PNG attachment.'], 400);
+            }
+
+            return $em->wrapInTransaction(function () use ($em, $tx, $request, $uploader): JsonResponse {
+                $em->lock($tx, LockMode::PESSIMISTIC_WRITE);
+                $attachmentCount = $em->getRepository(UnitDocument::class)->count(['hkTransaction' => $tx]);
+                if ($attachmentCount >= 2) {
+                    return $this->json(['error' => 'This allocation already has two attachments.'], 409);
+                }
+
+                return $this->uploadTransactionDocument($tx, $request, $uploader);
+            });
+        }
+
+        return $this->uploadTransactionDocument($tx, $request, $uploader);
+    }
+
+    private function uploadTransactionDocument(HKTransactions $tx, Request $request, DocumentUploadService $uploader): JsonResponse
+    {
         /** @var UploadedFile|null $file */
         $file = $request->files->get('file');
         if (!$file) {
@@ -354,6 +382,10 @@ class HKTransactionsController extends AbstractController
     #[Route('/{id}', name: 'update', methods: ['PUT'])]
     public function update(Request $request, HKTransactions $transaction, EntityManagerInterface $em): JsonResponse
     {
+        if ($transaction->getServiceJob() !== null) {
+            return $this->json(['error' => 'Manage this allocation from Service Jobs.'], 403);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         $this->mapDataToTransaction($transaction, $data, $em);
@@ -533,6 +565,10 @@ class HKTransactionsController extends AbstractController
     #[Route('/{id}', name: 'delete', methods: ['DELETE'])]
     public function delete(HKTransactions $transaction, EntityManagerInterface $em): JsonResponse
     {
+        if ($transaction->getServiceJob() !== null) {
+            return $this->json(['error' => 'Manage this allocation from Service Jobs.'], 403);
+        }
+
         $em->remove($transaction);
         $em->flush();
 

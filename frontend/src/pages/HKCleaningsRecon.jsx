@@ -34,6 +34,13 @@ import SaveIcon from '@mui/icons-material/Save';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CloseIcon from '@mui/icons-material/Close';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import {
+  HK_STATUS_COLORS,
+  HK_STATUS_LABELS,
+  displayStatusAfterChoice,
+  reportStatusFromChoice,
+  resolveHkStatus,
+} from '../utils/hkStatus';
 
 
 function ymNow() {
@@ -79,11 +86,9 @@ function normalizeReportStatus(v) {
 
 
 
-const statusColor = (v) => {
-  if (v === 'reported') return '#1e6f68'; // teal
-  if (v === 'needs_review') return '#f97316'; // orange
-  return 'text.secondary';
-};
+const statusColor = (v) => HK_STATUS_COLORS[v] || HK_STATUS_COLORS.pending;
+
+const FILTER_STATUS_VALUES = ['pending', 'done', 'reported', 'needs_review'];
 
 // Helper to normalize booking fields
 const normalizeBookingField = (b, keys, fallback = '') => {
@@ -101,6 +106,17 @@ const isPlayaCleaning = (row) =>
   String(row?.city ?? row?.unit_city ?? row?.unitCity ?? '')
     .toLowerCase()
     .includes('playa');
+
+const moneyToNum = (v) => {
+  const n = Number(String(v ?? '').trim().replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Tulum: paid above the expected rate. Playa: total paid (cleaning + laundry) above what was charged.
+const isOverExpected = (r) =>
+  isPlayaCleaning(r)
+    ? moneyToNum(r.cleaning_cost) + moneyToNum(r.laundry_cost) > moneyToNum(r.charged_cost)
+    : moneyToNum(r.cleaning_cost) > moneyToNum(r.expected_cost);
 
 const laundryWeightFromCost = (value) => {
   const raw = (value ?? '').toString().trim();
@@ -368,8 +384,7 @@ export default function HKCleaningsRecon() {
 
     if (statusFilter) {
       out = out.filter((r) => {
-        const s = normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending';
-        return s === statusFilter;
+        return resolveHkStatus(r) === statusFilter;
       });
     }
 
@@ -379,7 +394,7 @@ export default function HKCleaningsRecon() {
     }
 
     if (overExpectedOnly) {
-      out = out.filter((r) => toNum(r.cleaning_cost) > toNum(r.expected_cost));
+      out = out.filter(isOverExpected);
     }
 
     return out;
@@ -393,36 +408,32 @@ export default function HKCleaningsRecon() {
       return Number.isFinite(n) ? n : 0;
     };
 
-    const totalRows = rows.length;
-    const savedRows = rows.filter((r) => {
-      const s = normalizeReportStatus(r.report_status ?? r.reportStatus);
-      return s === 'reported';
-    }).length;
+    // Only cleanings marked as reported count towards Charged, Cost and Net.
+    const summarize = (list) => {
+      let charged = 0;
+      let cost = 0;
+      let savedRows = 0;
+      for (const r of list) {
+        if (resolveHkStatus(r) !== 'reported') continue;
+        savedRows += 1;
+        charged += toNum(r.charged_cost);
+        cost += toNum(r.cleaning_cost) + toNum(r.laundry_cost);
+      }
+      return { totalRows: list.length, savedRows, charged, cost, net: charged - cost };
+    };
 
-    let charged = 0;
-    let cost = 0;
-
-    for (const r of rows) {
-      // Charged comes from service
-      charged += toNum(r.charged_cost);
-
-      // Cost = cleaning_cost + laundry_cost (same logic as recomputeTotal)
-      cost += toNum(r.cleaning_cost) + toNum(r.laundry_cost);
-    }
-
-    const net = charged - cost;
-
-    const fmt = (n) => formatMoneyEU(n);
+    const inCity = (name) => rows.filter((r) => (r.city ?? '').toString() === name);
+    const scoped = cityFilter ? inCity(cityFilter) : rows;
+    const byCity = cityFilter
+      ? null
+      : ['Playa del Carmen', 'Tulum'].map((name) => ({ city: name, ...summarize(inCity(name)) }));
 
     return {
-      totalRows,
-      savedRows,
-      charged,
-      cost,
-      net,
-      fmt,
+      ...summarize(scoped),
+      byCity,
+      fmt: (n) => formatMoneyEU(n),
     };
-  }, [rows]);
+  }, [rows, cityFilter]);
 
  const load = useCallback(async () => {
     setLoading(true);
@@ -538,7 +549,9 @@ export default function HKCleaningsRecon() {
     const rsSaved = (row.__reportStatusSaved ?? 'pending').toString();
     const notesSaved = (row.__notesSaved ?? '').toString();
 
-    return cc !== ccSaved || lc !== lcSaved || rs !== rsSaved || notes !== notesSaved;
+    const sameMoney = (a, b) => (parseFloat(String(a).replace(',', '.')) || 0) === (parseFloat(String(b).replace(',', '.')) || 0);
+
+    return !sameMoney(cc, ccSaved) || !sameMoney(lc, lcSaved) || rs !== rsSaved || notes !== notesSaved;
   };
 
 
@@ -589,7 +602,7 @@ export default function HKCleaningsRecon() {
     });
   };
 
-  const saveRow = async (row) => {
+  const saveRow = async (row, { autosave = false } = {}) => {
     const toMoneyStr = (v) => {
       if (v === '' || v === null || v === undefined) return '0';
       const s = String(v).trim();
@@ -631,6 +644,19 @@ export default function HKCleaningsRecon() {
 
     await api.put(`/api/hk-reconcile/${row.id}?${q}`, payload);
 
+    if (autosave) {
+      // Patch in place (no reload) so fields the user is still typing in are not overwritten.
+      const savedStatus = deriveReportStatusForSave(row) || 'pending';
+      updateRow(row.id, {
+        report_status: savedStatus,
+        display_status: row.display_status,
+        __cleaningCostSaved: (row.cleaning_cost ?? '').toString(),
+        __laundryCostSaved: (laundryCost ?? '').toString(),
+        __reportStatusSaved: savedStatus,
+      });
+      return;
+    }
+
    // If NOTES changed, create a row-level note item (history)
    const notesChanged = (row.notes ?? '').toString() !== (row.__notesSaved ?? '').toString();
    const hasText = ((row.notes ?? '').toString().trim() !== '');
@@ -663,9 +689,36 @@ export default function HKCleaningsRecon() {
     await load();
   };
 
+  // Entering costs on a Pending Playa cleaning reports it automatically.
+  const withAutoReport = (row) => {
+    if (resolveHkStatus(row) !== 'pending') return row;
+    const laundryCost = isPlayaCleaning(row)
+      ? laundryCostFromWeight(row.__laundryWeight ?? laundryWeightFromCost(row.laundry_cost))
+      : row.laundry_cost;
+    const hasData = toNum(row.cleaning_cost) > 0 || toNum(laundryCost) > 0;
+    if (!hasData) return row;
+    return {
+      ...row,
+      report_status: 'reported',
+      display_status: row.display_status ? 'reported' : row.display_status,
+    };
+  };
+
+  // Saves a row when a Paid/Laundry field loses focus; skips rows with no changes.
+  const autoSaveRow = async (row) => {
+    if (row.__isNew || !computeRowDirty(row)) return;
+    try {
+      await saveRow(withAutoReport(row), { autosave: true });
+    } catch (e) {
+      setErr(e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e));
+    }
+  };
+
   const changeReportStatus = async (row, reportStatus) => {
-    const nextRow = { ...row, report_status: reportStatus };
-    updateRow(row.id, { report_status: reportStatus });
+    const nextReportStatus = reportStatusFromChoice(reportStatus);
+    const nextRow = { ...row, report_status: nextReportStatus };
+    const nextDisplay = row.display_status ? displayStatusAfterChoice(row, reportStatus) : row.display_status;
+    updateRow(row.id, { report_status: nextReportStatus, display_status: nextDisplay });
     setSavingStatusRowId(row.id);
     setErr(null);
 
@@ -760,15 +813,11 @@ export default function HKCleaningsRecon() {
                 <MenuItem value="">
                   <Typography variant="body2" color="text.secondary">All</Typography>
                 </MenuItem>
-                <MenuItem value="pending">
-                  <Typography variant="body2" color="text.secondary">Pending</Typography>
-                </MenuItem>
-                <MenuItem value="reported">
-                  <Typography variant="body2" sx={{ color: '#1e6f68' }}>Reported</Typography>
-                </MenuItem>
-                <MenuItem value="needs_review">
-                  <Typography variant="body2" sx={{ color: '#f97316' }}>Needs review</Typography>
-                </MenuItem>
+                {FILTER_STATUS_VALUES.map((value) => (
+                  <MenuItem key={value} value={value}>
+                    <Typography variant="body2" sx={{ color: statusColor(value) }}>{HK_STATUS_LABELS[value]}</Typography>
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
             <Button
@@ -791,20 +840,27 @@ export default function HKCleaningsRecon() {
                 </Typography>
               </Box>
 
-              <Typography
-                variant="body2"
-                sx={{
-                  whiteSpace: 'nowrap',
-                  color:
-                    headerStats.net > 0
-                      ? '#1e6f68'
-                      : headerStats.net < 0
-                        ? '#dc2626'
-                        : 'text.secondary',
-                }}
-              >
-                Net: <b>{headerStats.net >= 0 ? '+' : ''}{headerStats.fmt(headerStats.net)}</b>
-              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1, gap: 0 }}>
+                {(headerStats.byCity
+                  ? [...headerStats.byCity.map((c) => ({ ...c, city: c.city.startsWith('Playa') ? 'Playa' : c.city })),
+                      { city: 'Net Total', net: headerStats.net, total: true }]
+                  : [{ city: 'Net', net: headerStats.net, plain: true }]
+                ).map((item) => (
+                  <Typography
+                    key={item.city}
+                    variant="body2"
+                    sx={{
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.2,
+                      fontWeight: item.total ? 700 : 400,
+                      color: item.net > 0 ? '#1e6f68' : item.net < 0 ? '#dc2626' : 'text.secondary',
+                    }}
+                  >
+                    {item.plain ? 'Net' : item.city}:{' '}
+                    <b>{item.net >= 0 ? '+' : ''}{headerStats.fmt(item.net)}</b>
+                  </Typography>
+                ))}
+              </Box>
             </Box>
 
             <Box sx={{ flex: 1 }} />
@@ -952,10 +1008,7 @@ export default function HKCleaningsRecon() {
                     displayEmpty
                     renderValue={(v) => {
                       if (!v) return 'Status';
-                      if (v === 'pending') return 'Pending';
-                      if (v === 'reported') return 'Reported';
-                      if (v === 'needs_review') return 'Needs review';
-                      return 'Status';
+                      return HK_STATUS_LABELS[v] || 'Status';
                     }}
                     sx={{
                       minWidth: 90,
@@ -969,15 +1022,11 @@ export default function HKCleaningsRecon() {
                     <MenuItem value="">
                       <Typography variant="body2" color="text.secondary">All</Typography>
                     </MenuItem>
-                    <MenuItem value="pending">
-                      <Typography variant="body2" color="text.secondary">Pending</Typography>
-                    </MenuItem>
-                    <MenuItem value="reported">
-                      <Typography variant="body2" sx={{ color: '#1e6f68' }}>Reported</Typography>
-                    </MenuItem>
-                    <MenuItem value="needs_review">
-                      <Typography variant="body2" sx={{ color: '#f97316' }}>Needs review</Typography>
-                    </MenuItem>
+                    {FILTER_STATUS_VALUES.map((value) => (
+                      <MenuItem key={value} value={value}>
+                        <Typography variant="body2" sx={{ color: statusColor(value) }}>{HK_STATUS_LABELS[value]}</Typography>
+                      </MenuItem>
+                    ))}
                   </Select>
                 </TableCell>
                 <TableCell sx={{ width: 120, minWidth: 120, maxWidth: 120, fontWeight: 700, textAlign: 'right' }}>Actions</TableCell>
@@ -1008,6 +1057,8 @@ export default function HKCleaningsRecon() {
                   ? r.service_date.split('-').reverse().join('-')
                   : '—';
                 const playaLaundryByWeight = isPlayaCleaning(r);
+                const rowStatus = resolveHkStatus(r);
+                const rowAutoStatus = r.display_status && String(r.status).toLowerCase() === 'done' ? 'done' : 'pending';
 
                 // Compute charged, total, diff, and color
                 const chargedVal = Number(r.charged_cost ?? (dirtyTotal ? total : (r.total_cost ?? total)) ?? 0);
@@ -1016,7 +1067,7 @@ export default function HKCleaningsRecon() {
                 const diffColor =
                   diffVal > 0 ? '#1e6f68' : diffVal < 0 ? '#dc2626' : '#6b7280';
 
-                const overExpected = toNum(r.cleaning_cost) > toNum(r.expected_cost);
+                const overExpected = isOverExpected(r);
                 const overExpectedSx = overExpected
                   ? {
                       '& .MuiOutlinedInput-notchedOutline': { borderColor: '#dc2626' },
@@ -1147,6 +1198,7 @@ export default function HKCleaningsRecon() {
                       <TextField
                         value={r.cleaning_cost ?? ''}
                         onChange={(e) => updateRow(r.id, { cleaning_cost: e.target.value })}
+                        onBlur={() => autoSaveRow(r)}
                         size="small"
                         variant="outlined"
                         sx={{ width: 96, mx: 'auto', ...overExpectedSx }}
@@ -1168,13 +1220,17 @@ export default function HKCleaningsRecon() {
                           }
                         }}
                         onBlur={() => {
-                          if (!playaLaundryByWeight) return;
+                          if (!playaLaundryByWeight) {
+                            autoSaveRow(r);
+                            return;
+                          }
                           const laundryCost = laundryCostFromWeight(r.__laundryWeight);
                           if (laundryCost === null) {
                             setErr('Laundry weight must be a valid non-negative number.');
                             return;
                           }
                           updateRow(r.id, { laundry_cost: laundryCost });
+                          autoSaveRow({ ...r, laundry_cost: laundryCost });
                         }}
                         size="small"
                         variant="outlined"
@@ -1278,38 +1334,34 @@ export default function HKCleaningsRecon() {
                       <Box sx={{ width: 120, minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Select
                           size="small"
-                          value={normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending'}
+                          value={rowStatus}
                           onChange={(e) => changeReportStatus(r, e.target.value)}
                           disabled={loading || savingStatusRowId === r.id}
                           sx={{
                             width: 110,
-                            color: statusColor(normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending'),
-                            '& .MuiSelect-icon': {
-                              color: statusColor(normalizeReportStatus(r.report_status ?? r.reportStatus) || 'pending'),
-                            },
+                            color: statusColor(rowStatus),
+                            '& .MuiSelect-icon': { color: statusColor(rowStatus) },
                           }}
                         >
-                          <MenuItem value="pending">
-                            <Typography variant="body2" color="text.secondary">Pending</Typography>
-                          </MenuItem>
-                          <MenuItem value="reported">
-                            <Typography variant="body2" sx={{ color: '#1e6f68' }}>Reported</Typography>
-                          </MenuItem>
-                          <MenuItem value="needs_review">
-                            <Typography variant="body2" sx={{ color: '#f97316' }}>Needs review</Typography>
-                          </MenuItem>
+                          {[rowAutoStatus, 'reported', 'needs_review'].map((value) => (
+                            <MenuItem key={value} value={value}>
+                              <Typography variant="body2" sx={{ color: statusColor(value) }}>
+                                {HK_STATUS_LABELS[value]}
+                              </Typography>
+                            </MenuItem>
+                          ))}
                         </Select>
                       </Box>
                     </TableCell>
 
                     <TableCell sx={{ py: 0.5, width: 120, minWidth: 120, maxWidth: 120, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <IconButton
-                        title="Save"
+                        title={r.__rowDirty ? 'Save pending changes (notes, or retry)' : 'Saved'}
                         size="small"
                         type="button"
                         onClick={async () => {
                           try {
-                            await saveRow(r);
+                            await saveRow(withAutoReport(r));
                           } catch (e) {
                             setErr(e?.response?.data?.message || e?.response?.data?.error || e?.message || String(e));
                           }

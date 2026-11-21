@@ -7,3 +7,10 @@ knp_snappy:
       print-media-type: true
       lowquality: false
       quiet: false
+
+when@dev:
+  parameters:
+    env(WKHTMLTOPDF_BINARY): '/usr/local/bin/wkhtmltopdf'
+  knp_snappy:
+    pdf:
+      binary: '%env(WKHTMLTOPDF_BINARY)%'

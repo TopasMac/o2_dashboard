@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Alert,
   Box,
   Grid,
   IconButton,
@@ -17,7 +18,6 @@ import AddIcon from '@mui/icons-material/Add';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
-import O2Tooltip from '../common/O2Tooltip';
 
 /**
  * CCO2Results
@@ -770,6 +770,17 @@ export default function CCO2Results(props) {
                   <AddIcon fontSize="small" />
                 </IconButton>
               </Box>
+              {otherExpenses.softwareAlerts?.missing.length > 0 && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Missing Software expenses: {otherExpenses.softwareAlerts.missing.join(', ')}
+                </Alert>
+              )}
+              {otherExpenses.softwareAlerts?.duplicates.length > 0 && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Possible duplicate Software expenses:{' '}
+                  {otherExpenses.softwareAlerts.duplicates.map(({ name, count }) => `${name} (${count})`).join(', ')}
+                </Alert>
+              )}
               <TableContainer>
                 <Table size="small" aria-label="expenses table">
                   <TableHead>
@@ -842,29 +853,6 @@ export default function CCO2Results(props) {
                                 <Typography component="span" sx={{ ml: 0.25 }}>
                                   {categoryName}
                                 </Typography>
-                                {Array.isArray(category?.missingRecurring) &&
-                                  category.missingRecurring.length > 0 && (
-                                    <O2Tooltip
-                                      title={`Missing: ${category.missingRecurring.join(
-                                        ', '
-                                      )}`}
-                                      placement="top"
-                                    >
-                                      <Typography
-                                        component="span"
-                                        sx={{
-                                          ml: 1,
-                                          color: '#B26A00',
-                                          fontWeight: 600,
-                                          fontSize: 13,
-                                          lineHeight: 1,
-                                          cursor: 'help',
-                                        }}
-                                      >
-                                        ⚠
-                                      </Typography>
-                                    </O2Tooltip>
-                                  )}
                               </Box>
                             </TableCell>
                             <TableCell

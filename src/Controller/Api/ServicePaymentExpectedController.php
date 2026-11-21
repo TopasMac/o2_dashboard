@@ -221,9 +221,11 @@ class ServicePaymentExpectedController extends AbstractController
             }, explode(',', $unitIdsCsv)), static fn($v) => $v !== null));
         }
 
+        $activeOnly = $request->query->getBoolean('activeOnly');
+
         // Helper to call provider and extract items list (array or DTO tolerant)
-        $fetch = function (string $service) use ($provider, $month, $year, $unitIds) {
-            $filters = ['service' => $service, 'month' => $month, 'year' => $year];
+        $fetch = function (string $service) use ($provider, $month, $year, $unitIds, $activeOnly) {
+            $filters = ['service' => $service, 'month' => $month, 'year' => $year, 'activeOnly' => $activeOnly];
             if ($unitIds) $filters['unitIds'] = $unitIds; // provider may ignore if unsupported
             $report = $provider->provide(
                 operation: new GetCollection(),

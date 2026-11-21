@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\AllBookings;
+use App\Entity\IcalEvent;
 use App\Entity\ReviewAction;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -114,9 +115,38 @@ class AirbnbReviewService
 
         // Collect reservation IDs for a batched ReviewAction lookup.
         $reservationIds = [];
+        $codesByBooking = [];
+        $codesToLookUp = [];
         foreach ($bookings as $b) {
             // In your schema reservationId is typically the primary id of AllBookings.
             $reservationIds[] = $b->getId();
+
+            if (trim((string) $b->getIcalEvent()?->getReservationUrl()) === '') {
+                foreach ([$b->getConfirmationCode(), $b->getReservationCode()] as $code) {
+                    $code = strtolower(trim((string) $code));
+                    if ($code !== '') {
+                        $codesByBooking[$b->getId()][] = $code;
+                        $codesToLookUp[$code] = $code;
+                    }
+                }
+            }
+        }
+
+        $urlByCode = [];
+        if ($codesToLookUp !== []) {
+            $events = $this->em->getRepository(IcalEvent::class)->createQueryBuilder('event')
+                ->select('LOWER(event.reservationCode) AS code', 'event.reservationUrl AS url')
+                ->where('LOWER(event.reservationCode) IN (:codes)')
+                ->andWhere("TRIM(event.reservationUrl) <> ''")
+                ->setParameter('codes', array_values($codesToLookUp))
+                ->orderBy('event.updatedAt', 'DESC')
+                ->addOrderBy('event.id', 'DESC')
+                ->getQuery()
+                ->getArrayResult();
+
+            foreach ($events as $event) {
+                $urlByCode[$event['code']] ??= trim($event['url']);
+            }
         }
 
         // Step 2: fetch ReviewAction rows for these reservations (source=Airbnb).
@@ -190,6 +220,14 @@ class AirbnbReviewService
                 $stats['pending']++;
             }
 
+            $reservationUrl = trim((string) $b->getIcalEvent()?->getReservationUrl());
+            foreach ($codesByBooking[$reservationId] ?? [] as $code) {
+                if (isset($urlByCode[$code])) {
+                    $reservationUrl = $urlByCode[$code];
+                    break;
+                }
+            }
+
             $items[] = [
                 'bookingId'       => $reservationId,
                 'unitId'          => $b->getUnitId(),
@@ -198,7 +236,7 @@ class AirbnbReviewService
                 'checkoutDate'    => $coDate->format('Y-m-d'),
                 'reviewDeadline'  => $deadline->format('Y-m-d'),
                 'reservationCode' => $b->getConfirmationCode() ?? $b->getReservationCode(),
-                'reservationUrl'  => $b->getIcalEvent() ? $b->getIcalEvent()->getReservationUrl() : null,
+                'reservationUrl'  => $reservationUrl !== '' ? $reservationUrl : null,
                 'currentStatus'   => $currentStatus,
                 'reviewActionId'  => $reviewActionId,
             ];

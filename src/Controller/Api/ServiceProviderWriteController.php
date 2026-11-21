@@ -2,6 +2,8 @@
 
 namespace App\Controller\Api;
 
+use App\Entity\ServiceProvider;
+use Doctrine\ORM\EntityManagerInterface;
 use App\Service\ServiceProviderService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -10,12 +12,30 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class ServiceProviderWriteController extends AbstractController
 {
-    public function __construct(private readonly ServiceProviderService $service)
-    {
+    public function __construct(
+        private readonly ServiceProviderService $service,
+        private readonly EntityManagerInterface $em,
+    ) {
     }
 
     #[Route('/api/service-providers', name: 'api_service_providers_create', methods: ['POST'])]
     public function create(Request $request): JsonResponse
+    {
+        return $this->save($request);
+    }
+
+    #[Route('/api/service-providers/{id<\d+>}', name: 'api_service_providers_update', methods: ['PATCH'])]
+    public function update(int $id, Request $request): JsonResponse
+    {
+        $provider = $this->em->find(ServiceProvider::class, $id);
+        if (!$provider) {
+            return $this->json(['ok' => false, 'error' => 'Provider not found'], 404);
+        }
+
+        return $this->save($request, $provider);
+    }
+
+    private function save(Request $request, ?ServiceProvider $existing = null): JsonResponse
     {
         $payload = $request->getContent();
         $data = [];
@@ -32,41 +52,19 @@ class ServiceProviderWriteController extends AbstractController
         }
 
         try {
-            $provider = $this->service->create($data);
+            $provider = $existing
+                ? $this->service->update($existing, $data)
+                : $this->service->create($data);
 
             return $this->json([
                 'ok' => true,
-                'provider' => [
-                    'id' => $provider->getId(),
-                    'provider_id' => $provider->getProviderId(),
-                    'name' => $provider->getName(),
-                    'occupation' => $provider->getOccupation(),
-                    'area' => $provider->getArea(),
-                    'phone' => $provider->getPhone(),
-                    'whatsapp' => $provider->getWhatsapp(),
-                    'email' => $provider->getEmail(),
-                    'bank_name' => $provider->getBankName(),
-                    'account_holder' => $provider->getAccountHolder(),
-                    'clabe' => $provider->getClabe(),
-                    'account_number' => $provider->getAccountNumber(),
-                    'notes' => $provider->getNotes(),
-                    'is_active' => $provider->isActive(),
-                    'last_job_at' => $provider->getLastJobAt()?->format('Y-m-d H:i:s'),
-                    'created_at' => $provider->getCreatedAt()->format('Y-m-d H:i:s'),
-                    'updated_at' => $provider->getUpdatedAt()->format('Y-m-d H:i:s'),
-                ],
-            ], 201);
+                'provider' => ServiceProviderReadController::details($provider),
+            ], $existing ? 200 : 201, ['Cache-Control' => 'private, no-store']);
         } catch (\InvalidArgumentException $e) {
             return $this->json([
                 'ok' => false,
                 'error' => $e->getMessage(),
             ], 400);
-        } catch (\Throwable $e) {
-            // Avoid leaking internals; log via Symfony logger if needed.
-            return $this->json([
-                'ok' => false,
-                'error' => 'Unexpected error',
-            ], 500);
         }
     }
 }

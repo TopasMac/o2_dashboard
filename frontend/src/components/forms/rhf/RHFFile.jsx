@@ -1,8 +1,8 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Controller, useFormContext } from 'react-hook-form';
-import { FormControl, FormHelperText, IconButton, Tooltip, Box } from '@mui/material';
-import { PaperClipIcon } from '@heroicons/react/24/outline';
+import { FormControl, FormHelperText, IconButton, Tooltip, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
+import { EyeIcon, PaperClipIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 export const RHFFileClipIcon = (props) => (
   <PaperClipIcon style={{ width: 22, height: 22, color: '#1E6F68', ...(props?.style || {}) }} {...props} />
@@ -24,6 +24,7 @@ export default function RHFFile({
   label,
   accept,
   multiple = false,
+  fileActions = false,
   helperText,
   sx,
   widthVariant = 'full',
@@ -31,6 +32,19 @@ export default function RHFFile({
   ...other
 }) {
   const { control } = useFormContext();
+  const inputRef = React.useRef(null);
+  const [preview, setPreview] = React.useState(null);
+  const [previewUrl, setPreviewUrl] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!preview) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(preview.file.slice(0, preview.file.size, preview.mime));
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [preview]);
 
   const getNames = (val) => {
     if (!val) return '';
@@ -55,6 +69,10 @@ export default function RHFFile({
       render={({ field, fieldState }) => {
         const { onChange } = field;
         const { error } = fieldState;
+        const file = fileActions && !multiple && field.value instanceof File ? field.value : null;
+        const mime = file && {
+          pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        }[file.name.split('.').pop().toLowerCase()];
 
         const handleChange = (e) => {
           const filesList = e.target.files ? Array.from(e.target.files) : [];
@@ -73,6 +91,7 @@ export default function RHFFile({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.05, mb: 0.05 }}>
               <input
                 id={`file-input-${name}`}
+                ref={inputRef}
                 name={name}
                 type="file"
                 accept={accept}
@@ -90,8 +109,41 @@ export default function RHFFile({
               <Box sx={{ fontSize: '0.875rem', color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {getNames(field.value) || helperText || 'No file chosen'}
               </Box>
+              {file && mime && (
+                <Tooltip title="Preview attachment">
+                  <IconButton type="button" size="small" aria-label={`Preview ${file.name}`} onClick={() => setPreview({ file, mime })}>
+                    <EyeIcon width={18} height={18} color="#1E6F68" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              {file && (
+                <Tooltip title="Remove attachment">
+                  <IconButton type="button" size="small" aria-label={`Remove ${file.name}`} onClick={() => {
+                    inputRef.current.value = '';
+                    onChange(null);
+                    onFileChange?.(null);
+                  }}>
+                    <TrashIcon width={18} height={18} color="#C62828" />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
             {error && <FormHelperText>{error.message}</FormHelperText>}
+            {preview && (
+              <Dialog open onClose={() => setPreview(null)} fullWidth maxWidth="md" aria-labelledby={`preview-title-${name}`}>
+                <DialogTitle id={`preview-title-${name}`} sx={{ overflowWrap: 'anywhere' }}>{preview.file.name}</DialogTitle>
+                <DialogContent dividers>
+                  {previewUrl && (preview.mime === 'application/pdf' ? (
+                    <Box component="iframe" title={preview.file.name} src={previewUrl} sx={{ width: '100%', height: '65vh', border: 0 }} />
+                  ) : (
+                    <Box component="img" alt={preview.file.name} src={previewUrl} sx={{ display: 'block', mx: 'auto', maxWidth: '100%', maxHeight: '65vh', objectFit: 'contain' }} />
+                  ))}
+                </DialogContent>
+                <DialogActions>
+                  <Button type="button" onClick={() => setPreview(null)}>Close preview</Button>
+                </DialogActions>
+              </Dialog>
+            )}
           </FormControl>
         );
       }}
@@ -104,6 +156,7 @@ RHFFile.propTypes = {
   label: PropTypes.oneOfType([PropTypes.node, PropTypes.string]),
   accept: PropTypes.string,
   multiple: PropTypes.bool,
+  fileActions: PropTypes.bool,
   helperText: PropTypes.oneOfType([PropTypes.node, PropTypes.string]),
   sx: PropTypes.object,
   onFileChange: PropTypes.func,

@@ -1,27 +1,13 @@
 import React, { useState } from 'react';
 import { Card, CardContent, Box, Button } from '@mui/material';
 import AlertCenter from './AlertCenter';
+import AirbnbReviewsCard from './AirbnbReviewsCard';
 import useAlerts from '../../hooks/useAlerts';
 
-/**
- * DashboardAlertCenterCard
- *
- * Unified dashboard card that groups:
- *  - System / operational alerts (AlertCenter)
- *  - Email / iCal notifications (NotificationsCard)
- *
- * Intended to be used on both:
- *  - Admin dashboard
- *  - Manager dashboard
- *
- * For now, Alerts and Notifications each manage their own internal fetching
- * (via useAlerts and NotificationsCard's own logic). If we later want to
- * centralize fetching, we can add props like `alerts`, `notificationsItems`
- * and wire them as serverItems.
- */
-const DashboardAlertCenterCard = () => {
+const DashboardAlertCenterCard = ({ showAirbnbReviews = false }) => {
   const { alerts, dismissAlert, loading } = useAlerts();
   const [tab, setTab] = useState('alerts');
+  const [pendingReviews, setPendingReviews] = useState(null);
 
   const serviceAlerts = alerts.filter((a) =>
     [
@@ -42,44 +28,30 @@ const DashboardAlertCenterCard = () => {
   );
 
   return (
-    <Card sx={{ height: 420, display: 'flex', flexDirection: 'column', maxWidth: 720 }}>
-      {/* Teal header, similar to TaskNotificationsCard */}
-      <Box
-        sx={{
-          backgroundColor: '#1E6F68',
-          color: '#fff',
-          px: 1.5,
-          py: 1.25,             // increased from 1
-          minHeight: 42,        // ensure consistent height with Tasks
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          borderTopLeftRadius: 1,
-          borderTopRightRadius: 1,
-        }}
-      >
-        <Box sx={{ fontWeight: 600, fontSize: 14 }}>Alertas</Box>
-        <Box sx={{ fontSize: 12, opacity: 0.9 }}>
-          {alerts.length > 0
-            ? `${alerts.length} item${alerts.length !== 1 ? 's' : ''}`
-            : 'Sin alertas'}
-        </Box>
+    <Card
+      elevation={0}
+      sx={{
+        height: 420,
+        maxWidth: 720,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        border: '1px solid #dce6e7',
+        borderRadius: '16px',
+        backgroundColor: '#fff',
+        boxShadow: '0 2px 8px rgba(6, 24, 37, 0.06)',
+        p: '14px',
+      }}
+    >
+      <Box component="h2" sx={{ m: 0, mb: 1.5, color: '#061825', fontSize: 21, lineHeight: 1.1 }}>
+        Alertas
       </Box>
 
-      {/* Tabs row, mimicking TaskNotificationsCard style */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          borderBottom: '1px solid #e0e0e0',
-          px: 1.5,
-          pt: 0.5,
-          gap: 1,
-        }}
-      >
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
         {[
           { value: 'alerts', label: `Pagos de Servicios (${serviceAlerts.length})` },
           { value: 'notifications', label: `Conflictos de Reservas (${reservationAlerts.length})` },
+          ...(showAirbnbReviews ? [{ value: 'reviews', label: pendingReviews === null ? 'Reseñas Airbnb' : `Reseñas Airbnb (${pendingReviews})` }] : []),
         ].map((t) => {
           const active = tab === t.value;
           return (
@@ -87,19 +59,21 @@ const DashboardAlertCenterCard = () => {
               key={t.value}
               onClick={() => setTab(t.value)}
               size="small"
+              aria-pressed={active}
               sx={{
                 minWidth: 0,
-                px: 1,
-                py: 0.25,
-                fontSize: 14,
+                px: 1.25,
+                py: 0.75,
+                fontSize: 13,
+                fontWeight: 700,
                 textTransform: 'none',
-                borderRadius: 0,
-                borderBottom: active ? '2px solid #1E6F68' : '2px solid transparent',
-                color: active ? '#1E6F68' : 'text.secondary',
-                backgroundColor: 'transparent',
+                border: '1px solid',
+                borderRadius: '9px',
+                borderColor: active ? '#087f80' : '#dce6e7',
+                color: active ? '#fff' : '#4c5964',
+                backgroundColor: active ? '#087f80' : '#f7fafa',
                 '&:hover': {
-                  backgroundColor: 'transparent',
-                  color: active ? '#1E6F68' : '#1E6F68', // green on hover for non-selected
+                  backgroundColor: active ? '#087f80' : '#edf5f5',
                 },
               }}
             >
@@ -115,8 +89,12 @@ const DashboardAlertCenterCard = () => {
           overflowY: 'auto',
           display: 'flex',
           flexDirection: 'column',
-          pt: 1.5,
-          pb: 1.5,
+          minHeight: 0,
+          mt: 1.5,
+          border: '1px solid #dce6e7',
+          borderRadius: '12px',
+          p: 1.5,
+          '&:last-child': { pb: 1.5 },
         }}
       >
         <Box
@@ -153,6 +131,11 @@ const DashboardAlertCenterCard = () => {
             </Box>
           )}
         </Box>
+        {showAirbnbReviews && (
+          <Box hidden={tab !== 'reviews'}>
+            <AirbnbReviewsCard embedded onPendingCountChange={setPendingReviews} />
+          </Box>
+        )}
       </CardContent>
     </Card>
   );
