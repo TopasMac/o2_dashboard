@@ -49,6 +49,17 @@ Use synthetic or saved sanitized inputs for local integration tests. Local testi
 6. Report what changed, what was verified, known limitations, and any manual checks still needed.
 7. Do not commit, push, open or merge a pull request, or deploy unless the user explicitly asks for that step.
 
+## Starting local servers
+
+When the user asks to start local, start the local server, or run the app, start both the React frontend and Symfony backend using the commands in `LOCAL_DEVELOPMENT.md`. A request specifying port 3000 still includes the backend unless the user explicitly requests only one component.
+
+- Run both servers from this worktree, using the Node version pinned in `.nvmrc` and the existing local environment configuration.
+- Serve the frontend at `http://localhost:3000` and the backend at `http://127.0.0.1:8001`. Set `PORT=3000` and `O2_API_TARGET=http://127.0.0.1:8001` for the frontend.
+- Check both ports and identify the owning processes and their working directories before starting. Reuse a healthy server belonging to this worktree. If another worktree or application owns a required port, report the conflict and ask how to proceed. Do not stop that process or silently choose another port.
+- Check the required dependencies and local MySQL/Mailpit services using `LOCAL_DEVELOPMENT.md`. Preserve existing environment files, JWT keys, and database contents. Report any missing configuration needed to start safely without exposing secrets.
+- Keep both servers running in persistent sessions. Verify that each responds and that the frontend can reach the backend through its API proxy before reporting success.
+- Report both URLs and any startup errors or blockers. If the user explicitly requests only the frontend or only the backend, start and verify that component alone.
+
 ## Starting a feature
 
 Before any edits:
