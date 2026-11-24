@@ -1135,40 +1135,19 @@ export default function HKResults({
                         {fmtMoney(serverSummary?.playa_cleanings?.result ?? 0)}
                       </TableCell>
                     </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
-                        Charged
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
-                        {fmtMoney(serverSummary?.playa_cleanings?.charged ?? 0)}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
-                        Laundry
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
-                        {fmtMoney(serverSummary?.playa_cleanings?.laundry ?? 0)}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
-                        Fixed HR cost (Cleaner)
-                      </TableCell>
-                      <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
-                        {fmtMoney(serverSummary?.playa_cleanings?.fixed_hr_cost ?? 0)}
-                      </TableCell>
-                    </TableRow>
-                    {Number(serverSummary?.playa_cleanings?.external_hr_cost ?? 0) !== 0 && (
-                      <TableRow>
+                    {[[7, 'Limpiezas'], [8, 'Limpiezas Extra'], [13, 'Blancos Extra']].map(([category, label]) => (
+                      <TableRow key={`playa-cleaning-${category}`}>
                         <TableCell sx={{ borderBottom: 'none', py: 0.35, pl: 2, color: 'text.secondary' }}>
-                          External HR cost
+                          {label}
+                          {Number(serverSummary?.playa_cleanings?.counts?.[category] ?? 0) !== 0
+                            ? ` (${fmtInt(serverSummary.playa_cleanings.counts[category])})`
+                            : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ borderBottom: 'none', py: 0.35, color: 'text.secondary' }}>
-                          {fmtMoney(serverSummary?.playa_cleanings?.external_hr_cost ?? 0)}
+                          {fmtMoney(serverSummary?.playa_cleanings?.categories?.[category] ?? 0)}
                         </TableCell>
                       </TableRow>
-                    )}
+                    ))}
 
                     <TableRow>
                       <TableCell colSpan={2} sx={{ borderBottom: 'none', py: 0.6 }}>

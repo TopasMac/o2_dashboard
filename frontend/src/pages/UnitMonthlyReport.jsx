@@ -2259,7 +2259,7 @@ export default function UnitMonthlyReport() {
               ...hk.map(r => ({
                 id: r.id,
                 date: r.date || null,
-                description: r.description || '',
+                description: r.localizedDescription ?? r.description ?? '',
                 comments: r.notes ?? null,
                 amount: Number(r.charged ?? 0),
                 source: r.sourceType === 'HK_CLEANING' ? 'HK_CLEANING' : 'HK',

@@ -145,7 +145,7 @@ Before simplifying these areas, identify every bucket/key convention, signed-lin
 | Airbnb guest reviews | Keep | Desktop Admins can work the review queue under Alertas → Reseñas Airbnb. The Manager dashboard also has the queue. Reviews are submitted manually in Airbnb, and Owners2 records completed, skipped, and timed-out outcomes for reporting. |
 | Holds and soft reservations | Protect | Affects availability and automatic expiry. Test before consolidation. |
 | Housekeeping cleanings and reconciliation | Keep | High-volume operational data and automatic booking side effects. |
-| Service Jobs | Keep | Admin-only scheduling under Housekeeping. The Admin dashboard shows scheduled jobs alongside extra cleanings in Actividad → Servicios for the selected day. Activity Schedule also shows scheduled jobs by date and city for Admins. Jobs use a curated selection of transaction categories and can be assigned to providers from the existing directory. Admins can explicitly allocate completed jobs to multiple Labour and Equipment transactions. Each Client-billed line appears in the owner report for its transaction month. |
+| Service Jobs | Keep | Admin-only scheduling under Housekeeping. The Admin dashboard shows scheduled jobs alongside extra cleanings in Actividad → Servicios for the selected day. Activity Schedule also shows scheduled jobs by date and city for Admins. Jobs use a curated selection of transaction categories and can be assigned to providers from the existing directory. For Limpieza Extra (category 8), a Cleaning Type dropdown stores Initial, Mid-stay, Redo, Refresh, Other, Sofa cleaning, or Deep cleaning in the existing Description field. Legacy descriptions remain available when editing. Known category-8 cleaning descriptions are localized for Spanish client reports while original descriptions remain stored unchanged. Admins can explicitly allocate completed jobs to multiple Labour and Equipment transactions. Each Client-billed line appears in the owner report for its transaction month. |
 | Housekeeping laundry | Review | Laundry Records is disabled in desktop navigation and routing. Historical records, rates, and the API remain available. Confirm usage before permanent retirement. |
 | Employees and tasks | Keep | 7 employees, 64 tasks, comments, mobile task UI, access generation, and notifications. |
 | Employee cash and financial ledgers | Keep | 204 cash rows and 92 financial-ledger rows, with approval and allocation workflows. |
@@ -271,3 +271,6 @@ For the next review, answer **keep**, **remove**, or **unsure** for each:
 - Private Reservation staging/sync
 
 Until those decisions are recorded, all classifications above remain recommendations.
+
+
+O2 Results → Housekeepers → Cleaning Results: Playa del Carmen now sums charged minus paid from HK transactions dated in the selected month, with transaction city Playa del Carmen, categories 7 (Limpiezas), 8 (Limpiezas Extra), and 13 (Blancos Extra), linked to a reported, non-cancelled cleaning. The three category balances sum to Playa’s total; laundry and HR deductions are removed from this section. Tulum and other report cards retain their existing rules.

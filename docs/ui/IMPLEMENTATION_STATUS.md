@@ -160,3 +160,13 @@ Read these standards before UI work, inspect the current implementation, and reu
 HK Reconciliation and HK Cleanings retain their current table layouts. Cancelled is the last status option in reconciliation row dropdowns and both reconciliation filters, and remains last in the HK Cleanings header filter. Cancellation takes precedence over the retained report status in both pages and uses the HausIn semantic danger color (`#D9534F`) as soft red text.
 
 Reconciliation cancellation opens a dialog reading “Confirm Cancel {unit_name} on {dd-mm-yyyy}?” with a teal Confirm button and red Cancel text button. Either button closes the dialog; only Confirm saves. Cancelled rows remain visible and can be reopened to Pending or explicitly Reported. This is a focused workflow change, not a table-page migration or a new general form standard.
+
+## O2 Results: Playa Cleaning Results
+
+Focused card change: Playa displays its total and three balance rows (Limpiezas, Limpiezas Extra, Blancos Extra) for reported, non-cancelled cleanings, using transaction-month charged minus paid for categories 7, 8, and 13. The prior Charged, Laundry, Fixed HR cost, and External HR cost rows are removed from this section. Existing card styling and Tulum presentation are preserved; this is not a table-page migration.
+
+Playa category labels include the matching transaction count in parentheses when nonzero; zero counts leave the label unchanged. Counts use the same reported-cleaning filters as balances.
+
+## Service Jobs: extra-cleaning description
+
+For category 8 (Limpieza Extra), Add/Edit Service Job replaces the free-text Description input with a required Cleaning Type select: Initial, Mid-stay, Redo, Refresh, Other, Sofa cleaning, Deep cleaning. The selected text is stored in the existing Description field and prefills allocation descriptions. Switching to or from category 8 clears the description to prevent carrying a mismatched value. Existing custom descriptions remain selectable when editing historical jobs. Other categories retain the free-text field and the existing layout. Spanish client report pages and HTML/PDF rendering localize recognized category-8 descriptions without modifying stored text. No schema change is required.

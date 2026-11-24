@@ -884,7 +884,7 @@
                       : (g.total is defined ? g.total : 0))) %}
                 <tr>
                   <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
-                  <td>{{ gDesc }}</td>
+                  <td>{{ gDesc|cleaning_description(g.categoryId|default(g.category_id|default(null)), _lang) }}</td>
                   <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
                 </tr>
               {% endfor %}
@@ -936,7 +936,7 @@
                         : (g.total is defined ? g.total : 0))) %}
                   <tr>
                     <td>{{ gDate ? (gDate|date('d/m/y')) : '' }}</td>
-                    <td>{{ gDesc }}</td>
+                    <td>{{ gDesc|cleaning_description(g.categoryId|default(g.category_id|default(null)), _lang) }}</td>
                     <td class="num">{{ '$' }}{{ gAmt|number_format(2, _mdec, _mth) }}</td>
                   </tr>
                 {% endfor %}

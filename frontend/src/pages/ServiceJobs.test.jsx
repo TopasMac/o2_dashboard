@@ -193,3 +193,45 @@ test('allocates and reopens Labour and Equipment through the HK form', async () 
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Equipment · HK-equipment' })).not.toBeInTheDocument());
   expect(api.delete).toHaveBeenCalledWith('/api/service-jobs/4/allocations/8');
 }, 15000);
+
+test('extra cleaning type is conditional, clears on category change, and survives save/edit', async () => {
+  const unit = { id: 1, name: 'IT_001' };
+  const extra = { id: 8, name: 'Limpieza_extra' };
+  const maintenance = { id: 2, name: 'Mantenimiento' };
+  api.get.mockImplementation(async (url) => ({ data: {
+    '/api/service-jobs': { jobs: [] },
+    '/api/service-jobs/options': { units: [unit], categories: [extra, maintenance] },
+    '/api/service-providers': { providers: [] },
+  }[url] }));
+  api.post.mockImplementation(async (_, payload) => ({ data: { job: { ...payload, id: 99, unit, category: extra, provider: null } } }));
+  render(<ServiceJobs />);
+  await screen.findByText('No service jobs scheduled.');
+  fireEvent.click(screen.getByTitle('Clear month filter'));
+  fireEvent.click(screen.getByRole('button', { name: '+ Add Service' }));
+  const dialog = () => within(screen.getByRole('dialog'));
+  const select = (name, option) => {
+    fireEvent.mouseDown(dialog().getByRole('combobox', { name }));
+    fireEvent.click(screen.getByRole('option', { name: option }));
+  };
+  expect(dialog().queryByRole('combobox', { name: 'Cleaning Type' })).toBeNull();
+  select(/Category/, 'Limpieza Extra');
+  fireEvent.mouseDown(dialog().getByRole('combobox', { name: 'Cleaning Type' }));
+  for (const type of ['Initial', 'Mid-stay', 'Redo', 'Refresh', 'Other', 'Sofa cleaning', 'Deep cleaning']) {
+    expect(screen.getByRole('option', { name: type })).toBeInTheDocument();
+  }
+  fireEvent.click(screen.getByRole('option', { name: 'Initial' }));
+  select(/Category/, 'Mantenimiento');
+  expect(dialog().queryByRole('combobox', { name: 'Cleaning Type' })).toBeNull();
+  select(/Category/, 'Limpieza Extra');
+  expect(dialog().getByRole('combobox', { name: 'Cleaning Type' })).not.toHaveTextContent('Initial');
+  select('Cleaning Type', 'Mid-stay');
+  fireEvent.change(dialog().getByLabelText(/Scheduled Date/), { target: { value: '2026-11-24' } });
+  fireEvent.change(dialog().getByRole('combobox', { name: /Unit/ }), { target: { value: 'IT_' } });
+  fireEvent.click(screen.getByRole('option', { name: unit.name }));
+  fireEvent.click(dialog().getByRole('button', { name: 'Save' }));
+  const edit = await screen.findByRole('button', { name: 'HKSJ00099' });
+  expect(api.post).toHaveBeenLastCalledWith('/api/service-jobs', expect.objectContaining({ description: 'Mid-stay' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  fireEvent.click(edit);
+  expect(dialog().getByRole('combobox', { name: 'Cleaning Type' })).toHaveTextContent('Mid-stay');
+});

@@ -17,6 +17,31 @@ class HKMonthlySummaryService
     {
     }
 
+    /** Balances of reported Playa transactions, grouped by the approved cleaning categories. */
+    public function getPlayaReportedCleaningBalances(int $year, int $month): array
+    {
+        $start = new DateTimeImmutable(sprintf('%04d-%02d-01', $year, $month));
+        $rows = $this->db->fetchAllAssociative(<<<'SQL'
+            SELECT hk.category_id, COUNT(*) AS count, SUM(COALESCE(hk.charged, 0) - COALESCE(hk.paid, 0)) AS balance
+            FROM hktransactions hk
+            INNER JOIN hk_cleanings hc ON hc.id = hk.hk_cleaning_id
+            WHERE hk.date >= :start AND hk.date < :end
+              AND LOWER(TRIM(COALESCE(hk.city, ''))) = 'playa del carmen'
+              AND LOWER(TRIM(COALESCE(hc.report_status, ''))) = 'reported'
+              AND LOWER(TRIM(COALESCE(hc.status, ''))) <> 'cancelled'
+              AND hk.category_id IN (7, 8, 13)
+            GROUP BY hk.category_id
+        SQL, ['start' => $start->format('Y-m-d'), 'end' => $start->modify('+1 month')->format('Y-m-d')]);
+
+        $balances = [7 => 0.0, 8 => 0.0, 13 => 0.0];
+        $counts = [7 => 0, 8 => 0, 13 => 0];
+        foreach ($rows as $row) {
+            $counts[(int) $row['category_id']] = (int) $row['count'];
+            $balances[(int) $row['category_id']] = round((float) $row['balance'], 2);
+        }
+        return ['categories' => $balances, 'counts' => $counts, 'result' => round(array_sum($balances), 2)];
+    }
+
     /**
      * Return HK transactions rows for a month.
      *

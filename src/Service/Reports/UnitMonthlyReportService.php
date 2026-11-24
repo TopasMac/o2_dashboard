@@ -546,6 +546,7 @@ SQL;
                 'categoryAllowHk'   => isset($hr['category_allow_hk']) ? (bool) $hr['category_allow_hk'] : null,
                 'allocationTarget' => $hr['allocation_target'] ?? null,
                 'description' => $hr['description'] ?? null,
+                'localizedDescription' => CleaningDescriptionTranslator::translate($hr['description'] ?? null, $hr['category_id'] ?? null, $clientBlock['language'] ?? 'es'),
                 'notes'       => $hr['notes'] ?? null,
                 'charged'     => isset($hr['charged']) ? (float) $hr['charged'] : 0.0,
                 'paid'        => isset($hr['paid']) ? (float) $hr['paid'] : 0.0,

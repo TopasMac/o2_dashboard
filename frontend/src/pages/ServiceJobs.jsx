@@ -38,6 +38,7 @@ function displayStatus(job) {
 
 const STATUS_COLORS = { pending: '#D4A017', done: '#1E6F68', cancelled: '#C62828', allocated: '#1565C0' };
 const BILL_TO = { CLIENT: 'Client', OWNERS2: 'Owners2' };
+const CLEANING_TYPES = ['Initial', 'Mid-stay', 'Redo', 'Refresh', 'Other', 'Sofa cleaning', 'Deep cleaning'];
 const EMPTY_FORM = {
   scheduledDate: '',
   unitId: '',
@@ -494,7 +495,8 @@ export default function ServiceJobs() {
                   </TextField>
                 </Box>
                 <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', sm: form.id ? 'repeat(2, minmax(0, 1fr))' : '1fr' } }}>
-                  <TextField label="Category" select required {...field('categoryId')}>
+                  <TextField label="Category" select required {...field('categoryId')}
+                    onChange={(event) => setForm((previous) => ({ ...previous, categoryId: event.target.value, description: Number(event.target.value) === 8 || Number(previous.categoryId) === 8 ? '' : previous.description }))}>
                     {selectedJob && !categories.some(({ id }) => id === selectedJob.category.id) && (
                       <MenuItem value={selectedJob.category.id}>{selectedJob.category.name}</MenuItem>
                     )}
@@ -514,7 +516,16 @@ export default function ServiceJobs() {
                     renderInput={(params) => <TextField {...params} label="Assigned Provider" />}
                   />
                 </Box>
-                <TextField label="Description" required slotProps={{ htmlInput: { maxLength: 255 } }} {...field('description')} />
+                {Number(form.categoryId) === 8 ? (
+                  <TextField label="Cleaning Type" select required {...field('description')}>
+                    {form.description && !CLEANING_TYPES.includes(form.description) && (
+                      <MenuItem value={form.description}>{form.description}</MenuItem>
+                    )}
+                    {CLEANING_TYPES.map((type) => <MenuItem key={type} value={type}>{type}</MenuItem>)}
+                  </TextField>
+                ) : (
+                  <TextField label="Description" required slotProps={{ htmlInput: { maxLength: 255 } }} {...field('description')} />
+                )}
                 <TextField label="Notes" multiline minRows={2} {...field('notes')} />
               </Stack>
             </DialogContent>

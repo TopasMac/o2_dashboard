@@ -103,7 +103,9 @@ class O2MonthlyResultsController extends AbstractController
             }
             $hrAmount = $hrSalary + $hrAdvances;
 
-            // Playa cleaning results (fixed HR cost for Cleaners only; salary + deduction; ignore advances)
+            $playaBalances = $hkSvc->getPlayaReportedCleaningBalances($yearOut, $monthOut);
+
+            // Legacy expense summary is also consumed by the HR breakdown.
             $playaCharged = $hkSvc->getCompletedCleaningChargesByMonth(
                 $yearOut,
                 $monthOut,
@@ -135,8 +137,6 @@ class O2MonthlyResultsController extends AbstractController
                     $playaFixedHr += (float)($r['amount'] ?? 0);
                 }
             }
-
-            $playaResult = $playaCharged - $playaLaundry - $playaFixedHr - $playaExternalHrCost;
 
             // Tulum cleanings (simple: charged - paid on categories 7/8/14)
             $tulumCharged = 0.0;
@@ -215,7 +215,9 @@ class O2MonthlyResultsController extends AbstractController
                         'laundry' => round($playaLaundry, 2),
                         'fixed_hr_cost' => round($playaFixedHr, 2),
                         'external_hr_cost' => round($playaExternalHrCost, 2),
-                        'result' => round($playaResult, 2),
+                        'result' => $playaBalances['result'],
+                        'categories' => $playaBalances['categories'],
+                        'counts' => $playaBalances['counts'],
                     ],
                     'tulum_cleanings' => [
                         'charged' => round($tulumCharged, 2),
