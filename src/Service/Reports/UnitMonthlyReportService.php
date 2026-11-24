@@ -188,6 +188,8 @@ SQL;
         $o2CommissionAirbnb = 0.0;   // only o2_commission from Airbnb source
         $cleaningAirbnb     = 0.0;   // only cleaning_fee from Airbnb source
 
+        $reportCleaningFee = CleaningFeeReportPolicy::cleaningFeeSql('s');
+        $reportOwnerPayout = CleaningFeeReportPolicy::ownerPayoutSql('s');
         $sqlSlices = <<<SQL
 SELECT
   s.id                        AS slice_id,
@@ -202,9 +204,9 @@ SELECT
   s.nights_in_month          AS nights_in_month,
   s.payout_in_month          AS payout_in_month,
   s.commission_base_in_month AS commission_base_in_month,
-  s.cleaning_fee_in_month    AS cleaning_fee_in_month,
+  {$reportCleaningFee}       AS cleaning_fee_in_month,
   s.o2_commission_in_month   AS o2_commission_in_month,
-  s.owner_payout_in_month    AS owner_payout_in_month,
+  {$reportOwnerPayout}       AS owner_payout_in_month,
   b.payout                   AS booking_payout,
   b.tax_percent              AS tax_percent,
   b.commission_percent       AS commission_percent,
@@ -484,6 +486,7 @@ FROM hktransactions hk
 LEFT JOIN transaction_category tc ON tc.id = hk.category_id
 WHERE hk.unit_id = :unit
   AND hk.allocation_target = 'Client'
+  AND NOT EXISTS (SELECT 1 FROM hk_cleanings cancelled_cleaning WHERE cancelled_cleaning.id = hk.hk_cleaning_id AND LOWER(cancelled_cleaning.status) = 'cancelled')
   AND DATE_FORMAT(hk.date, '%Y-%m') = :ym
   AND NOT EXISTS (
     SELECT 1

@@ -59,6 +59,7 @@ class HKMonthlySummaryService
             LEFT JOIN transaction_category tc ON tc.id = hk.category_id
             LEFT JOIN hk_cleanings hc ON hc.id = hk.hk_cleaning_id
             WHERE DATE(hk.`date`) BETWEEN :start AND LAST_DAY(:start)
+              AND LOWER(COALESCE(hc.status, '')) <> 'cancelled'
         ";
 
         $params = ['start' => $start];

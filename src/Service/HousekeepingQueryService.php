@@ -62,6 +62,7 @@ class HousekeepingQueryService
         $sql[] = 'SELECT city, COUNT(*) AS cnt';
         $sql[] = 'FROM hk_cleanings';
         $sql[] = "WHERE checkout_date BETWEEN :d1 AND :d2";
+        $sql[] = "  AND LOWER(COALESCE(status, '')) <> 'cancelled'";
         $sql[] = "  AND cleaning_type = 'checkout'";
         if ($city) {
             $sql[] = '  AND city = :city';
@@ -91,6 +92,7 @@ class HousekeepingQueryService
         $sql[] = 'SELECT SUM(COALESCE(o2_collected_fee, expected_fee)) AS total';
         $sql[] = 'FROM hk_cleanings';
         $sql[] = 'WHERE checkout_date BETWEEN :d1 AND :d2';
+        $sql[] = "  AND LOWER(COALESCE(status, '')) <> 'cancelled'";
         $sql[] = "  AND cleaning_type = 'checkout'";
         if ($city) { $sql[] = '  AND city = :city'; }
 
@@ -111,6 +113,7 @@ class HousekeepingQueryService
         $sql[] = 'SELECT SUM(expected_fee) AS total';
         $sql[] = 'FROM hk_cleanings';
         $sql[] = 'WHERE checkout_date BETWEEN :d1 AND :d2';
+        $sql[] = "  AND LOWER(COALESCE(status, '')) <> 'cancelled'";
         $sql[] = "  AND cleaning_type = 'checkout'";
         if ($city) { $sql[] = '  AND city = :city'; }
 

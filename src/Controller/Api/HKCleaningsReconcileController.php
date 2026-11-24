@@ -66,6 +66,39 @@ class HKCleaningsReconcileController extends AbstractController
         ], Response::HTTP_METHOD_NOT_ALLOWED);
     }
 
+    #[Route('/{id<\d+>}/status', name: 'api_hk_reconcile_status', methods: ['PUT'])]
+    #[\Symfony\Component\Security\Http\Attribute\IsGranted('ROLE_MANAGER')]
+    public function changeStatus(int $id, Request $request, EntityManagerInterface $em, \App\Service\HKCleaningCancellation $cancellation, HKCleaningManager $manager): JsonResponse
+    {
+        $hk = $em->getRepository(HKCleanings::class)->find($id);
+        if (!$hk) {
+            return $this->json(['message' => 'HK cleaning not found'], 404);
+        }
+        $choice = $request->toArray()['status'] ?? '';
+        if (!in_array($choice, ['cancelled', 'pending', 'reported', 'needs_review'], true)) {
+            return $this->json(['message' => 'Invalid status'], 400);
+        }
+        if ($choice === 'cancelled') {
+            $cancellation->setCancelled($hk);
+        } else {
+            // Reopen cancelled work, or explicitly report previously reopened pending work.
+            if (!in_array($hk->getStatus(), [HKCleanings::STATUS_CANCELLED, HKCleanings::STATUS_PENDING], true)) {
+                return $this->json(['message' => 'Cleaning status has changed. Refresh and try again.'], 409);
+            }
+            $em->wrapInTransaction(function () use ($hk, $choice, $em, $manager, $cancellation): void {
+                $cancellation->retainSnapshot($hk);
+                $hk->setStatus(HKCleanings::STATUS_PENDING);
+                $hk->setReportStatus($choice);
+                if ($choice === 'reported') {
+                    // Explicit Admin/Manager reporting means the work was performed.
+                    $manager->completeCleaning($hk);
+                }
+                $em->flush();
+            });
+        }
+        return $this->json(['ok' => true, 'status' => $hk->getStatus(), 'report_status' => $hk->getReportStatus()]);
+    }
+
     #[Route('/{id<\d+>}', name: 'api_hk_reconcile_update', methods: ['PUT'])]
     public function update(int $id, Request $request, EntityManagerInterface $em, HKCleaningManager $cleaningManager): JsonResponse
     {
@@ -116,14 +149,14 @@ class HKCleaningsReconcileController extends AbstractController
             }
         }
 
-        // Only DONE cleanings can be reconciled, except non-cancelled Playa del Carmen cleanings,
-        // which may be reconciled (costs and report status) before they are marked done.
+        // Keep cancelled/reopened reconciliation details editable without completing the work.
+        // Other pending Tulum cleanings retain the existing restriction.
         $status = method_exists($hk, 'getStatus') ? (string)($hk->getStatus() ?? '') : '';
         $isDone = strtolower($status) === 'done';
-        if ($status !== '' && !$isDone) {
+        if ($status !== '' && !$isDone && $status !== HKCleanings::STATUS_CANCELLED) {
             $allowsPreDone = HKCleaningDisplayStatus::appliesToCity($hk->getCity())
                 && strtolower($status) !== HKCleanings::STATUS_CANCELLED;
-            if (!$allowsPreDone) {
+            if (!$allowsPreDone && $em->getConnection()->fetchOne('SELECT 1 FROM hk_cleanings_reconcile WHERE hk_cleaning_id = ?', [$id]) === false) {
                 return $this->json([
                     'ok' => false,
                     'error' => 'invalid_status',
@@ -330,7 +363,7 @@ class HKCleaningsReconcileController extends AbstractController
                 ]
             );
 
-            if (!$usesNewPolicy) {
+            if (!$usesNewPolicy && $hk->getStatus() === HKCleanings::STATUS_DONE) {
                 // Preserve the legacy pre-cutoff transaction synchronization.
                 $chargedNum = 0.0;
                 if (method_exists($hk, 'getO2CollectedFee')) {

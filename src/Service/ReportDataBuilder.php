@@ -44,6 +44,8 @@ class ReportDataBuilder
      */
     public function build(int $unitId, string $yearMonth): array
     {
+        $reportCleaningFee = \App\Service\Reports\CleaningFeeReportPolicy::cleaningFeeSql('b');
+        $reportOwnerPayout = \App\Service\Reports\CleaningFeeReportPolicy::ownerPayoutSql('b');
         $ym = substr($yearMonth, 0, 7);
         if (!preg_match('/^\\d{4}-\\d{2}$/', $ym)) {
             throw new \InvalidArgumentException('yearMonth must be in YYYY-MM format');
@@ -119,7 +121,7 @@ class ReportDataBuilder
                 $qbP->select('COALESCE(SUM(b.`payout_in_month`), 0) AS total');
             } else {
                 // Default OWNERS2 behavior
-                $qbP->select('COALESCE(SUM(b.`owner_payout_in_month`), 0) AS total');
+                $qbP->select("COALESCE(SUM($reportOwnerPayout), 0) AS total");
             }
             $qbP->from('`booking_month_slice`', 'b')
                 ->where('b.`unit_id` = :unitId')
@@ -157,7 +159,7 @@ class ReportDataBuilder
         $cleaningTotal = 0.0;
         try {
             $row = $this->conn->createQueryBuilder()
-                ->select('COALESCE(SUM(b.`cleaning_fee_in_month`), 0) AS total')
+                ->select("COALESCE(SUM($reportCleaningFee), 0) AS total")
                 ->from('`booking_month_slice`', 'b')
                 ->where('b.`unit_id` = :unitId')
                 ->andWhere('b.`year_month` = :ym')
@@ -180,8 +182,8 @@ class ReportDataBuilder
             $row = $this->conn->createQueryBuilder()
                 ->select(
                     "COALESCE(SUM(CASE WHEN UPPER(b.`source`) = 'AIRBNB' THEN b.`o2_commission_in_month` ELSE 0 END), 0) AS o2_airbnb",
-                    "COALESCE(SUM(CASE WHEN UPPER(b.`source`) = 'AIRBNB' THEN b.`cleaning_fee_in_month` ELSE 0 END), 0) AS clean_airbnb",
-                    "COALESCE(SUM(CASE WHEN UPPER(b.`source`) = 'PRIVATE' THEN b.`owner_payout_in_month` ELSE 0 END), 0) AS owner_payout_private"
+                    "COALESCE(SUM(CASE WHEN UPPER(b.`source`) = 'AIRBNB' THEN $reportCleaningFee ELSE 0 END), 0) AS clean_airbnb",
+                    "COALESCE(SUM(CASE WHEN UPPER(b.`source`) = 'PRIVATE' THEN $reportOwnerPayout ELSE 0 END), 0) AS owner_payout_private"
                 )
                 ->from('`booking_month_slice`', 'b')
                 ->where('b.`unit_id` = :unitId')
@@ -241,6 +243,7 @@ class ReportDataBuilder
                 ->where('h.`unit_id` = :unitId')
                 ->andWhere('h.`date` BETWEEN :start AND :end')
                 ->andWhere("h.`cost_centre` = 'Client'")
+                ->andWhere("NOT EXISTS (SELECT 1 FROM hk_cleanings cancelled_cleaning WHERE cancelled_cleaning.id = h.hk_cleaning_id AND LOWER(cancelled_cleaning.status) = 'cancelled')")
                 ->andWhere('(h.`category_id` IS NULL OR h.`category_id` <> 7)')
                 ->andWhere('h.`charged` > 0')
                 ->setParameter('unitId', $unitId)
@@ -353,9 +356,9 @@ class ReportDataBuilder
                     'b.`nights_in_month` AS nightsInMonth',
                     'b.`net_payout_in_month` AS netPayoutInMonth',
                     'b.`commission_base_in_month` AS commissionBaseInMonth',
-                    'b.`cleaning_fee_in_month` AS cleaningFeeInMonth',
+                    "$reportCleaningFee AS cleaningFeeInMonth",
                     'b.`o2_commission_in_month` AS o2CommissionInMonth',
-                    'b.`owner_payout_in_month` AS ownerPayoutInMonth',
+                    "$reportOwnerPayout AS ownerPayoutInMonth",
                     'ab.`status` AS status',
                     'ab.`tax_percent` AS taxPercent',
                     'ab.`payment_method` AS paymentMethod',
@@ -444,6 +447,7 @@ class ReportDataBuilder
             ->where('h.`unit_id` = :unitId')
             ->andWhere('h.`date` BETWEEN :start AND :end')
             ->andWhere("h.`cost_centre` = 'Client'")
+            ->andWhere("NOT EXISTS (SELECT 1 FROM hk_cleanings cancelled_cleaning WHERE cancelled_cleaning.id = h.hk_cleaning_id AND LOWER(cancelled_cleaning.status) = 'cancelled')")
             ->andWhere('(h.`category_id` IS NULL OR h.`category_id` <> 7)')
             ->andWhere('h.`charged` > 0')
             ->orderBy('h.`date`', 'ASC')

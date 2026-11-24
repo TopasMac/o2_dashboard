@@ -4,6 +4,7 @@ import AppDrawer from '../components/common/AppDrawer';
 import HKCleaningsEditFormRHF from '../components/forms/HKCleaningsEditFormRHF';
 import TableLiteTwoLineCell from '../components/layout/TableLiteTwoLineCell';
 import api from '../api';
+import HKCancelDialog from '../components/common/HKCancelDialog';
 import HKReconMonthNotesDrawer from '../components/drawers/HKReconMonthNotesDrawer';
 import {
   Autocomplete,
@@ -88,7 +89,7 @@ function normalizeReportStatus(v) {
 
 const statusColor = (v) => HK_STATUS_COLORS[v] || HK_STATUS_COLORS.pending;
 
-const FILTER_STATUS_VALUES = ['pending', 'done', 'reported', 'needs_review'];
+const FILTER_STATUS_VALUES = ['pending', 'done', 'reported', 'needs_review', 'cancelled'];
 
 // Helper to normalize booking fields
 const normalizeBookingField = (b, keys, fallback = '') => {
@@ -141,6 +142,7 @@ export default function HKCleaningsRecon() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+  const [cancelRow, setCancelRow] = useState(null);
   const [savingStatusRowId, setSavingStatusRowId] = useState(null);
 
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
@@ -565,6 +567,7 @@ export default function HKCleaningsRecon() {
   const deriveReportStatusForSave = (row) => {
     const noteStatus = normalizeNoteStatus(row.resolution_status ?? row.resolutionStatus);
     // Highest precedence: open notes => needs_review
+    if (String(row.status).toLowerCase() === 'cancelled') return normalizeReportStatus(row.report_status) || 'pending';
     if (noteStatus === 'open') return 'needs_review';
 
     // Reporting is explicit: entering costs alone must not mark the row as reported.
@@ -691,7 +694,7 @@ export default function HKCleaningsRecon() {
 
   // Entering costs on a Pending Playa cleaning reports it automatically.
   const withAutoReport = (row) => {
-    if (resolveHkStatus(row) !== 'pending') return row;
+    if (!isPlayaCleaning(row) || resolveHkStatus(row) !== 'pending') return row;
     const laundryCost = isPlayaCleaning(row)
       ? laundryCostFromWeight(row.__laundryWeight ?? laundryWeightFromCost(row.laundry_cost))
       : row.laundry_cost;
@@ -714,7 +717,29 @@ export default function HKCleaningsRecon() {
     }
   };
 
+  const saveCleaningWorkflowStatus = async (row, status) => {
+    setSavingStatusRowId(row.id);
+    setErr(null);
+    try {
+      await api.put(`/api/hk-reconcile/${row.id}/status`, { status });
+      await load();
+    } catch (e) {
+      setErr(e?.response?.data?.message || e?.message || String(e));
+    } finally {
+      setSavingStatusRowId(null);
+    }
+  };
+
   const changeReportStatus = async (row, reportStatus) => {
+    if (reportStatus === 'cancelled') {
+      setCancelRow(row);
+      return;
+    }
+    if (String(row.status).toLowerCase() === 'cancelled'
+      || (row.city === 'Tulum' && String(row.status).toLowerCase() === 'pending')) {
+      await saveCleaningWorkflowStatus(row, reportStatus);
+      return;
+    }
     const nextReportStatus = reportStatusFromChoice(reportStatus);
     const nextRow = { ...row, report_status: nextReportStatus };
     const nextDisplay = row.display_status ? displayStatusAfterChoice(row, reportStatus) : row.display_status;
@@ -1013,6 +1038,7 @@ export default function HKCleaningsRecon() {
                     sx={{
                       minWidth: 90,
                       fontWeight: 700,
+                      color: statusFilter === 'cancelled' ? statusColor('cancelled') : 'inherit',
                       '& .MuiSelect-select': {
                         textAlign: 'center',
                         paddingRight: '20px',
@@ -1343,7 +1369,7 @@ export default function HKCleaningsRecon() {
                             '& .MuiSelect-icon': { color: statusColor(rowStatus) },
                           }}
                         >
-                          {[rowAutoStatus, 'reported', 'needs_review'].map((value) => (
+                          {[rowAutoStatus, 'reported', 'needs_review', 'cancelled'].map((value) => (
                             <MenuItem key={value} value={value}>
                               <Typography variant="body2" sx={{ color: statusColor(value) }}>
                                 {HK_STATUS_LABELS[value]}
@@ -1425,6 +1451,11 @@ export default function HKCleaningsRecon() {
         </Typography>
       )}
 
+      <HKCancelDialog
+        row={cancelRow}
+        onClose={() => setCancelRow(null)}
+        onConfirm={(row) => saveCleaningWorkflowStatus(row, 'cancelled')}
+      />
       <Popover
         open={Boolean(bookingsAnchorEl) && Boolean(bookingsOpenKey)}
         anchorEl={bookingsAnchorEl}

@@ -466,11 +466,11 @@ const HKCleaningsView = () => {
       width: 110,
       cellStyle: { py: 1, px: 1.5, maxWidth: 110 },
       render: (value, row) => {
-        const resolved = row?.display_status ? resolveHkStatus(row) : null;
-        const key = resolved
-          || (String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim() === 'reported'
-            ? 'reported'
-            : String(value ?? '').toLowerCase());
+        const key = String(row?.status ?? '').toLowerCase() === 'cancelled'
+          ? 'cancelled'
+          : row?.display_status ? resolveHkStatus(row)
+          : String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase() === 'reported'
+            ? 'reported' : String(value ?? '').toLowerCase();
         if (!HK_STATUS_LABELS[key]) return value || '';
         return <span style={{ color: HK_STATUS_COLORS[key] }}>{HK_STATUS_LABELS[key]}</span>;
       },
@@ -483,9 +483,10 @@ const HKCleaningsView = () => {
           { label: 'Done', value: 'done' },
           { label: 'Reported', value: 'reported' },
           { label: 'Needs review', value: 'needs_review' },
-          { label: 'Cancelled', value: 'cancelled' },
+          { label: <span style={{ color: HK_STATUS_COLORS.cancelled }}>Cancelled</span>, value: 'cancelled' },
         ],
         valueAccessor: (row) => {
+          if (String(row?.status ?? '').toLowerCase() === 'cancelled') return 'cancelled';
           if (row?.display_status) return resolveHkStatus(row);
           const reportStatus = String(row?.report_status ?? row?.reportStatus ?? '').toLowerCase().trim();
           return reportStatus === 'reported' ? 'reported' : row?.status;

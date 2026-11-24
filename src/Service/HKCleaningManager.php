@@ -210,6 +210,11 @@ class HKCleaningManager
             $cleaningType,
             $reservationCode,
         );
+        if ($existingBeforeSync?->getStatus() === HKCleanings::STATUS_CANCELLED) {
+            // A manual cancellation retains its date, notes, costs and reconciliation history.
+            $this->deleteTransactionForCleaning($existingBeforeSync);
+            return ['created' => 0, 'skipped' => 1, 'ledgerCreated' => 0];
+        }
         // Booking synchronization may create or update a cleaning, but a past
         // checkout is not evidence that the work was completed. Preserve any
         // existing manual workflow status; new rows always start pending.
@@ -246,7 +251,8 @@ class HKCleaningManager
                 $this->deleteTransactionForCleaning($cleaning);
                 $this->ensureReconcileRowExistsForDoneCleaning($cleaning);
             } else {
-                $this->removePostCutoffAccountingArtifacts($cleaning);
+                // Preserve reconciliation details for cancelled/reopened work.
+                $this->deleteTransactionForCleaning($cleaning);
             }
         }
 
@@ -316,6 +322,10 @@ class HKCleaningManager
                 continue;
             }
 
+            if ($cleaning->getStatus() === HKCleanings::STATUS_CANCELLED) {
+                $this->deleteTransactionForCleaning($cleaning);
+                continue;
+            }
             $this->removePostCutoffAccountingArtifacts($cleaning);
 
             $cleaningId = (int)($cleaning->getId() ?? 0);
