@@ -154,3 +154,9 @@ The feature chat reported the following against the integrated release candidate
 ## Working Method
 
 Read these standards before UI work, inspect the current implementation, and reuse shared components. Work in small stages from current `main`, preserving unrelated behavior. Verify each migrated page locally, run the relevant regression checks, and complete release smoke tests. Update this status file with approved decisions and converted pages so work can continue across chats and releases.
+
+## HK cancellation controls
+
+HK Reconciliation and HK Cleanings retain their current table layouts. Cancelled is the last status option in reconciliation row dropdowns and both reconciliation filters, and remains last in the HK Cleanings header filter. Cancellation takes precedence over the retained report status in both pages and uses the HausIn semantic danger color (`#D9534F`) as soft red text.
+
+Reconciliation cancellation opens a dialog reading “Confirm Cancel {unit_name} on {dd-mm-yyyy}?” with a teal Confirm button and red Cancel text button. Either button closes the dialog; only Confirm saves. Cancelled rows remain visible and can be reopened to Pending or explicitly Reported. This is a focused workflow change, not a table-page migration or a new general form standard.

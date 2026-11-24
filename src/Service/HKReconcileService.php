@@ -55,8 +55,7 @@ class HKReconcileService
             );
         }
 
-        // Load hk_cleanings rows for this month + city: all non-cancelled for Playa del Carmen,
-        // DONE only for the other cities.
+        // Keep cancelled rows and previously reconciled rows visible, including reopened work.
         // NOTE: Reconciliation is now a view/editor over hk_cleanings (single source of truth).
         $start = $asOf->format('Y-m-01');
         $end   = $asOf->format('Y-m-t');
@@ -79,8 +78,9 @@ class HKReconcileService
             ->andWhere('COALESCE(u.city, hc.city) IN (:cities)')
             ->andWhere('hc.checkoutDate BETWEEN :d1 AND :d2')
             ->andWhere(
-                '(COALESCE(u.city, hc.city) = :playa AND LOWER(COALESCE(hc.status, \'\')) <> \'cancelled\')'
-                . ' OR (COALESCE(u.city, hc.city) <> :playa AND LOWER(COALESCE(hc.status, \'\')) = \'done\')'
+                "COALESCE(u.city, hc.city) = :playa"
+                . " OR LOWER(COALESCE(hc.status, '')) IN ('done', 'cancelled')"
+                . " OR EXISTS (SELECT snapshot.id FROM App\\Entity\\HKCleaningsReconcile snapshot WHERE snapshot.hkCleaning = hc)"
             )
             ->setParameter('playa', 'Playa del Carmen')
             ->setParameter('cities', $cities)
@@ -149,7 +149,8 @@ class HKReconcileService
             $displayStatus = HKCleaningDisplayStatus::derive($rowCity, $hc->getStatus(), $hc->getReportStatus());
 
             // Playa totals only include cleanings marked as reported.
-            if ($displayStatus === null || $displayStatus === HKCleaningDisplayStatus::REPORTED) {
+            if ($hc->getStatus() !== HKCleanings::STATUS_CANCELLED
+                && (($displayStatus === null && $hc->getStatus() === HKCleanings::STATUS_DONE) || $displayStatus === HKCleaningDisplayStatus::REPORTED)) {
                 $sumCharged += $chargedF;
                 $sumCost += $totalCostF;
             }

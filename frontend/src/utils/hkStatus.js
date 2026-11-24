@@ -3,7 +3,7 @@ export const HK_STATUS_COLORS = {
   done: '#1e6f68', // teal
   reported: '#1976d2', // blue
   needs_review: '#f97316', // orange
-  cancelled: '#d32f2f', // red
+  cancelled: '#D9534F', // red
 };
 
 export const HK_STATUS_LABELS = {
@@ -24,6 +24,7 @@ const normalizeReportStatus = (v) => {
 // Playa del Carmen rows carry `display_status` from the API (null for other cities).
 // For other cities fall back to the report status, as before.
 export function resolveHkStatus(row) {
+  if (String(row?.status ?? row?.hk_status ?? '').toLowerCase() === 'cancelled') return 'cancelled';
   const display = (row?.display_status ?? row?.displayStatus ?? '').toString().trim();
   if (display) return display;
   return normalizeReportStatus(row?.report_status ?? row?.reportStatus);

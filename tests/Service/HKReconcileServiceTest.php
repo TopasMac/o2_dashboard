@@ -74,4 +74,36 @@ final class HKReconcileServiceTest extends TestCase
         self::assertSame('5900.00', $view['totals']['charged']);
         self::assertSame('4100.00', $view['totals']['diff']);
     }
+    public function testCancelledRowsRemainVisibleButNeverContributeToTotals(): void
+    {
+        $rows = [];
+        foreach (['Tulum', 'Playa del Carmen'] as $city) {
+            foreach ([HKCleanings::BILL_TO_CLIENT, HKCleanings::BILL_TO_GUEST, HKCleanings::BILL_TO_OWNERS2] as $billTo) {
+                $unit = (new Unit())->setCity($city)->setUnitName('Synthetic');
+                (new \ReflectionProperty(Unit::class, 'id'))->setValue($unit, 1);
+                $rows[] = (new HKCleanings())->setUnit($unit)
+                    ->setCity($city)->setStatus('cancelled')->setReportStatus('reported')
+                    ->setBillTo($billTo)->setCleaningCost('300.00')->setLaundryCost('50.00')
+                    ->setO2CollectedFee('900.00')->setCheckoutDate(new \DateTimeImmutable('2026-11-23'));
+            }
+        }
+        $rows[] = (clone $rows[0])->setStatus('pending')->setReportStatus('pending');
+        $db = $this->createMock(Connection::class);
+        $db->method('fetchAllAssociative')->willReturn([]);
+        $em = $this->createMock(EntityManagerInterface::class);
+        $query = $this->createMock(Query::class);
+        $query->method('getResult')->willReturn($rows);
+        $builder = $this->getMockBuilder(QueryBuilder::class)->setConstructorArgs([$em])->onlyMethods(['getQuery'])->getMock();
+        $builder->method('getQuery')->willReturn($query);
+        $em->method('createQueryBuilder')->willReturn($builder);
+        $em->method('getConnection')->willReturn($db);
+        $view = (new HKReconcileService($em))->getMonthView('2026-11', ['Tulum', 'Playa del Carmen']);
+        self::assertCount(7, $view['rows']);
+        self::assertSame('0.00', $view['totals']['charged']);
+        self::assertSame('0.00', $view['totals']['diff']);
+        self::assertSame(array_fill(0, 7, '300.00'), array_column($view['rows'], 'cleaning_cost'));
+        self::assertStringContainsString("IN ('done', 'cancelled')", $builder->getDQL());
+        self::assertStringContainsString('snapshot.hkCleaning = hc', $builder->getDQL());
+    }
+
 }

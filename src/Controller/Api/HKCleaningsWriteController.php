@@ -827,7 +827,7 @@ public function markDoneBy(Request $request): JsonResponse
      * Body JSON: { checkoutDate?: 'YYYY-MM-DD', status?: 'pending'|'done'|'cancelled', reportStatus?: 'pending'|'reported'|'needs_review', cleaningType?: string, billTo?: string|null, cleaningCost?: number|null, o2CollectedFee?: number|null, notes?: string|null }
      */
     #[Route('/api/hk-cleanings/{id<\d+>}', name: 'api_hk_cleanings_update', methods: ['PUT'])]
-    public function updateCleaning(int $id, Request $request): JsonResponse
+    public function updateCleaning(int $id, Request $request, \App\Service\HKCleaningCancellation $cancellation): JsonResponse
     {
         $hk = $this->em->getRepository(HKCleanings::class)->find($id);
         if (!$hk) {
@@ -1001,6 +1001,10 @@ public function markDoneBy(Request $request): JsonResponse
         $newStatus = method_exists($hk, 'getStatus') ? strtolower((string)$hk->getStatus()) : null;
         $transitionToDone = ($oldStatus !== 'done' && $newStatus === 'done');
         $transitionFromDone = ($oldStatus === 'done' && $newStatus !== 'done');
+        if ($oldStatus === HKCleanings::STATUS_CANCELLED && $newStatus === HKCleanings::STATUS_PENDING) {
+            $cancellation->retainSnapshot($hk);
+            $hk->setReportStatus(HKCleanings::REPORT_STATUS_PENDING);
+        }
 
         // Enforce bill_to defaulting rule on update:
         // If cleaning_type is owner AND bill_to is empty AND user did not explicitly set bill_to,
@@ -1029,6 +1033,13 @@ public function markDoneBy(Request $request): JsonResponse
             }
         } catch (\Throwable $e) {
             // non-fatal
+        }
+
+        if ($newStatus === HKCleanings::STATUS_CANCELLED) {
+            // Restore the old in-memory value so rollback can restore it on failure.
+            $hk->setStatus($oldStatus);
+            $cancellation->setCancelled($hk);
+            return $this->json(['ok' => true, 'data' => ['id' => $hk->getId(), 'status' => $hk->getStatus()]]);
         }
 
         $this->em->flush();

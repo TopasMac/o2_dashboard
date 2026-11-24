@@ -54,6 +54,32 @@ final class HKCleaningManagerCompletionTest extends TestCase
         self::assertSame($completedAt, $cleaning->getDoneAt());
     }
 
+
+    public function testBookingSynchronizationPreservesCancelledCleaningDetails(): void
+    {
+        $unit = (new \App\Entity\Unit())->setCity('Tulum');
+        (new \ReflectionProperty(\App\Entity\Unit::class, 'id'))->setValue($unit, 1);
+        $cleaning = (new HKCleanings())->setUnit($unit)->setStatus('cancelled')->setAssignNotes('Keep manual notes');
+        $booking = (new \App\Entity\AllBookings())->setUnitId(1)->setCheckOut(new \DateTimeImmutable('2026-11-23'))
+            ->setGuestType('airbnb_guest')->setStatus('Past');
+        $units = $this->createMock(\Doctrine\ORM\EntityRepository::class);
+        $units->method('find')->willReturn($unit);
+        $cleanings = $this->createMock(\Doctrine\ORM\EntityRepository::class);
+        $cleanings->method('findOneBy')->willReturn($cleaning);
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturnCallback(static fn ($class) => $class === \App\Entity\Unit::class ? $units : $cleanings);
+        $em->method('getConnection')->willReturn($this->createMock(Connection::class));
+        $em->expects(self::never())->method('flush');
+        $manager = $this->getMockBuilder(HKCleaningManager::class)->setConstructorArgs([
+            $em, $this->createMock(HKCleaningRateResolver::class), $this->createMock(DocumentUploadService::class), new HKCleaningBookingSyncPolicy(),
+        ])->onlyMethods(['bulkCreate', 'deleteTransactionForCleaning'])->getMock();
+        $manager->expects(self::never())->method('bulkCreate');
+        $manager->expects(self::once())->method('deleteTransactionForCleaning')->with($cleaning);
+        $manager->syncCheckoutCleaningForBooking($booking);
+        self::assertSame('cancelled', $cleaning->getStatus());
+        self::assertSame('Keep manual notes', $cleaning->getAssignNotes());
+    }
+
     private function managerExpectingCompletionPersistence(HKCleanings $cleaning): HKCleaningManager
     {
         $connection = $this->createMock(Connection::class);

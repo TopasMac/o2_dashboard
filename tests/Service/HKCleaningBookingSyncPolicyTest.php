@@ -40,4 +40,9 @@ final class HKCleaningBookingSyncPolicyTest extends TestCase
 
         self::assertSame(HKCleanings::STATUS_SCHEDULED, $this->policy->statusFor($cleaning));
     }
+    public function testManualCancellationIsPreserved(): void
+    {
+        self::assertSame('cancelled', $this->policy->statusFor((new HKCleanings())->setStatus('cancelled')));
+    }
+
 }
