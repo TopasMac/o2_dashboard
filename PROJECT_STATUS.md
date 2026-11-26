@@ -65,18 +65,18 @@ Booking synchronization may create or update a checkout cleaning, but it must no
 ## Current production release
 
 - **Production checkout:** `/home/ubuntu/owners2_main`
-- **Production server checkout last verified:** `b1d4603` — `Support cancelled HK reconciliation cleanings and waive related charges (#110)` (deployed 2026-11-23, America/Cancun. Rollback point `2311d9c`. No migrations. Mobile S3/CloudFront publishing not required and not performed. See `DEPLOYMENT.md`.)
-- **GitHub `main`:** `b1d4603` — `Support cancelled HK reconciliation cleanings and waive related charges (#110)` (release target. Subsequent release-record commits are documentation only.)
+- **Production server checkout last verified:** `66ab7e0` — `Update Service Jobs sorting and table layout (#112)` (deployed 2026-11-26, America/Cancun. Rollback point `b1d4603`. No migrations. Mobile S3/CloudFront publishing not required and not performed. See `DEPLOYMENT.md`.)
+- **GitHub `main`:** `66ab7e0` — `Update Service Jobs sorting and table layout (#112)` (release target. Subsequent release-record commits are documentation only.)
 - **Mobile frontend:** served through S3/CloudFront at `app.myhausin.com`; Admin and the controlled Cleaner pilot are deployed, with Mobile V2 as the only active mobile application.
 - **Production server state after the latest deployment:** clean and synchronized with `origin/main`.
 - **Nginx:** active
-- **Doctrine migrations:** 242 executed, 242 available, 0 new, 0 executed unavailable. Latest `Version20261113000100` (verified after #110).
-- **Smoke tests:** owner confirmed release #110 smoke tests passed after deployment.
-- **Database backup:** automated backup `s3://owners2-db-backups/owners2_dashboard_2026-11-23-02-30.sql` (3,586,319 bytes) was listed before #110. Backup timestamp November 23 at 02:30 America/Mexico_City server time, 03:30 America/Cancun. Restore integrity was not tested.
-- **Rollback point:** `2311d9c` — `Prevent invalid booking date ranges in forms and API (#108)`.
+- **Doctrine migrations:** 242 executed, 242 available, 0 new, 0 executed unavailable. Latest `Version20261113000100` (verified after #112).
+- **Smoke tests:** owner confirmed release #112 smoke tests passed after deployment.
+- **Database backup:** manual backup `s3://owners2-db-backups/owners2_dashboard_2026-11-26-00-45.sql` (3,599,411 bytes) was uploaded and listed before #112. Backup timestamp November 26 at 00:45 America/Mexico_City server time, 01:45 America/Cancun. Restore integrity was not tested.
+- **Rollback point:** `b1d4603` — `Support cancelled HK reconciliation cleanings and waive related charges (#110)`.
 - **Safety recovery:** production WIP was archived and retained in stash `pre-deploy-production-wip-2026-09-16`; do not reapply it without review because its intended behavior is now reconciled in Git.
 
-Release #110 keeps cancelled and reopened cleanings visible in HK reconciliation, adds explicit cancellation/reopening controls, and waives related report charges. Cancellation removes linked HK transactions transactionally while retaining cleaning details. Booking synchronization preserves manual cancellation. Report-time fee adjustments apply to existing cancelled/reopened work. Backend checks passed with 81 tests passing, 2 skipped, and 315 assertions. Frontend checks had 108 passing tests and one Service Jobs timeout. All 3 Service Jobs tests passed alone with unchanged timeouts. The production build compiled with warnings. No migrations or dependency changes were introduced.
+Release #112 adopts the HausIn table toolbar and fixed 25-row pagination for Service Jobs. Jobs sort newest scheduled date first, with descending ID as the tie-breaker. Month, Unit, and Status filters and Clear Filters replace the previous controls. Description and Provider column filters were removed. Backend checks passed with 81 tests passing, 2 skipped, and 315 assertions. All 111 frontend tests passed across 25 suites. The production build compiled with warnings. No backend, migration, or dependency changes were introduced.
 
 Mobile V2 in production supports administrators and the controlled Cleaner pilot. Verified Cleaner profiles receive only the cleanings page, are limited server-side to their assigned city (or both cities for `General`), and retain self-only completion authority. Manager access is not enabled.
 
