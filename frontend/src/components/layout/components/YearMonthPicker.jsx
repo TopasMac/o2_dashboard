@@ -109,6 +109,7 @@ const YearMonthPicker = ({
   value,
   onChange,
   label = 'Month',
+  inputAriaLabel = label,
   sx,
   options,
   minYm,
@@ -229,6 +230,7 @@ const YearMonthPicker = ({
           fullWidth
           size="small"
           label={label}
+          inputProps={{ 'aria-label': inputAriaLabel }}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onBlur={commitTypedValue}

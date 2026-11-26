@@ -122,7 +122,9 @@ intentionally migrated and tested.
 
 - Converted and deployed — Unit Transactions.
 - Pending migration — Reservations, Units, Clients, Owners2 Transactions, HK Transactions, and other comparable table pages.
-- Service Jobs and Service Providers retain their existing presentation; compatibility was checked during the pilot.
+- Service Jobs now opts into the shared stacked TableToolbar, HausIn table styling, and fixed 25-row client pagination. Month, Unit, and Status are top filters with Clear Filters; Unit options derive from all jobs, including historical units. Unit, Description, and Provider column filters are removed. Add Service sits in the title/actions row. Month/unit/status changes reset pagination. Filter labels appear above the boxes, matching Unit Transactions. Forms and operational actions retain their existing behavior.
+- Service Providers retains its existing presentation; compatibility was checked during the pilot.
+- Service Jobs displays scheduled dates newest first, with higher job IDs first for equal dates. This order also applies after filtering and saving; the existing table presentation is retained.
 - General form layouts, typography beyond the documented table controls, and other new patterns require design and approval.
 - Server-side filtering, sorting, and pagination remain future work. The current pilot uses client-side pagination. Plan backend changes separately when dataset size or performance requires them.
 - Review loading and error treatments during each page migration. The pilot's empty and final-page states were verified.
