@@ -1,15 +1,94 @@
 import { randomUUID } from 'crypto';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { ThemeProvider } from '@mui/material/styles';
+import theme from '../theme';
 import api from '../api';
+
+const render = (ui) => rtlRender(<ThemeProvider theme={theme}>{ui}</ThemeProvider>);
 import ServiceJobs from './ServiceJobs';
 
 jest.mock('../components/layout/AppShell', () => ({ children }) => <div>{children}</div>);
 jest.mock('../components/layout/SectionHeader', () => () => null);
 jest.mock('../api', () => ({ get: jest.fn(), post: jest.fn(), patch: jest.fn(), put: jest.fn(), delete: jest.fn() }));
+
+test('shows jobs newest scheduled date first, with newer IDs first on the same date', async () => {
+  const job = {
+    unit: { id: 1, name: 'Test unit' }, category: { id: 2, name: 'Mantenimiento' },
+    status: 'pending', bill_to: 'CLIENT',
+  };
+  const jobs = [
+    { ...job, id: 1, scheduledDate: '2020-02-01', description: 'Oldest job' },
+    { ...job, id: 2, scheduledDate: '2020-02-20', description: 'Later job' },
+    { ...job, id: 3, scheduledDate: '2020-02-20', description: 'Newest job' },
+  ];
+  api.get.mockImplementation(async (url) => ({ data: {
+    '/api/service-jobs': { jobs },
+    '/api/service-jobs/options': { units: [], categories: [] },
+    '/api/service-providers': { providers: [] },
+  }[url] }));
+  const originalUrl = window.location.href;
+  window.history.replaceState(null, '', '/service-jobs?job=1');
+  try {
+    render(<ServiceJobs />);
+    await screen.findByText('Newest job');
+    const rows = screen.getAllByRole('row').filter((row) => /Oldest job|Later job|Newest job/.test(row.textContent));
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent('Newest job');
+    expect(rows[1]).toHaveTextContent('Later job');
+    expect(rows[2]).toHaveTextContent('Oldest job');
+  } finally {
+    window.history.replaceState(null, '', originalUrl);
+  }
+});
+
+test('paginates newest jobs and resets the page when toolbar filters change', async () => {
+  const jobs = Array.from({ length: 27 }, (_, index) => ({
+    id: index + 1, scheduledDate: '2020-02-20', description: `Task ${index + 1}`,
+    unit: index === 0 ? { id: 2, name: 'Historical unit' } : { id: 1, name: 'Test unit' }, category: { id: 2, name: 'Mantenimiento' },
+    status: index === 0 ? 'done' : 'pending', bill_to: 'CLIENT',
+  }));
+  api.get.mockImplementation(async (url) => ({ data: {
+    '/api/service-jobs': { jobs },
+    '/api/service-jobs/options': { units: [], categories: [] },
+    '/api/service-providers': { providers: [] },
+  }[url] }));
+  const originalUrl = window.location.href;
+  window.history.replaceState(null, '', '/service-jobs?job=27');
+  try {
+    render(<ServiceJobs />);
+    await screen.findByText('Task 27');
+    expect(screen.getByRole('heading', { name: 'Service Jobs' })).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–25 of 27')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Task 1')).toBeInTheDocument();
+    const filters = within(screen.getByRole('group', { name: 'Table filters' }));
+    fireEvent.mouseDown(filters.getByRole('combobox', { name: 'Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Pending' }));
+    expect(screen.getByText('Showing 1–25 of 26')).toBeInTheDocument();
+    expect(screen.getByText('Task 27')).toBeInTheDocument();
+    expect(screen.queryByText('Task 1')).not.toBeInTheDocument();
+    const unitInput = filters.getByRole('combobox', { name: 'Unit' });
+    expect(screen.getAllByRole('combobox', { name: 'Unit' })).toHaveLength(1);
+    expect(screen.queryByRole('combobox', { name: 'Provider' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Description' })).not.toBeInTheDocument();
+    fireEvent.change(unitInput, { target: { value: 'Historical' } });
+    fireEvent.click(await screen.findByRole('option', { name: 'Historical unit' }));
+    expect(screen.getByText('Showing 0 of 0')).toBeInTheDocument();
+    fireEvent.mouseDown(filters.getByRole('combobox', { name: 'Status' }));
+    fireEvent.click(screen.getByRole('option', { name: 'All' }));
+    expect(screen.getByText('Task 1')).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–1 of 1')).toBeInTheDocument();
+    fireEvent.click(filters.getByRole('button', { name: 'Clear Filters' }));
+    expect(screen.getByText('Showing 1–25 of 27')).toBeInTheDocument();
+    expect(filters.getByRole('button', { name: 'Clear Filters' })).toBeDisabled();
+  } finally {
+    window.history.replaceState(null, '', originalUrl);
+  }
+});
 
 test('opens the linked job month and scrolls to its row', async () => {
   const job = {

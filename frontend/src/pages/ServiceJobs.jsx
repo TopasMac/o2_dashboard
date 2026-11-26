@@ -14,7 +14,11 @@ import {
   Stack,
   TextField,
   Tooltip,
+  Typography,
 } from '@mui/material';
+import { alpha, darken, useTheme } from '@mui/material/styles';
+import TableToolbar from '../components/layout/TableToolbar';
+
 import { CubeIcon, WrenchIcon } from '@heroicons/react/24/outline';
 
 import api from '../api';
@@ -50,9 +54,33 @@ const EMPTY_FORM = {
 };
 
 export default function ServiceJobs() {
+  const theme = useTheme();
+  const tokens = theme.hausin;
+  const controlSx = {
+    '& .MuiOutlinedInput-root': {
+      height: tokens.controls.height,
+      borderRadius: `${tokens.controls.borderRadius}px`,
+      backgroundColor: theme.palette.common.white,
+      fontSize: tokens.controls.fontSize,
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: tokens.colors.border },
+      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: tokens.colors.primaryTeal },
+      '&.Mui-focused': { boxShadow: `0 0 0 2px ${alpha(tokens.colors.primaryTeal, 0.18)}` },
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: tokens.colors.primaryTeal, borderWidth: 1 },
+    },
+  };
+  const filterFieldSx = { display: 'flex', flexDirection: 'column', gap: 0.5, flex: '0 0 auto' };
+  const filterLabelSx = {
+    color: tokens.colors.textSecondary, fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.25, pl: '1px',
+  };
+  const buttonSx = {
+    height: tokens.controls.height, borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2, fontSize: tokens.controls.fontSize, fontWeight: tokens.controls.fontWeight,
+    '&.Mui-focusVisible': { outline: `2px solid ${tokens.colors.primaryTeal}`, outlineOffset: 2 },
+  };
   const [defaultMonth] = useState(() => monthFormatter.format(new Date()));
   const [monthFilter, setMonth] = useState(null);
   const [status, setStatus] = useState('');
+  const [unitFilter, setUnitFilter] = useState(null);
   const [data, setData] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -117,9 +145,7 @@ export default function ServiceJobs() {
     if (!job?.id) throw new Error('Unexpected save response.');
     setData((previous) => ({
       ...previous,
-      jobs: [...previous.jobs.filter((row) => row.id !== job.id), job].sort((a, b) =>
-        a.scheduledDate.localeCompare(b.scheduledDate) || a.id - b.id
-      ),
+      jobs: [...previous.jobs.filter((row) => row.id !== job.id), job],
     }));
   }
 
@@ -226,7 +252,6 @@ export default function ServiceJobs() {
     {
       accessor: 'unit', header: 'Unit', width: 170,
       render: (unit) => unit.name,
-      filter: { type: 'autocomplete', inline: true, placeholder: 'Unit', valueAccessor: (row) => row.unit.name },
     },
     {
       accessor: 'category', header: 'Description', width: 250,
@@ -235,16 +260,11 @@ export default function ServiceJobs() {
         primary: job.description,
         meta: `${category.name} * ${BILL_TO[job.bill_to]}`,
       }),
-      filter: { type: 'select', inline: true, placeholder: 'Description', valueAccessor: (row) => row.category.name },
     },
     { accessor: 'notes', header: 'Notes', width: 240 },
     {
       accessor: 'provider', header: 'Provider', width: 210,
       render: (provider) => provider?.name ?? 'Unassigned',
-      filter: {
-        type: 'autocomplete', inline: true, placeholder: 'Provider',
-        valueAccessor: (row) => row.provider?.name ?? 'Unassigned',
-      },
     },
     {
       accessor: 'status', header: 'Status', width: 140,
@@ -310,8 +330,14 @@ export default function ServiceJobs() {
   ];
 
   const visibleJobs = (data?.jobs ?? []).filter((job) =>
-    (!month || job.scheduledDate.startsWith(month)) && (!status || displayStatus(job) === status)
+    (!month || job.scheduledDate.startsWith(month)) &&
+    (!unitFilter || job.unit.id === unitFilter.id) &&
+    (!status || displayStatus(job) === status)
+  ).sort((a, b) =>
+    b.scheduledDate.localeCompare(a.scheduledDate) || b.id - a.id
   );
+  const filterUnits = Array.from(new Map((data?.jobs ?? []).map((job) => [job.unit.id, job.unit])).values())
+    .sort((a, b) => a.name.localeCompare(b.name));
   const selectedJob = data?.jobs.find((job) => job.id === form?.id);
   const activeUnits = data?.units ?? [];
   const existingUnit = selectedJob?.unit;
@@ -337,41 +363,83 @@ export default function ServiceJobs() {
       title="Service Jobs"
       sectionKey="housekeepers"
       currentPath={PATH}
-      stickyHeader={
-        <Stack direction="row" spacing={2} alignItems="center">
-          <YearMonthPicker value={month} onChange={setMonth} sx={{ width: 240 }} />
-          <TextField
-            label="Status" select size="small" value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            sx={{ width: 150 }}
-            slotProps={{ inputLabel: { shrink: true }, select: { displayEmpty: true } }}
-          >
-            <MenuItem value="">All</MenuItem>
-            {Object.entries(FILTER_STATUSES).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
-          </TextField>
-          <Button variant="contained" disabled={!data} onClick={() => open()}>
-            + Add Service
-          </Button>
-          {loadError && (
-            <Button onClick={() => {
-              setLoadError('');
-              setLoadAttempt((attempt) => attempt + 1);
-            }}>Retry</Button>
+      tableToolbar
+      stickyHeader={(
+        <TableToolbar
+          title="Service Jobs"
+          layout="stacked"
+          actions={(
+            <>
+              <Button variant="contained" disabled={!data} onClick={() => open()}
+                sx={{ ...buttonSx, backgroundColor: tokens.colors.primaryTeal,
+                  '&:hover': { backgroundColor: darken(tokens.colors.primaryTeal, 0.12) } }}>
+                + Add Service
+              </Button>
+              {loadError && (
+                <Button onClick={() => {
+                  setLoadError('');
+                  setLoadAttempt((attempt) => attempt + 1);
+                }}>Retry</Button>
+              )}
+            </>
           )}
-        </Stack>
-      }
+          filters={(
+            <>
+              <Box sx={filterFieldSx}>
+                <Typography component="span" sx={filterLabelSx}>Month</Typography>
+                <YearMonthPicker label="" inputAriaLabel="Month" value={month} onChange={setMonth}
+                  sx={{ ...controlSx, width: 260 }} />
+              </Box>
+              <Box sx={filterFieldSx}>
+                <Typography component="span" sx={filterLabelSx}>Unit</Typography>
+                <Autocomplete
+                  size="small"
+                  options={filterUnits}
+                  value={unitFilter}
+                  onChange={(_, value) => setUnitFilter(value)}
+                  getOptionLabel={(unit) => unit.name}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  sx={{ ...controlSx, width: 220, flexShrink: 0 }}
+                  renderInput={(params) => <TextField {...params} placeholder="All units"
+                    inputProps={{ ...params.inputProps, 'aria-label': 'Unit' }} />}
+                />
+              </Box>
+              <Box sx={filterFieldSx}>
+                <Typography component="span" sx={filterLabelSx}>Status</Typography>
+                <TextField
+                  select size="small" value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                  sx={{ ...controlSx, width: 150, flexShrink: 0 }}
+                  slotProps={{ select: { displayEmpty: true, inputProps: { 'aria-label': 'Status' } } }}
+                >
+                  <MenuItem value="">All</MenuItem>
+                  {Object.entries(FILTER_STATUSES).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+                </TextField>
+              </Box>
+              <Button variant="outlined" disabled={!month && !unitFilter && !status}
+                sx={{ ...buttonSx, color: tokens.colors.primaryTeal, borderColor: tokens.colors.primaryTeal, flexShrink: 0, alignSelf: 'flex-end' }}
+                onClick={() => { setMonth(''); setUnitFilter(null); setStatus(''); }}>
+                Clear Filters
+              </Button>
+            </>
+          )}
+        />
+      )}
     >
       {attachmentWarning && (
         <Alert severity="warning" onClose={() => setAttachmentWarning('')}>{attachmentWarning}</Alert>
       )}
       {statusError && <Alert severity="error" onClose={() => setStatusError('')}>{statusError}</Alert>}
       {data && linkedJobId && !linkedJob && <Alert severity="info">The linked service job could not be found.</Alert>}
-      <Box sx={{ flex: 1, minHeight: 0, mt: 2 }}>
+      <Box sx={{ display: 'flex', height: '100%', minHeight: 0 }}>
         <TableLite
           columns={columns}
           rows={visibleJobs}
           height="100%"
-          enableFilters
+          showHeaderFilters={false}
+          visualVariant="hausin"
+          clientPagination
+          paginationResetKey={`${month}|${unitFilter?.id ?? ''}|${status}`}
           loading={!data && !loadError}
           error={loadError}
           defaultStringTransform={null}
