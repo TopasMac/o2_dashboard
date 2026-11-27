@@ -192,6 +192,8 @@ export default function BookingEditFormRHF({
 
   const originalRef = useRef({ checkIn: '', checkOut: '', payout: null });
   const [payoutConfirmOpen, setPayoutConfirmOpen] = useState(false);
+  const [cancellationConfirmOpen, setCancellationConfirmOpen] = useState(false);
+  const [confirmSaving, setConfirmSaving] = useState(false);
   const [pendingSubmitValues, setPendingSubmitValues] = useState(null);
 
   const {
@@ -217,7 +219,7 @@ export default function BookingEditFormRHF({
     const labelMap = { Upcoming: 'Upcoming', Ongoing: 'Ongoing', Past: 'Past', Cancelled: 'Cancelled' };
     const items = [];
     if (cur) items.push({ value: cur, label: labelMap[cur] || cur, disabled: true });
-    items.push({ value: 'Cancelled', label: 'Cancelled' });
+    if (cur !== 'Cancelled') items.push({ value: 'Cancelled', label: 'Cancelled' });
     return items;
   }, [curStatus]);
 
@@ -246,7 +248,7 @@ export default function BookingEditFormRHF({
       guests: iv.guests != null ? Number(iv.guests) : (iv.numGuests != null ? Number(iv.numGuests) : ''),
       payout: toInputString(iv.payout ?? iv.payoutInMonth ?? iv.totalPayout ?? iv.total_payout ?? ''),
       // Strict: only rely on `cleaningFee` coming from the caller/API
-      cleaningFee: toInputString(iv.cleaningFee ?? iv.cleaning_fee ?? ''),
+      cleaningFee: iv.status === 'Cancelled' ? '0' : toInputString(iv.cleaningFee ?? iv.cleaning_fee ?? ''),
       commissionPercent: toInputString(iv.commissionPercent ?? iv.commission_percent ?? ''),
       // dates
       checkIn: iv.checkIn ?? iv.check_in ?? '',
@@ -261,6 +263,9 @@ export default function BookingEditFormRHF({
       source: iv.source ?? '',
     };
     reset(next);
+    setPayoutConfirmOpen(false);
+    setCancellationConfirmOpen(false);
+    setPendingSubmitValues(null);
     originalRef.current = {
       checkIn: dmyToYMD(next.checkIn),
       checkOut: dmyToYMD(next.checkOut),
@@ -392,7 +397,7 @@ export default function BookingEditFormRHF({
         unitId: Number(values.unitId),
         guests: values.guests != null ? Number(values.guests) : undefined,
         payout: parseCommaNumber(values.payout),
-        cleaningFee: parseCommaNumber(values.cleaningFee),
+        cleaningFee: values.status === 'Cancelled' ? 0 : parseCommaNumber(values.cleaningFee),
         commissionPercent: parseCommaNumber(values.commissionPercent),
       };
       // Ensure id is present for PUT /api/bookings/{id}
@@ -414,6 +419,12 @@ export default function BookingEditFormRHF({
   };
 
   const handleFormSubmit = async (values) => {
+    if (confirmSaving || cancellationConfirmOpen || payoutConfirmOpen) return;
+    if (values.status === 'Cancelled') {
+      setPendingSubmitValues(values);
+      setCancellationConfirmOpen(true);
+      return;
+    }
     // If dates changed but payout did not, require explicit confirmation.
     const curCheckIn = dmyToYMD(values?.checkIn);
     const curCheckOut = dmyToYMD(values?.checkOut);
@@ -482,6 +493,14 @@ export default function BookingEditFormRHF({
             control={control}
             label="Status"
             options={statusOptionsForEdit}
+            onChange={(event) => {
+              const status = event.target.value;
+              setValue('status', status, { shouldDirty: true, shouldValidate: true });
+              if (status === 'Cancelled' && curStatus !== 'Cancelled') {
+                setValue('payout', '0', { shouldDirty: true, shouldValidate: true });
+                setValue('cleaningFee', '0', { shouldDirty: true, shouldValidate: true });
+              }
+            }}
             size="small"
             fullWidth={isMobileLayout}
             sx={isMobileLayout ? { width: '100%' } : { minWidth: 200, maxWidth: 320 }}
@@ -697,6 +716,7 @@ export default function BookingEditFormRHF({
                   <TextField
                     {...field}
                     label={isMobileLayout ? 'Cleaning' : 'Cleaning Fee'}
+                    disabled={curStatus === 'Cancelled'}
                     size="small"
                     inputMode="decimal"
                     fullWidth
@@ -798,6 +818,28 @@ export default function BookingEditFormRHF({
           />
         )}
       </Stack>
+      <O2ConfirmDialog
+        open={cancellationConfirmOpen}
+        title="Confirm Cancellation?"
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        loading={confirmSaving}
+        onClose={() => {
+          setCancellationConfirmOpen(false);
+          setPendingSubmitValues(null);
+        }}
+        onConfirm={async () => {
+          if (confirmSaving || !pendingSubmitValues) return;
+          setConfirmSaving(true);
+          try {
+            await doSubmit(pendingSubmitValues);
+          } finally {
+            setConfirmSaving(false);
+            setCancellationConfirmOpen(false);
+            setPendingSubmitValues(null);
+          }
+        }}
+      />
       <O2ConfirmDialog
         open={payoutConfirmOpen}
         title="Dates changed — payout not updated"

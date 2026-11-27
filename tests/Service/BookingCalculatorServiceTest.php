@@ -11,6 +11,25 @@ use PHPUnit\Framework\TestCase;
 
 final class BookingCalculatorServiceTest extends TestCase
 {
+    public function testCancelledBookingKeepsPayoutOverrideAndAlwaysZerosCleaningFee(): void
+    {
+        $unit = (new Unit())->setPaymentType('OWNERS2')->setCleaningFee(300.00);
+        $config = (new BookingConfig())->setDefaultTaxPercentage(0.00)->setDefaultCommissionPercentage(20.00);
+        $calculator = new BookingCalculatorService(new BookingNightCalculator());
+
+        foreach ([0.00, 250.50] as $payout) {
+            $booking = (new AllBookings())->setSource('Private')->setStatus('Cancelled')
+                ->setPaymentMethod('cash')->setPayout($payout)->setCleaningFee(300.00)
+                ->setTaxPercent(0.00)->setTaxAmount(0.00)->setCommissionPercent(20.00)
+                ->setCheckIn(new \DateTimeImmutable('2026-11-21'))
+                ->setCheckOut(new \DateTimeImmutable('2026-11-22'));
+            $calculator->recalculate($booking, $unit, $config);
+            self::assertSame($payout, $booking->getPayout());
+            self::assertSame(0.00, $booking->getCleaningFee());
+            self::assertSame('Cancelled', $booking->getStatus());
+        }
+    }
+
     public function testItUsesCalendarNightsForStoredDaysAndPerNightRoomFee(): void
     {
         $booking = (new AllBookings())

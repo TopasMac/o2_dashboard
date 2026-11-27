@@ -14,6 +14,8 @@ const theme = createTheme({
       success: '#2E7D5B',
       danger: '#D9534F',
       warningAccent: '#F57C4D',
+      holdAmber: '#FBBF24',
+      blockGrey: '#9AA3A7',
     },
     controls: {
       height: 36,

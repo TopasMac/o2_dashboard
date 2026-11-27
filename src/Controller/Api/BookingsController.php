@@ -254,17 +254,35 @@ class BookingsController extends AbstractController
                 $andX->add($qb->expr()->lte('b.checkOut', ':coTo'));
                 $qb->setParameter('coTo', $coToDt, Types::DATE_IMMUTABLE);
             }
+            // Opt-in for the basic current-month table: retain stays already in progress,
+            // even if they started before the selected check-in range. Other callers retain
+            // strict date bounds. Use dates because statuses are refreshed after this query.
+            $rangeWhere = $andX;
+            if ($request->query->getBoolean('includeOngoing')) {
+                $dates = ReservationStatus::transitionDates();
+                $ongoing = $qb->expr()->andX(
+                    $qb->expr()->lte('b.checkIn', ':ongoingLastArrived'),
+                    $qb->expr()->gt('b.checkOut', ':ongoingLastDeparted'),
+                    "(b.status IS NULL OR LOWER(b.status) NOT IN ('cancelled', 'canceled', 'expired'))"
+                );
+                if ($unitId !== null) {
+                    $ongoing->add($qb->expr()->eq('b.unitId', ':unitId'));
+                }
+                $rangeWhere = $qb->expr()->orX($andX, $ongoing);
+                $qb->setParameter('ongoingLastArrived', new \DateTimeImmutable($dates['lastArrived']), Types::DATE_IMMUTABLE);
+                $qb->setParameter('ongoingLastDeparted', new \DateTimeImmutable($dates['lastDeparted']), Types::DATE_IMMUTABLE);
+            }
             if ($andX->count() > 0) {
                 // If a focusId is provided, always include that booking id in the result
                 if (!empty($focusId)) {
                     $orX = $qb->expr()->orX(
-                        $andX,
+                        $rangeWhere,
                         $qb->expr()->eq('b.id', ':focusId')
                     );
                     $qb->where($orX)
                        ->setParameter('focusId', (int)$focusId);
                 } else {
-                    $qb->where($andX);
+                    $qb->where($rangeWhere);
                 }
             }
         } else {
