@@ -24,6 +24,7 @@ Do not propose a ground-up rewrite as the default approach. Prefer small, testab
 - Preserve the development safeguards that disable UnitMedia S3 mutation listeners. Other S3-writing paths must be assessed before they are exercised.
 - Do not run `doctrine:schema:update --force`.
 - Before any destructive database operation, require an explicit target, a current backup, a reviewed migration, and a rollback plan.
+- Local refresh exception: the documented `scripts/refresh_local_database.py` procedure may replace disposable Docker `owners2_dev` from an explicitly selected trusted SQL backup after typed confirmation, without backing up existing testing data or requiring a migration. Recovery is reimporting the selected backup. This exception does not authorize production operations or other destructive database changes.
 - Do not edit production cron schedules until the current commands, logs, external caller, and replay path have been verified.
 
 ## Protected behavior
@@ -67,6 +68,10 @@ When the user asks to start local, start the local server, or run the app, start
 - Check the required dependencies and local MySQL/Mailpit services using `LOCAL_DEVELOPMENT.md`. Preserve existing environment files, JWT keys, and database contents. Report any missing configuration needed to start safely without exposing secrets.
 - Keep both servers running in persistent sessions. Verify that each responds and that the frontend can reach the backend through its API proxy before reporting success.
 - Report both URLs and any startup errors or blockers. If the user explicitly requests only the frontend or only the backend, start and verify that component alone.
+
+## Refreshing the local database
+
+For requests such as “Refresh the local database using [filename] in incoming, then restart local”, follow **Requests handled by future Codex chats** in `LOCAL_DEVELOPMENT.md`. That workflow defines the local-only authorization, environment checks, import, migration review, and server restart.
 
 ## Starting a feature
 
