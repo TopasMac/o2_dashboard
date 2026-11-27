@@ -13,6 +13,7 @@ export const BANKS = [
     "Cibanco",
     "Kapital Bank",
     "Mercado Pago",
+    "Mifel",
     "Monex",
     "Compartamos"
   ];

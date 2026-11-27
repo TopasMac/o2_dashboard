@@ -1,9 +1,13 @@
 import api from '../api';
+import { bookingBusinessDates, getBookingDisplayStatus, sortBookingsForTable } from '../utils/bookingTableOrder';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import React, { useEffect, useState } from 'react';
 import TableLite from '../components/layout/TableLite';
+import TableToolbar from '../components/layout/TableToolbar';
+import { alpha, darken, useTheme } from '@mui/material/styles';
+import SearchIcon from '@mui/icons-material/Search';
 import PageScaffold from '../components/layout/PageScaffold';
-import { Button, Stack, IconButton, Typography, Box } from '@mui/material';
+import { Autocomplete, Button, Stack, IconButton, InputAdornment, MenuItem, TextField, Typography, Box } from '@mui/material';
 import BookingNewFormRHF from '../components/forms/BookingNewFormRHF';
 import BookingEditFormRHF from '../components/forms/BookingEditFormRHF';
 import PaymentConfirmForm from '../components/forms/PaymentConfirmForm';
@@ -15,7 +19,21 @@ import AppDrawer from '../components/common/AppDrawer';
 import { toast } from 'react-toastify';
 import YearMonthPicker from '../components/layout/components/YearMonthPicker';
 
+const BASIC_STATUS_OPTIONS = ['Ongoing', 'Upcoming', 'Block / Hold', 'Past / Expired', 'Cancelled'];
+const STATUS_FILTER_GROUPS = {
+  'Block / Hold': ['Block', 'Hold'],
+  'Past / Expired': ['Past', 'Expired'],
+};
+
+const INITIAL_BASIC_FILTERS = { status: '', unitName: '', guestName: '' };
+
 const SeeBookings = () => {
+  const theme = useTheme();
+  const tokens = theme.hausin;
+  const [basicFilters, setBasicFilters] = useState({ ...INITIAL_BASIC_FILTERS });
+  // The combined option is handled as an OR before TableLite applies the other AND filters.
+  const tableBasicFilters = STATUS_FILTER_GROUPS[basicFilters.status]
+    ? { ...basicFilters, status: '' } : basicFilters;
   // Local helper until ../api exposes it everywhere
   const buildAuthHeaders = () => {
     try {
@@ -101,7 +119,7 @@ const SeeBookings = () => {
   const [sourceFilter, setSourceFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const today = new Date();
-  const defaultYm = today.toISOString().slice(0, 7);
+  const defaultYm = bookingBusinessDates().today.slice(0, 7);
   const [stayFromYm, setStayFromYm] = useState(defaultYm);
   const [stayToYm, setStayToYm] = useState('');
 
@@ -284,7 +302,15 @@ const SeeBookings = () => {
       (stayFromYm && stayFromYm !== defaultYm);
 
     const params = {};
-    if (hasCustomRange) {
+    if (view === 'basic' && stayFromYm) {
+      const range = deriveRangeFromYm(stayFromYm);
+      if (range) {
+        params.checkInFrom = range.start;
+        params.checkInTo = range.end;
+        // Keep current ongoing stays visible even when they checked in in an earlier month.
+        if (stayFromYm === defaultYm) params.includeOngoing = 1;
+      }
+    } else if (view !== 'basic' && hasCustomRange) {
       const hasCheckoutFilter = !!stayToRange || !!toEnd;
       const effectiveFrom = hasCheckoutFilter ? undefined : (fromStart ?? stayFromDate);
       const effectiveTo = toEnd ?? (stayToRange ? stayToRange.end : undefined);
@@ -310,7 +336,7 @@ const SeeBookings = () => {
         console.error('Error fetching bookings:', error);
         setLoading(false);
       });
-  }, [stayFromDate, stayToRange, stayFromYm, defaultYm, focusId]);
+  }, [stayFromDate, stayToRange, stayFromYm, defaultYm, focusId, view, deriveRangeFromYm]);
 
   const markAsPaid = async (bookingId, { note, paymentMethod }) => {
     // 1) Optimistic UI: mark as paid locally, set both keys for compatibility
@@ -419,6 +445,11 @@ const SeeBookings = () => {
 
   useEffect(() => {
     if (highlightId) {
+      if (view === 'basic') {
+        window.dispatchEvent(new CustomEvent('datatable:highlight', { detail: { id: highlightId } }));
+        setHighlightId(null);
+        return;
+      }
       let attempts = 0;
       const tryHighlight = () => {
         const row = document.querySelector(`[data-row-id=\"${highlightId}\"]`);
@@ -436,82 +467,13 @@ const SeeBookings = () => {
       };
       tryHighlight();
     }
-  }, [bookings, highlightId]);
+  }, [bookings, highlightId, view]);
 
 
-  // Status sort priority: ongoing → upcoming/active → past → cancelled
-  const getStatusRank = (s) => {
-    const v = String(s || '').toLowerCase().trim();
-    // 0: Ongoing / In-house
-    if (['ongoing', 'inhouse', 'in house', 'current'].includes(v)) return 0;
-    // 1: Upcoming + Active (same weight, sorted by check-in)
-    if (['upcoming', 'future', 'scheduled', 'pending', 'active'].includes(v)) return 1;
-    // 2: Past
-    if (['past', 'completed', 'finished', 'done'].includes(v)) return 2;
-    // 3: Cancelled
-    if (['cancelled', 'canceled'].includes(v)) return 3;
-    // 4: Unknowns last
-    return 4;
-  };
-
-  // Memoized sorted data for DataTable:
-  // Always sort by status priority, then by check-in date ascending as a tiebreaker.
   const normalizeSource = (src) => String(src || '').trim().toLowerCase();
 
   const dataForTable = React.useMemo(() => {
-    // Helpers to normalize check-in / check-out times
-    const getCheckInTime = (b) => {
-      const v = b.checkIn ?? b.check_in;
-      if (!v) return null;
-      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-        const [y, m, d] = v.split('-').map(Number);
-        return new Date(y, m - 1, d).getTime();
-      }
-      const t = new Date(v).getTime();
-      return Number.isNaN(t) ? null : t;
-    };
-    const getCheckOutTime = (b) => {
-      const v = b.checkOut ?? b.check_out;
-      if (!v) return null;
-      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-        const [y, m, d] = v.split('-').map(Number);
-        return new Date(y, m - 1, d).getTime();
-      }
-      const t = new Date(v).getTime();
-      return Number.isNaN(t) ? null : t;
-    };
-
-    const copy = [...bookings];
-
-    // Sort by status priority, then by date:
-    // - ongoing / upcoming: check-in ASC (earliest first)
-    // - past / cancelled: check-out DESC (latest first)
-    copy.sort((a, b) => {
-      const ra = getStatusRank(a.status);
-      const rb = getStatusRank(b.status);
-      if (ra !== rb) return ra - rb;
-
-      // Same status group: decide which date to use
-      const checkInA = getCheckInTime(a);
-      const checkInB = getCheckInTime(b);
-      const checkOutA = getCheckOutTime(a);
-      const checkOutB = getCheckOutTime(b);
-
-      // Groups: 0 = ongoing, 1 = upcoming, 2 = past, 3 = cancelled, 4 = unknown
-      if (ra === 0 || ra === 1) {
-        // Ongoing / Upcoming → earliest check-in first
-        if (checkInA == null && checkInB == null) return 0;
-        if (checkInA == null) return 1;
-        if (checkInB == null) return -1;
-        return checkInA - checkInB;
-      }
-
-      // Past / Cancelled / Unknown → most recent check-out first
-      if (checkOutA == null && checkOutB == null) return 0;
-      if (checkOutA == null) return 1;
-      if (checkOutB == null) return -1;
-      return checkOutB - checkOutA;
-    });
+    const copy = sortBookingsForTable(bookings);
 
     const filteredBySource = sourceFilter
       ? copy.filter((row) => normalizeSource(row.source ?? row.bookingSource ?? row.channel) === sourceFilter)
@@ -527,8 +489,11 @@ const SeeBookings = () => {
       : filteredBySource;
 
     // No extra month-range slicing on the frontend; use the full backend window.
-    return filteredByCity;
-  }, [bookings, sourceFilter, cityFilter]);
+    const statusGroup = STATUS_FILTER_GROUPS[basicFilters.status];
+    return view === 'basic' && statusGroup
+      ? filteredByCity.filter((row) => statusGroup.includes(getBookingDisplayStatus(row)))
+      : filteredByCity;
+  }, [bookings, sourceFilter, cityFilter, view, basicFilters.status]);
 
   // Define fixed field order for columns
   const fieldOrder = [
@@ -760,9 +725,7 @@ const SeeBookings = () => {
                 );
               }
               if (originalKey === 'status') {
-                const v = String(value).toLowerCase();
-                const cls = (v === 'active') ? 'ongoing' : v;
-                return <span className={`status-pill ${cls}`}><strong>{value}</strong></span>;
+                return renderStatus(getBookingDisplayStatus(row));
               }
               // Handle unitName field rendering
               if (originalKey === 'unitName') {
@@ -954,6 +917,7 @@ const SeeBookings = () => {
               if (originalKey === 'status') {
                 return {
                   filterable: true,
+                  filter: { type: 'select', valueAccessor: (row) => getBookingDisplayStatus(row) },
                   filterType: 'select',
                   // keep the control narrower than the header to avoid clipping
                   filterProps: { sx: { width: '100%', maxWidth: 90, minWidth: 80 } },
@@ -1273,6 +1237,183 @@ const SeeBookings = () => {
     fetchBookings();
   };
 
+  const handleBasicFilterChange = (key, value) => {
+    setBasicFilters((previous) => ({ ...previous, [key]: value || '' }));
+  };
+  const basicUnitOptions = React.useMemo(() => Array.from(new Set(
+    bookings.map((booking) => booking.unitName).filter(Boolean)
+  )).sort(), [bookings]);
+  const renderStatus = (label) => {
+    const group = STATUS_FILTER_GROUPS[label];
+    if (group) {
+      return <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+        {renderStatus(group[0])}{' / '}{renderStatus(group[1])}
+      </Box>;
+    }
+    const value = String(label).toLowerCase();
+    const cls = value === 'active' ? 'ongoing' : value;
+    const color = value === 'hold' ? tokens.colors.holdAmber
+      : value === 'block' ? tokens.colors.blockGrey : undefined;
+    return <Box component="strong" className={`status-pill ${cls}`} sx={{ color }}>{label}</Box>;
+  };
+  const hasActiveFilters = !!stayFromYm || Object.values(basicFilters).some(Boolean) || !!sourceFilter || !!cityFilter;
+  const clearBasicFilters = () => {
+    setBasicFilters({ ...INITIAL_BASIC_FILTERS });
+    setStayFromYm('');
+    setStayToYm('');
+    setSourceFilter('');
+    setCityFilter('');
+  };
+  const controlSx = {
+    '& .MuiOutlinedInput-root': {
+      height: tokens.controls.height,
+      borderRadius: `${tokens.controls.borderRadius}px`,
+      backgroundColor: theme.palette.common.white,
+      '& .MuiInputBase-input, & .MuiSelect-select': {
+        fontSize: tokens.controls.fontSize,
+        fontWeight: tokens.controls.fontWeight,
+      },
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.border,
+      },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.primaryTeal,
+      },
+      '&.Mui-focused': {
+        boxShadow: `0 0 0 2px ${alpha(tokens.colors.primaryTeal, 0.18)}`,
+      },
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+        borderColor: tokens.colors.primaryTeal,
+        borderWidth: 1,
+      },
+    },
+  };
+  const filterFieldSx = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 0.5,
+    flex: '0 0 auto',
+  };
+  const filterLabelSx = {
+    color: tokens.colors.textSecondary,
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    lineHeight: 1.25,
+    pl: '1px',
+  };
+  const primaryButtonSx = {
+    height: tokens.controls.height,
+    borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2,
+    fontSize: tokens.controls.fontSize,
+    fontWeight: tokens.controls.fontWeight,
+    backgroundColor: tokens.colors.primaryTeal,
+    '&:hover': {
+      backgroundColor: darken(tokens.colors.primaryTeal, 0.12),
+    },
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${tokens.colors.primaryTeal}`,
+      outlineOffset: 2,
+    },
+    '&.Mui-disabled': {
+      backgroundColor: tokens.colors.subtle,
+      color: tokens.colors.muted,
+    },
+  };
+  const secondaryButtonSx = {
+    height: tokens.controls.height,
+    borderRadius: `${tokens.controls.borderRadius}px`,
+    px: 2,
+    fontSize: tokens.controls.fontSize,
+    fontWeight: tokens.controls.fontWeight,
+    color: tokens.colors.primaryTeal,
+    borderColor: tokens.colors.primaryTeal,
+    backgroundColor: theme.palette.common.white,
+    '&:hover': {
+      borderColor: tokens.colors.primaryTeal,
+      backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+    },
+    '&.Mui-focusVisible': {
+      outline: `2px solid ${tokens.colors.primaryTeal}`,
+      outlineOffset: 2,
+    },
+    '&.Mui-disabled': {
+      color: tokens.colors.muted,
+      borderColor: tokens.colors.border,
+    },
+  };
+  const utilityButtonSx = {
+    ...secondaryButtonSx,
+    color: tokens.colors.textSecondary,
+    borderColor: tokens.colors.border,
+    '&:hover': {
+      borderColor: tokens.colors.border,
+      backgroundColor: tokens.colors.subtle,
+      color: tokens.colors.textPrimary,
+    },
+  };
+  const clearFiltersButtonSx = {
+    ...utilityButtonSx,
+    ...(hasActiveFilters && {
+      color: tokens.colors.primaryTeal,
+      borderColor: tokens.colors.primaryTeal,
+      '&:hover': {
+        borderColor: tokens.colors.primaryTeal,
+        backgroundColor: alpha(tokens.colors.primaryTeal, 0.08),
+        color: tokens.colors.primaryTeal,
+      },
+    }),
+  };
+
+  const basicToolbar = (
+    <TableToolbar title="Bookings" layout="stacked" actions={(
+      <Stack direction="row" spacing={1} alignItems="center">
+        <Button variant="contained" sx={primaryButtonSx} onClick={() => {
+          setSelectedBooking(null);
+          setDrawerOpen(true);
+        }}>+ New Booking</Button>
+      </Stack>
+    )} filters={(
+      <>
+        <Box sx={{ ...filterFieldSx, width: 240 }}>
+          <Typography component="span" sx={filterLabelSx}>Check-in month</Typography>
+          <YearMonthPicker value={stayFromYm} onChange={(value) => setStayFromYm(value || '')}
+            label="" inputAriaLabel="Check-in month" sx={controlSx} />
+        </Box>
+        <Box sx={{ ...filterFieldSx, width: 160 }}>
+          <Typography component="span" sx={filterLabelSx}>Status</Typography>
+          <TextField select size="small" value={basicFilters.status}
+            onChange={(event) => handleBasicFilterChange('status', event.target.value)}
+            SelectProps={{ displayEmpty: true, renderValue: (value) => value ? renderStatus(value) : 'All statuses' }} inputProps={{ 'aria-label': 'Filter by status' }} sx={controlSx}>
+            <MenuItem value="">All statuses</MenuItem>
+            {BASIC_STATUS_OPTIONS.map((status) => <MenuItem key={status} value={status}>{renderStatus(status)}</MenuItem>)}
+          </TextField>
+        </Box>
+        <Box sx={{ ...filterFieldSx, width: 200 }}>
+          <Typography component="span" sx={filterLabelSx}>Unit</Typography>
+          <Autocomplete size="small" clearOnBlur={false} options={basicUnitOptions}
+            value={basicUnitOptions.includes(basicFilters.unitName) ? basicFilters.unitName : null}
+            inputValue={basicFilters.unitName}
+            onChange={(_, value) => handleBasicFilterChange('unitName', value)}
+            onInputChange={(_, value, reason) => {
+              if (reason !== 'reset') handleBasicFilterChange('unitName', value);
+            }} sx={controlSx} renderInput={(params) => (
+              <TextField {...params} placeholder="All units" inputProps={{ ...params.inputProps, 'aria-label': 'Filter by unit' }} />
+            )} />
+        </Box>
+        <Box sx={{ ...filterFieldSx, width: 280, minWidth: 240, flex: '0 1 280px' }}>
+          <Typography component="span" sx={filterLabelSx}>Guest</Typography>
+          <TextField size="small" placeholder="Search guest..." value={basicFilters.guestName}
+            onChange={(event) => handleBasicFilterChange('guestName', event.target.value)}
+            inputProps={{ 'aria-label': 'Search guest' }} sx={controlSx}
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }} />
+        </Box>
+        <Button variant="outlined" sx={{ ...clearFiltersButtonSx, alignSelf: 'flex-end', whiteSpace: 'nowrap', flexShrink: 0 }}
+          disabled={!hasActiveFilters} onClick={clearBasicFilters}>Clear Filters</Button>
+      </>
+    )} />
+  );
+
   const actionBar = (
     <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
       <IconButton
@@ -1346,14 +1487,22 @@ const SeeBookings = () => {
       sectionKey="bookings"
       currentPath="/bookings"
       layout="table"
-      stickyHeader={actionBar}
+      stickyHeader={view === 'basic' ? basicToolbar : actionBar}
+      tableToolbar={view === 'basic'}
     >
-      <Box sx={{ flex: 1, minHeight: 0 }}>
+      <Box sx={view === 'basic' ? { display: 'flex', flex: 1, minHeight: 0, height: '100%' } : { flex: 1, minHeight: 0 }}>
         <TableLite
           key={filterKey}
           columns={columns}
           rows={dataForTable}
           loading={loading}
+          height={view === 'basic' ? '100%' : undefined}
+          showHeaderFilters={view !== 'basic'}
+          visualVariant={view === 'basic' ? 'hausin' : undefined}
+          clientPagination={view === 'basic'}
+          filterValues={view === 'basic' ? tableBasicFilters : undefined}
+          onFilterChange={view === 'basic' ? handleBasicFilterChange : undefined}
+          paginationResetKey={`${stayFromYm}:${sourceFilter}:${cityFilter}:${basicFilters.status}`}
           enableFilters
           optionsSourceRows={bookings}
           defaultStringTransform={null}

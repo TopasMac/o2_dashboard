@@ -48,6 +48,8 @@ separation.
 | Success | `#2E7D5B` |
 | Danger | `#D9534F` |
 | Warning / Accent Coral | `#F57C4D` |
+| Hold status / Calendar amber | `#FBBF24` |
+| Block status / Calendar grey | `#9AA3A7` |
 
 - Coral is an accent or warning color, not the generic secondary-action color.
 - Red is reserved for destructive or error meaning.
@@ -63,3 +65,5 @@ separation.
   of these tokens.
 - Exact derived values should be finalized during implementation and visual
   testing rather than invented independently per page.
+
+The Bookings table uses `theme.hausin.colors.holdAmber` for active Hold status text and `blockGrey` for active Block status text. These match the existing Bookings Timeline `--bt-hold` and `--bt-block` colors. Labels identify the state alongside color.
